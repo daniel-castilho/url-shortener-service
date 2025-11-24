@@ -76,7 +76,7 @@ public class UrlController {
         }
 
         @GetMapping("/{id}")
-        @Operation(summary = "Redirect to original URL", description = "Retrieves the original URL and redirects (HTTP 302). Uses multi-level caching: Caffeine (L1, 5s) → Redis (L2, 24h+jitter) → Cassandra. Click events are tracked asynchronously without blocking the redirect.")
+        @Operation(summary = "Redirect to original URL", description = "Retrieves the original URL and redirects (HTTP 302). Uses multi-level caching: Caffeine (L1, 5s) → Redis (L2, 24h+jitter) → MongoDB. Click events are tracked asynchronously without blocking the redirect.")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "302", description = "Redirect to original URL"),
                         @ApiResponse(responseCode = "404", description = "Short URL not found", content = @Content)

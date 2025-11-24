@@ -23,6 +23,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 @org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
 @DisplayName("RedisUrlCache Tests")
+@SuppressWarnings("unchecked")
 class RedisUrlCacheTest {
 
     @Mock

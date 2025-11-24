@@ -1,5 +1,6 @@
 package com.example.urlshortener;
 
+import com.example.urlshortener.config.BaseIntegrationTest;
 import com.example.urlshortener.core.ports.outgoing.RateLimiterPort;
 import com.example.urlshortener.infra.adapter.input.rest.dto.ShortenRequest;
 import com.example.urlshortener.infra.adapter.input.rest.dto.ShortenResponse;
@@ -9,15 +10,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.CassandraContainer;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,36 +18,11 @@ import static org.hamcrest.Matchers.*;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = com.example.urlshortener.infra.Application.class)
-@Testcontainers
 @DisplayName("URL Shortener Integration Tests")
-class UrlShortenerIntegrationTest {
+class UrlShortenerIntegrationTest extends BaseIntegrationTest {
 
         @LocalServerPort
         private int port;
-
-        @Container
-        static CassandraContainer<?> cassandra = new CassandraContainer<>(
-                        DockerImageName.parse("cassandra:4.1"))
-                        .withExposedPorts(9042);
-
-        @Container
-        static GenericContainer<?> redis = new GenericContainer<>(
-                        DockerImageName.parse("redis:alpine"))
-                        .withExposedPorts(6379)
-                        .withCommand("redis-server", "--appendonly", "yes");
-
-        @DynamicPropertySource
-        static void configureProperties(DynamicPropertyRegistry registry) {
-                registry.add("spring.cassandra.contact-points",
-                                () -> cassandra.getHost() + ":" + cassandra.getMappedPort(9042));
-                registry.add("spring.cassandra.local-datacenter", () -> "datacenter1");
-                registry.add("spring.cassandra.keyspace-name", () -> "url_shortener");
-                registry.add("spring.cassandra.schema-action", () -> "create-if-not-exists");
-
-                registry.add("spring.data.redis.host", redis::getHost);
-                registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
-        }
 
         @MockitoBean
         private RateLimiterPort rateLimiter;

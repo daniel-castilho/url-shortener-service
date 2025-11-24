@@ -8,7 +8,8 @@ import org.redisson.api.RBloomFilter;
 import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -24,6 +25,8 @@ public class RedisUrlCache implements UrlCachePort {
     private static final Duration BASE_TTL = Duration.ofHours(24);
     private static final long MAX_JITTER_SECONDS = 60;
 
+    private static final Logger log = org.slf4j.LoggerFactory.getLogger(RedisUrlCache.class);
+
     public RedisUrlCache(StringRedisTemplate redisTemplate, RedissonClient redisson, MetricsPort metrics) {
         this.redisTemplate = redisTemplate;
         this.redisson = redisson;
@@ -37,7 +40,17 @@ public class RedisUrlCache implements UrlCachePort {
 
         // Bloom Filter: Expected 100M elements, 1% false positive probability
         this.bloomFilter = redisson.getBloomFilter("url_shortener:bloom_filter");
-        this.bloomFilter.tryInit(100_000_000L, 0.01);
+        try {
+            this.bloomFilter.tryInit(100_000_000L, 0.01);
+        } catch (org.redisson.client.RedisException e) {
+            if (e.getMessage().contains("Bloom filter config has been changed")) {
+                log.warn("Bloom Filter config changed. Re-initializing...");
+                this.bloomFilter.delete();
+                this.bloomFilter.tryInit(100_000_000L, 0.01);
+            } else {
+                throw e;
+            }
+        }
     }
 
     @Override
@@ -49,9 +62,14 @@ public class RedisUrlCache implements UrlCachePort {
         }
 
         // 2. Check Bloom Filter (Protection against Cache Penetration)
-        if (!bloomFilter.contains(id)) {
-            metrics.recordBloomFilterRejection();
-            return null; // Definitely doesn't exist
+        try {
+            if (!bloomFilter.contains(id)) {
+                metrics.recordBloomFilterRejection();
+                return null; // Definitely doesn't exist
+            }
+        } catch (org.redisson.client.RedisException e) {
+            log.warn("Bloom Filter error during contains check. Skipping filter.", e);
+            // Continue to Redis check if Bloom Filter fails
         }
 
         // 3. Check Redis
@@ -68,7 +86,12 @@ public class RedisUrlCache implements UrlCachePort {
     @Override
     public void put(String id, String originalUrl) {
         // Add to Bloom Filter
-        bloomFilter.add(id);
+        try {
+            bloomFilter.add(id);
+        } catch (org.redisson.client.RedisException e) {
+            log.warn("Bloom Filter error during add. Skipping filter.", e);
+            // Continue without Bloom Filter if it fails
+        }
 
         // Add to Redis with Jitter (Protection against Cache Stampede)
         long jitter = ThreadLocalRandom.current().nextLong(MAX_JITTER_SECONDS);

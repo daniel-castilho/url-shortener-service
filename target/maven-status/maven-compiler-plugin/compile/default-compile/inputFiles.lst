@@ -18,12 +18,14 @@
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/adapter/input/rest/dto/ShortenResponse.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/adapter/output/analytics/AsyncAnalyticsAdapter.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/adapter/output/analytics/ClickBatchWorker.java
-/home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/adapter/output/persistence/CassandraUrlRepository.java
+/home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/adapter/output/persistence/MongoUrlRepository.java
+/home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/adapter/output/persistence/config/MongoCollections.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/adapter/output/persistence/entity/ShortUrlEntity.java
+/home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/adapter/output/persistence/exception/RepositoryException.java
+/home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/adapter/output/persistence/mapper/ShortUrlMapper.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/adapter/output/redis/RangeAwareIdGenerator.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/adapter/output/redis/RedisRateLimiterAdapter.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/adapter/output/redis/RedisUrlCache.java
-/home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/config/CassandraConfig.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/config/NativeHintsConfig.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/config/OpenApiConfig.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/config/RedisConfig.java

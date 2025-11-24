@@ -1,0 +1,16 @@
+[
+  {
+    "name": "io.netty.util.internal.shaded.org.jctools.util.UnsafeAccess",
+    "allDeclaredFields": true,
+    "allDeclaredConstructors": true,
+    "unsafeAllocated": true
+  },
+  {
+    "name": "io.netty.util.internal.shaded.org.jctools.queues.MpscArrayQueueConsumerIndexField",
+    "allDeclaredFields": true
+  },
+  {
+    "name": "io.netty.util.internal.shaded.org.jctools.queues.MpscArrayQueueProducerIndexField",
+    "allDeclaredFields": true
+  }
+]

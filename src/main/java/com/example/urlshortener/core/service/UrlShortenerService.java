@@ -28,7 +28,7 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
     private final MetricsPort metrics;
 
     public UrlShortenerService(UrlRepositoryPort urlRepository, IdGeneratorPort idGenerator,
-            UrlCachePort urlCache, MetricsPort metrics) {
+                               UrlCachePort urlCache, MetricsPort metrics) {
         this.urlRepository = urlRepository;
         this.idGenerator = idGenerator;
         this.urlCache = urlCache;

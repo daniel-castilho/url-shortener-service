@@ -1,0 +1,49 @@
+spring:
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/url_shortener_test
+      auto-index-creation: true
+      connect-timeout: 5000ms
+      socket-timeout: 15000ms
+      server-selection-timeout: 5000ms
+  redis:
+    host: localhost
+    port: 6379
+    timeout: 500ms
+
+server:
+  undertow:
+    threads:
+      io: 16
+      worker: 200
+
+app:
+  shortener:
+    salt: "test-salt"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 5s
+        failureRateThreshold: 50
+    instances:
+      databaseCb:
+        baseConfig: default
+        failureRateThreshold: 50
+        waitDurationInOpenState: 20s
+      rateLimiterCb:
+        baseConfig: default
+        failureRateThreshold: 40
+

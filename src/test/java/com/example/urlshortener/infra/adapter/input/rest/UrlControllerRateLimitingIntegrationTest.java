@@ -1,19 +1,17 @@
 package com.example.urlshortener.infra.adapter.input.rest;
 
-import com.example.urlshortener.core.ports.outgoing.RateLimiterPort;
 import com.example.urlshortener.core.ports.incoming.GetUrlUseCase;
 import com.example.urlshortener.core.ports.incoming.ShortenUrlUseCase;
 import com.example.urlshortener.core.ports.outgoing.AnalyticsPort;
-import com.example.urlshortener.infra.adapter.input.rest.dto.ShortenRequest;
-import com.example.urlshortener.infra.adapter.input.rest.dto.ShortenResponse;
+import com.example.urlshortener.core.ports.outgoing.RateLimiterPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.anyString;
@@ -22,6 +20,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(UrlController.class)
+@ActiveProfiles("test")
 class UrlControllerRateLimitingIntegrationTest {
 
     @Autowired
@@ -57,23 +56,23 @@ class UrlControllerRateLimitingIntegrationTest {
         // First request allowed
         when(rateLimiter.isAllowed("127.0.0.1")).thenReturn(true);
         mockMvc.perform(post("/api/v1/urls")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"originalUrl\":\"https://example.com\"}")
-                .with(request -> {
-                    request.setRemoteAddr("127.0.0.1");
-                    return request;
-                }))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"originalUrl\":\"https://example.com\"}")
+                        .with(request -> {
+                            request.setRemoteAddr("127.0.0.1");
+                            return request;
+                        }))
                 .andExpect(status().isOk());
 
         // Second request exceeds limit
         when(rateLimiter.isAllowed("127.0.0.1")).thenReturn(false);
         mockMvc.perform(post("/api/v1/urls")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"originalUrl\":\"https://example.com\"}")
-                .with(request -> {
-                    request.setRemoteAddr("127.0.0.1");
-                    return request;
-                }))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"originalUrl\":\"https://example.com\"}")
+                        .with(request -> {
+                            request.setRemoteAddr("127.0.0.1");
+                            return request;
+                        }))
                 .andExpect(status().isTooManyRequests());
     }
 }

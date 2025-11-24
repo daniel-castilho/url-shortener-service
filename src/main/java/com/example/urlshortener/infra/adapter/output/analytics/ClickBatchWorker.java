@@ -36,7 +36,7 @@ public class ClickBatchWorker {
 
         if (!batch.isEmpty()) {
             log.info("Processing batch of {} click events...", batch.size());
-            // Here we would do a batch insert into Cassandra
+            // Here we would do a batch insert into MongoDB
             // clickRepository.saveAll(batch);
 
             // For now, just log to simulate processing

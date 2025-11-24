@@ -22,7 +22,7 @@ public class OpenApiConfig {
                                 Ultra-fast URL shortening service built with:
                                 - Java 21 Virtual Threads
                                 - Spring Boot 3.5.7 + Undertow
-                                - Apache Cassandra + Redis
+                                - MongoDB + Redis
                                 - Bloom Filters & Multi-Level Caching
 
                                 Designed to handle 100M+ writes/day and 1B+ reads/day.

@@ -1,41 +1,22 @@
 package com.example.urlshortener.infra.adapter.output.redis;
 
+import com.example.urlshortener.config.BaseIntegrationTest;
+import com.example.urlshortener.core.ports.outgoing.RateLimiterPort;
 import org.hashids.Hashids;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 import java.util.HashSet;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import com.example.urlshortener.core.ports.outgoing.RateLimiterPort;
 
-@SpringBootTest
-@Testcontainers
 @DisplayName("Redis Integration Tests")
-class RedisIntegrationTest {
-
-    @Container
-    static GenericContainer<?> redis = new GenericContainer<>(
-            DockerImageName.parse("redis:alpine"))
-            .withExposedPorts(6379);
-
-    @DynamicPropertySource
-    static void configureProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.data.redis.host", redis::getHost);
-        registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
-    }
+class RedisIntegrationTest extends BaseIntegrationTest {
 
     @Autowired
     private StringRedisTemplate redisTemplate;

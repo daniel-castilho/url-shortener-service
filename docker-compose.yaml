@@ -1,28 +1,17 @@
 services:
-  cassandra:
-    image: cassandra:4.1
-    container_name: cassandra
+  mongo:
+    image: mongo:6.0
+    container_name: urlshortener-mongo
     ports:
-      - "9042:9042"
-    environment:
-      - CASSANDRA_CLUSTER_NAME=UrlShortenerCluster
-      - CASSANDRA_DC=datacenter1
-      - CASSANDRA_ENDPOINT_SNITCH=GossipingPropertyFileSnitch
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
     healthcheck:
-      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
-      interval: 15s
-      timeout: 10s
-      retries: 10
-    networks:
-      - url-shortener-net
-
-  cassandra-init:
-    image: cassandra:4.1
-    depends_on:
-      cassandra:
-        condition: service_healthy
-    command: >
-      bash -c "echo \"CREATE KEYSPACE IF NOT EXISTS url_shortener WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};\" | cqlsh cassandra"
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     networks:
       - url-shortener-net
 
@@ -38,3 +27,6 @@ services:
 networks:
   url-shortener-net:
     driver: bridge
+
+volumes:
+  mongo-data:

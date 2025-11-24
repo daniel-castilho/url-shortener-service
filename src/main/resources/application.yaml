@@ -12,25 +12,20 @@ spring:
   threads:
     virtual:
       enabled: true  # Enables Virtual Threads across the container (Undertow)
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://localhost:27017/url_shortener}
+      auto-index-creation: true
+      connect-timeout: 10000ms
+      socket-timeout: 30000ms
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    timeout: 500ms
 
 app:
   shortener:
-    salt: "my-secret-salt-change-me-in-prod" # Should be an env var in production
-
-  # Optimized Configuration for Cassandra and Redis
-  cassandra:
-    keyspace-name: url_shortener
-    local-datacenter: datacenter1
-    connection:
-      connect-timeout: 2s
-      init-query-timeout: 2s
-    schema-action: create-if-not-exists
-  
-  data:
-    redis:
-      host: localhost
-      port: 6379
-      timeout: 500ms
+    salt: ${SHORTENER_SALT:my-secret-salt-change-me-in-prod} # Should be an env var in production
 
 management:
   endpoints:
