@@ -1,9 +1,9 @@
 server:
   undertow:
     threads:
-      io: 16           # Threads de I/O (Geralmente qtd de Cores * 2)
-      worker: 200      # Worker threads (Virtual threads assumem a carga pesada)
-    buffer-size: 1024  # Otimização de buffer direto
+      io: 16           # I/O threads (Usually cores * 2)
+      worker: 200      # Worker threads (Virtual threads handle the heavy load)
+    buffer-size: 1024  # Direct buffer optimization
     direct-buffers: true
 
 spring:
@@ -14,12 +14,12 @@ app:
   shortener:
     salt: "my-secret-salt-change-me-in-prod" # Should be an env var in production
   
-  # A MÁGICA DO JAVA 21+
+  # JAVA 21+ MAGIC
   threads:
     virtual:
-      enabled: true  # Ativa Virtual Threads em todo o container (Undertow)
+      enabled: true  # Enables Virtual Threads across the container (Undertow)
 
-  # Configuração Otimizada para Cassandra e Redis
+  # Optimized Configuration for Cassandra and Redis
   cassandra:
     keyspace-name: url_shortener
     local-datacenter: datacenter1

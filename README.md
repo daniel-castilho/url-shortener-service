@@ -2,106 +2,106 @@
 
 ![Java](https://img.shields.io/badge/Java-21-orange) ![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.5.7-green) ![Undertow](https://img.shields.io/badge/Undertow-High_Perf-blue) ![GraalVM](https://img.shields.io/badge/GraalVM-Native-orange)
 
-Um encurtador de URLs ultra-rápido construído com **Spring Boot 3.5.7**, **Undertow** (substituindo o Tomcat) e preparado para **GraalVM Native Image**. Este projeto segue os princípios da **Clean Architecture** para garantir manutenibilidade e desacoplamento.
+An ultra-fast URL shortener built with **Spring Boot 3.5.7**, **Undertow** (replacing Tomcat), and ready for **GraalVM Native Image**. This project follows **Clean Architecture** principles to ensure maintainability and decoupling.
 
 ---
 
-## 🏗️ Arquitetura
+## 🏗️ Architecture
 
-O projeto está estruturado para isolar o domínio da infraestrutura:
+The project is structured to isolate the domain from infrastructure:
 
-*   **🟢 Core (Domain)**: Regras de negócio puras, sem dependências de framework.
-*   **🔵 Infra (Adapter)**: Implementações do Spring, Banco de Dados (Cassandra), Cache (Redis) e Controladores Web.
+*   **🟢 Core (Domain)**: Pure business rules, no framework dependencies.
+*   **🔵 Infra (Adapter)**: Spring implementations, Database (Cassandra), Cache (Redis), and Web Controllers.
 
-### 📂 Estrutura de Diretórios
+### 📂 Directory Structure
 
 ```
 src/main/java/com/example/urlshortener
-├── core          # 🧠 Domínio (Puro Java)
-│   ├── model     # Entidades de Domínio
-│   ├── ports     # Interfaces (Entrada/Saída)
-│   └── service   # Casos de Uso
-└── infra         # ⚙️ Infraestrutura (Spring Boot)
-    ├── adapter   # Implementações dos Ports (Web, DB, Redis)
-    └── config    # Configurações (Undertow, Cassandra, etc.)
+├── core          # 🧠 Domain (Pure Java)
+│   ├── model     # Domain Entities
+│   ├── ports     # Interfaces (Input/Output)
+│   └── service   # Use Cases
+└── infra         # ⚙️ Infrastructure (Spring Boot)
+    ├── adapter   # Port Implementations (Web, DB, Redis)
+    └── config    # Configurations (Undertow, Cassandra, etc.)
 ```
 
 ---
 
 ## 🛠️ Tech Stack
 
-*   **Java 21**: Aproveitando as últimas features e Virtual Threads.
-*   **Spring Boot 3.5.7**: Framework base.
-*   **Undertow**: Servidor Web de alta performance (Non-blocking I/O).
-*   **Virtual Threads (Project Loom)**: Concorrência leve e escalável.
-*   **Apache Cassandra**: Banco de dados NoSQL para alta disponibilidade e escrita massiva.
-*   **Redis**: Cache, geração de IDs atômicos e Bloom Filter.
-*   **Redisson**: Cliente Redis avançado com suporte a Bloom Filters.
-*   **Caffeine**: Cache local em memória (L1) para URLs quentes.
-*   **Hashids**: Ofuscação de IDs sequenciais em códigos curtos.
-*   **GraalVM**: Suporte para compilação nativa (AOT) para startup instantâneo e baixo consumo de memória.
+*   **Java 21**: Leveraging the latest features and Virtual Threads.
+*   **Spring Boot 3.5.7**: Base framework.
+*   **Undertow**: High-performance web server (Non-blocking I/O).
+*   **Virtual Threads (Project Loom)**: Lightweight and scalable concurrency.
+*   **Apache Cassandra**: NoSQL database for high availability and massive writes.
+*   **Redis**: Cache, atomic ID generation, and Bloom Filter.
+*   **Redisson**: Advanced Redis client with Bloom Filter support.
+*   **Caffeine**: In-memory local cache (L1) for hot URLs.
+*   **Hashids**: Sequential ID obfuscation into short codes.
+*   **GraalVM**: Native compilation (AOT) support for instant startup and low memory consumption.
 
 ---
 
 ## 🛡️ High-Scale Features
 
-Este projeto foi otimizado para suportar **100 milhões de escritas/dia** e **1 bilhão de leituras/dia**:
+This project is optimized to support **100 million writes/day** and **1 billion reads/day**:
 
 ### Protection Patterns
 
-- **Bloom Filter**: Previne ataques de Cache Penetration (IDs inválidos não chegam ao banco)
-- **TTL Jitter**: Evita Cache Stampede adicionando aleatoriedade ao tempo de expiração
-- **Caffeine L1 Cache**: Cache local de 5 segundos para os 100 links mais acessados
+- **Bloom Filter**: Prevents Cache Penetration attacks (invalid IDs don't reach the database)
+- **TTL Jitter**: Avoids Cache Stampede by adding randomness to expiration time
+- **Caffeine L1 Cache**: 5-second local cache for the top 100 most accessed links
 
 ### ID Generation Strategy
 
-- **Counter-Based Shuffle**: Redis fornece IDs sequenciais em blocos de 1.000
-- **Hashids Encoding**: IDs são ofuscados em códigos de 7+ caracteres (ex: `vE1GpYK`)
-- **Zero Collision**: Unicidade matemática garantida sem lookup de banco
+- **Counter-Based Shuffle**: Redis provides sequential IDs in batches of 1,000
+- **Hashids Encoding**: IDs are obfuscated into 7+ character codes (e.g., `vE1GpYK`)
+- **Zero Collision**: Mathematical uniqueness guaranteed without database lookup
 
 ### Async Analytics
 
-- **Fire-and-Forget**: Cliques são rastreados sem bloquear o redirecionamento
-- **Batch Processing**: Worker processa eventos em lotes a cada 5 segundos
-- **Queue Capacity**: 100k eventos em memória para absorver picos de tráfego
+- **Fire-and-Forget**: Clicks are tracked without blocking redirection
+- **Batch Processing**: Worker processes events in batches every 5 seconds
+- **Queue Capacity**: 100k events in memory to absorb traffic spikes
 
 ---
 
-## 🚀 Como Rodar
+## 🚀 How to Run
 
-### Pré-requisitos
+### Prerequisites
 
 *   Java 21 JDK
 *   Maven
 *   Docker & Docker Compose
 
-### 🔧 Build e Execução
+### 🔧 Build and Execution
 
-1.  **Clone o repositório:**
+1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/seu-usuario/url-shortener-service.git
+    git clone https://github.com/your-username/url-shortener-service.git
     cd url-shortener-service
     ```
 
-2.  **Suba a infraestrutura (Cassandra + Redis):**
+2.  **Start infrastructure (Cassandra + Redis):**
     ```bash
     docker-compose up -d
     ```
-    *Aguarde alguns instantes para o Cassandra inicializar e criar o keyspace.*
+    *Wait a few moments for Cassandra to initialize and create the keyspace.*
 
-3.  **Compile o projeto:**
+3.  **Compile the project:**
     ```bash
     mvn clean install
     ```
 
-4.  **Rode a aplicação:**
+4.  **Run the application:**
     ```bash
     mvn spring-boot:run
     ```
 
-### ⚡ Build Nativo (GraalVM)
+### ⚡ Native Build (GraalVM)
 
-Para gerar um binário nativo ultra-otimizado:
+To generate an ultra-optimized native binary:
 
 ```bash
 mvn -Pnative native:compile
@@ -112,7 +112,7 @@ mvn -Pnative native:compile
 
 ## 🔌 API Endpoints
 
-### Encurtar URL
+### Shorten URL
 
 `POST /api/v1/urls`
 
@@ -131,24 +131,24 @@ mvn -Pnative native:compile
 }
 ```
 
-### Redirecionar (Acessar URL Curta)
+### Redirect (Access Short URL)
 
 `GET /{id}`
 
-**Exemplo:**
+**Example:**
 ```bash
 curl -v http://localhost:8080/vE1GpYK
 # HTTP/1.1 302 Found
 # Location: https://www.google.com/search?q=spring+boot+undertow
 ```
 
-**Logs (primeira vez):**
+**Logs (first time):**
 ```
 Cache Miss for ID: vE1GpYK. Fetching from DB...
 Processing batch of 1 click events...
 ```
 
-**Logs (segunda vez):**
+**Logs (second time):**
 ```
 Cache Hit for ID: vE1GpYK
 ```
@@ -157,51 +157,51 @@ Cache Hit for ID: vE1GpYK
 
 ## 📖 API Documentation (Swagger)
 
-A documentação interativa da API está disponível via **Swagger UI**:
+Interactive API documentation is available via **Swagger UI**:
 
 **Swagger UI**: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
 
 **OpenAPI JSON**: [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
 
-A interface permite:
-- Testar todos os endpoints diretamente do navegador
-- Visualizar schemas de request/response
-- Entender os códigos de status HTTP
-- Ver exemplos de uso
+The interface allows you to:
+- Test all endpoints directly from the browser
+- View request/response schemas
+- Understand HTTP status codes
+- See usage examples
 
 ---
 
-## 🧪 Testes
+## 🧪 Tests
 
-O projeto possui cobertura completa de **testes unitários** e **testes de integração**.
+The project has complete coverage of **unit tests** and **integration tests**.
 
-### Testes Unitários
+### Unit Tests
 
-Testam componentes isolados usando mocks:
-- `UrlShortenerServiceTest`: Lógica de negócio
-- `RangeAwareIdGeneratorTest`: Geração de IDs
-- `RedisUrlCacheTest`: Cache multi-nível
-- `UrlControllerTest`: Endpoints REST
+Test isolated components using mocks:
+- `UrlShortenerServiceTest`: Business logic
+- `RangeAwareIdGeneratorTest`: ID generation
+- `RedisUrlCacheTest`: Multi-level cache
+- `UrlControllerTest`: REST endpoints
 
 ```bash
 mvn test -Dtest="*Test"
 ```
 
-### Testes de Integração
+### Integration Tests
 
-Usam **Testcontainers** para subir Redis e Cassandra reais em Docker:
-- `UrlShortenerIntegrationTest`: Fluxo E2E completo
-- `RedisIntegrationTest`: Persistência e batching de IDs
-- `CassandraIntegrationTest`: Persistência de URLs
+Use **Testcontainers** to spin up real Redis and Cassandra in Docker:
+- `UrlShortenerIntegrationTest`: Complete E2E flow
+- `RedisIntegrationTest`: ID persistence and batching
+- `CassandraIntegrationTest`: URL persistence
 
 ```bash
 mvn test -Dtest="*IntegrationTest"
 ```
 
-**Requisitos:**
-- Docker rodando (para Testcontainers)
+**Requirements:**
+- Docker running (for Testcontainers)
 
-### Rodar Todos os Testes
+### Run All Tests
 
 ```bash
 mvn test
@@ -209,14 +209,14 @@ mvn test
 
 ---
 
-## ⚙️ Configuração
+## ⚙️ Configuration
 
-As principais configurações estão em `src/main/resources/application.yml`.
+Main configurations are in `src/main/resources/application.yml`.
 
-*   **Undertow**: Tunado para performance com buffer direto.
-*   **Virtual Threads**: Habilitadas globalmente (`spring.threads.virtual.enabled: true`).
-*   **Cassandra/Redis**: Configurados para `localhost` por padrão.
+*   **Undertow**: Tuned for performance with direct buffers.
+*   **Virtual Threads**: Enabled globally (`spring.threads.virtual.enabled: true`).
+*   **Cassandra/Redis**: Configured for `localhost` by default.
 
 ---
 
-Feito com ❤️ e performance extrema.
+Made with ❤️ and extreme performance.
