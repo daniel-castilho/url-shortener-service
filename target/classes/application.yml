@@ -9,15 +9,13 @@ server:
 spring:
   application:
     name: url-shortener-native
+  threads:
+    virtual:
+      enabled: true  # Enables Virtual Threads across the container (Undertow)
 
 app:
   shortener:
     salt: "my-secret-salt-change-me-in-prod" # Should be an env var in production
-  
-  # JAVA 21+ MAGIC
-  threads:
-    virtual:
-      enabled: true  # Enables Virtual Threads across the container (Undertow)
 
   # Optimized Configuration for Cassandra and Redis
   cassandra:

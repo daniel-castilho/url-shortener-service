@@ -24,6 +24,7 @@
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/adapter/output/redis/RedisRateLimiterAdapter.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/adapter/output/redis/RedisUrlCache.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/config/CassandraConfig.java
+/home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/config/NativeHintsConfig.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/config/OpenApiConfig.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/config/RedisConfig.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/config/ShortCodeConfig.java

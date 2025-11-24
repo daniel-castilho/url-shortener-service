@@ -1,0 +1,2698 @@
+
+
+===== src/test/java/com/example/urlshortener/infra/adapter/output/redis/RedisIntegrationTest.java =====
+
+package com.example.urlshortener.infra.adapter.output.redis;
+
+import org.hashids.Hashids;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
+
+import java.util.HashSet;
+import java.util.Set;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import com.example.urlshortener.core.ports.outgoing.RateLimiterPort;
+
+@SpringBootTest
+@Testcontainers
+@DisplayName("Redis Integration Tests")
+class RedisIntegrationTest {
+
+    @Container
+    static GenericContainer<?> redis = new GenericContainer<>(
+            DockerImageName.parse("redis:alpine"))
+            .withExposedPorts(6379);
+
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.data.redis.host", redis::getHost);
+        registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+    }
+
+    @Autowired
+    private StringRedisTemplate redisTemplate;
+
+    @MockitoBean
+    private RateLimiterPort rateLimiter;
+
+    private RangeAwareIdGenerator idGenerator;
+    private Hashids hashids;
+
+    @BeforeEach
+    void setUp() {
+        hashids = new Hashids("test-salt", 7);
+        idGenerator = new RangeAwareIdGenerator(redisTemplate, hashids);
+
+        // Clean up Redis before each test
+        redisTemplate.delete("global_link_id_seq");
+    }
+
+    @Test
+    @DisplayName("Should generate IDs with Redis persistence")
+    void shouldGenerateIdsWithRedisPersistence() {
+        // When
+        String id1 = idGenerator.generateId();
+        String id2 = idGenerator.generateId();
+
+        // Then
+        assertThat(id1).isNotNull();
+        assertThat(id2).isNotNull();
+        assertThat(id1).isNotEqualTo(id2);
+        assertThat(id1).hasSize(7);
+        assertThat(id2).hasSize(7);
+    }
+
+    @Test
+    @DisplayName("Should batch IDs locally and minimize Redis calls")
+    void shouldBatchIdsLocally() {
+        // Given
+        Long initialValue = redisTemplate.opsForValue().get("global_link_id_seq") != null
+                ? Long.parseLong(redisTemplate.opsForValue().get("global_link_id_seq"))
+                : 0L;
+
+        // When: Generate 5 IDs
+        Set<String> ids = new HashSet<>();
+        for (int i = 0; i < 5; i++) {
+            ids.add(idGenerator.generateId());
+        }
+
+        // Then: All IDs should be unique
+        assertThat(ids).hasSize(5);
+
+        // And: Redis should have been incremented by 1000 (one batch)
+        Long finalValue = Long.parseLong(redisTemplate.opsForValue().get("global_link_id_seq"));
+        assertThat(finalValue - initialValue).isEqualTo(1000L);
+    }
+
+    @Test
+    @DisplayName("Should generate 10,000 unique IDs")
+    void shouldGenerateManyUniqueIds() {
+        // When
+        Set<String> ids = new HashSet<>();
+        for (int i = 0; i < 10_000; i++) {
+            ids.add(idGenerator.generateId());
+        }
+
+        // Then
+        assertThat(ids).hasSize(10_000);
+    }
+
+    @Test
+    @DisplayName("Should persist sequence in Redis")
+    void shouldPersistSequenceInRedis() {
+        // When
+        idGenerator.generateId();
+
+        // Then
+        String sequence = redisTemplate.opsForValue().get("global_link_id_seq");
+        assertThat(sequence).isNotNull();
+        assertThat(Long.parseLong(sequence)).isGreaterThan(0);
+    }
+}
+
+
+===== src/test/java/com/example/urlshortener/infra/adapter/output/redis/RangeAwareIdGeneratorTest.java =====
+
+package com.example.urlshortener.infra.adapter.output.redis;
+
+import org.hashids.Hashids;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("RangeAwareIdGenerator Tests")
+class RangeAwareIdGeneratorTest {
+
+    @Mock
+    private StringRedisTemplate redis;
+
+    @Mock
+    private ValueOperations<String, String> valueOperations;
+
+    private Hashids hashids;
+    private RangeAwareIdGenerator generator;
+
+    @BeforeEach
+    void setUp() {
+        hashids = new Hashids("test-salt", 7);
+        when(redis.opsForValue()).thenReturn(valueOperations);
+        generator = new RangeAwareIdGenerator(redis, hashids);
+    }
+
+    @Test
+    @DisplayName("Should generate first ID and fetch range from Redis")
+    void shouldGenerateFirstId() {
+        // Given
+        when(valueOperations.increment(eq("global_link_id_seq"), eq(1000L)))
+                .thenReturn(1000L);
+
+        // When
+        String id = generator.generateId();
+
+        // Then
+        assertThat(id).isNotNull();
+        assertThat(id).hasSize(7); // Minimum length from Hashids
+        verify(valueOperations).increment("global_link_id_seq", 1000L);
+    }
+
+    @Test
+    @DisplayName("Should generate multiple IDs without calling Redis (batching)")
+    void shouldBatchIdsLocally() {
+        // Given
+        when(valueOperations.increment(eq("global_link_id_seq"), eq(1000L)))
+                .thenReturn(1000L);
+
+        // When
+        String id1 = generator.generateId();
+        String id2 = generator.generateId();
+        String id3 = generator.generateId();
+
+        // Then
+        assertThat(id1).isNotEqualTo(id2);
+        assertThat(id2).isNotEqualTo(id3);
+        assertThat(id1).isNotEqualTo(id3);
+
+        // Redis should only be called once for the range
+        verify(valueOperations, times(1)).increment(anyString(), anyLong());
+    }
+
+    @Test
+    @DisplayName("Should generate unique IDs")
+    void shouldGenerateUniqueIds() {
+        // Given
+        when(valueOperations.increment(eq("global_link_id_seq"), eq(1000L)))
+                .thenReturn(1000L)
+                .thenReturn(2000L);
+
+        // When
+        String id1 = generator.generateId();
+        String id2 = generator.generateId();
+
+        // Then
+        assertThat(id1).isNotEqualTo(id2);
+    }
+}
+
+
+===== src/test/java/com/example/urlshortener/infra/adapter/output/redis/RedisUrlCacheTest.java =====
+
+package com.example.urlshortener.infra.adapter.output.redis;
+
+import com.example.urlshortener.core.ports.outgoing.MetricsPort;
+import com.github.benmanes.caffeine.cache.Cache;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.redisson.api.RBloomFilter;
+import org.redisson.api.RedissonClient;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.time.Duration;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+@org.mockito.junit.jupiter.MockitoSettings(strictness = org.mockito.quality.Strictness.LENIENT)
+@DisplayName("RedisUrlCache Tests")
+class RedisUrlCacheTest {
+
+    @Mock
+    private StringRedisTemplate redisTemplate;
+
+    @Mock
+    private RedissonClient redisson;
+
+    @Mock
+    private RBloomFilter<String> bloomFilter;
+
+    @Mock
+    private ValueOperations<String, String> valueOperations;
+
+    @Mock
+    private MetricsPort metrics;
+
+    private RedisUrlCache cache;
+
+    private static final String TEST_ID = "abc123";
+    private static final String TEST_URL = "https://www.example.com";
+
+    @BeforeEach
+    void setUp() {
+        when(redisson.<String>getBloomFilter(anyString())).thenReturn(bloomFilter);
+        when(bloomFilter.tryInit(anyLong(), anyDouble())).thenReturn(true);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+
+        cache = new RedisUrlCache(redisTemplate, redisson, metrics);
+    }
+
+    @Test
+    @DisplayName("Should return null when Bloom Filter says ID doesn't exist")
+    void shouldReturnNullWhenBloomFilterSaysNotExists() {
+        // Given
+        when(bloomFilter.contains(TEST_ID)).thenReturn(false);
+
+        // When
+        String result = cache.get(TEST_ID);
+
+        // Then
+        assertThat(result).isNull();
+        verify(bloomFilter).contains(TEST_ID);
+        verify(redisTemplate, never()).opsForValue();
+    }
+
+    @Test
+    @DisplayName("Should get from Redis when Bloom Filter says ID exists")
+    void shouldGetFromRedisWhenBloomFilterSaysExists() {
+        // Given
+        when(bloomFilter.contains(TEST_ID)).thenReturn(true);
+        when(valueOperations.get("url:" + TEST_ID)).thenReturn(TEST_URL);
+
+        // When
+        String result = cache.get(TEST_ID);
+
+        // Then
+        assertThat(result).isEqualTo(TEST_URL);
+        verify(bloomFilter).contains(TEST_ID);
+        verify(valueOperations).get("url:" + TEST_ID);
+    }
+
+    @Test
+    @DisplayName("Should put URL in Redis, Bloom Filter, and local cache")
+    void shouldPutUrlInAllLayers() {
+        // When
+        cache.put(TEST_ID, TEST_URL);
+
+        // Then
+        verify(bloomFilter).add(TEST_ID);
+        verify(valueOperations).set(eq("url:" + TEST_ID), eq(TEST_URL), any(Duration.class));
+
+        // Verify local cache was populated (subsequent get should hit local cache)
+        when(bloomFilter.contains(TEST_ID)).thenReturn(true);
+        Cache<String, String> localCache = (Cache<String, String>) ReflectionTestUtils.getField(cache, "localCache");
+        assertThat(localCache.getIfPresent(TEST_ID)).isEqualTo(TEST_URL);
+    }
+
+    @Test
+    @DisplayName("Should use TTL with jitter")
+    void shouldUseTtlWithJitter() {
+        // When
+        cache.put(TEST_ID, TEST_URL);
+
+        // Then
+        verify(valueOperations).set(eq("url:" + TEST_ID), eq(TEST_URL), argThat(duration -> duration.toHours() == 24
+                && duration.toSeconds() >= 86400 && duration.toSeconds() <= 86460));
+    }
+}
+
+
+===== src/test/java/com/example/urlshortener/infra/adapter/output/redis/RedisRateLimiterAdapterTest.java =====
+
+package com.example.urlshortener.infra.adapter.output.redis;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+import com.example.urlshortener.core.ports.outgoing.RateLimiterPort;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.redisson.api.RAtomicLong;
+import org.redisson.api.RedissonClient;
+import java.time.Duration;
+
+class RedisRateLimiterAdapterTest {
+
+    private RedissonClient redissonClient;
+    private RAtomicLong atomicLong;
+    private RedisRateLimiterAdapter adapter;
+
+    @BeforeEach
+    void setUp() {
+        redissonClient = mock(RedissonClient.class);
+        atomicLong = mock(RAtomicLong.class);
+        when(redissonClient.getAtomicLong(anyString())).thenReturn(atomicLong);
+        // Use default limit 2 and window 1 minute for test simplicity
+        adapter = new RedisRateLimiterAdapter(redissonClient, 2, Duration.ofMinutes(1));
+    }
+
+    @Test
+    void shouldAllowRequestsWithinLimit() {
+        when(atomicLong.incrementAndGet()).thenReturn(1L, 2L);
+        // first request sets expiry
+        assertTrue(adapter.isAllowed("1.2.3.4"));
+        // second request still within limit
+        assertTrue(adapter.isAllowed("1.2.3.4"));
+        verify(atomicLong, times(2)).incrementAndGet();
+        verify(atomicLong, times(1)).expire(Duration.ofMinutes(1));
+    }
+
+    @Test
+    void shouldBlockWhenExceedingLimit() {
+        when(atomicLong.incrementAndGet()).thenReturn(1L, 2L, 3L);
+        assertTrue(adapter.isAllowed("5.6.7.8")); // 1st
+        assertTrue(adapter.isAllowed("5.6.7.8")); // 2nd
+        assertFalse(adapter.isAllowed("5.6.7.8")); // 3rd exceeds limit of 2
+    }
+}
+
+
+===== src/test/java/com/example/urlshortener/infra/adapter/output/persistence/CassandraIntegrationTest.java =====
+
+package com.example.urlshortener.infra.adapter.output.persistence;
+
+import com.example.urlshortener.core.model.ShortUrl;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.CassandraContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
+
+import java.time.LocalDateTime;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import com.example.urlshortener.core.ports.outgoing.RateLimiterPort;
+
+@SpringBootTest
+@Testcontainers
+@DisplayName("Cassandra Integration Tests")
+class CassandraIntegrationTest {
+
+    @Container
+    static CassandraContainer<?> cassandra = new CassandraContainer<>(
+            DockerImageName.parse("cassandra:4.1"))
+            .withExposedPorts(9042);
+
+    @DynamicPropertySource
+    static void configureProperties(DynamicPropertyRegistry registry) {
+        registry.add("spring.cassandra.contact-points",
+                () -> cassandra.getHost() + ":" + cassandra.getMappedPort(9042));
+        registry.add("spring.cassandra.local-datacenter", () -> "datacenter1");
+        registry.add("spring.cassandra.keyspace-name", () -> "url_shortener");
+        registry.add("spring.cassandra.schema-action", () -> "create-if-not-exists");
+    }
+
+    @Autowired
+    private CassandraUrlRepository repository;
+
+    @MockitoBean
+    private RateLimiterPort rateLimiter;
+
+    private static final String TEST_ID = "test123";
+    private static final String TEST_URL = "https://www.example.com/test";
+
+    @BeforeEach
+    void setUp() {
+        // Clean up before each test (optional, depends on test isolation needs)
+    }
+
+    @Test
+    @DisplayName("Should save and retrieve ShortUrl")
+    void shouldSaveAndRetrieve() {
+        // Given
+        ShortUrl shortUrl = new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now());
+
+        // When
+        repository.save(shortUrl);
+        Optional<ShortUrl> retrieved = repository.findById(TEST_ID);
+
+        // Then
+        assertThat(retrieved).isPresent();
+        assertThat(retrieved.get().id()).isEqualTo(TEST_ID);
+        assertThat(retrieved.get().originalUrl()).isEqualTo(TEST_URL);
+        assertThat(retrieved.get().createdAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Should return empty Optional for non-existent ID")
+    void shouldReturnEmptyForNonExistentId() {
+        // When
+        Optional<ShortUrl> result = repository.findById("nonexistent999");
+
+        // Then
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Should persist multiple URLs")
+    void shouldPersistMultipleUrls() {
+        // Given
+        ShortUrl url1 = new ShortUrl("id1", "https://example1.com", LocalDateTime.now());
+        ShortUrl url2 = new ShortUrl("id2", "https://example2.com", LocalDateTime.now());
+        ShortUrl url3 = new ShortUrl("id3", "https://example3.com", LocalDateTime.now());
+
+        // When
+        repository.save(url1);
+        repository.save(url2);
+        repository.save(url3);
+
+        // Then
+        assertThat(repository.findById("id1")).isPresent();
+        assertThat(repository.findById("id2")).isPresent();
+        assertThat(repository.findById("id3")).isPresent();
+    }
+
+    @Test
+    @DisplayName("Should handle URLs with special characters")
+    void shouldHandleSpecialCharacters() {
+        // Given
+        String urlWithSpecialChars = "https://example.com/path?param=value&other=123#anchor";
+        ShortUrl shortUrl = new ShortUrl("special123", urlWithSpecialChars, LocalDateTime.now());
+
+        // When
+        repository.save(shortUrl);
+        Optional<ShortUrl> retrieved = repository.findById("special123");
+
+        // Then
+        assertThat(retrieved).isPresent();
+        assertThat(retrieved.get().originalUrl()).isEqualTo(urlWithSpecialChars);
+    }
+}
+
+
+===== src/test/java/com/example/urlshortener/infra/adapter/input/rest/advice/GlobalExceptionHandlerTest.java =====
+
+package com.example.urlshortener.infra.adapter.input.rest.advice;
+
+import com.example.urlshortener.core.exception.UrlNotFoundException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+
+import com.example.urlshortener.core.ports.incoming.GetUrlUseCase;
+import com.example.urlshortener.core.ports.incoming.ShortenUrlUseCase;
+import com.example.urlshortener.core.ports.outgoing.AnalyticsPort;
+import com.example.urlshortener.core.ports.outgoing.RateLimiterPort;
+import com.example.urlshortener.infra.adapter.input.rest.UrlController;
+import com.example.urlshortener.infra.adapter.input.rest.dto.ShortenRequest;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+@WebMvcTest(UrlController.class)
+@DisplayName("GlobalExceptionHandler Tests")
+class GlobalExceptionHandlerTest {
+
+        @Autowired
+        private MockMvc mockMvc;
+
+        @Autowired
+        private ObjectMapper objectMapper;
+
+        @MockitoBean
+        private ShortenUrlUseCase shortenUrlUseCase;
+
+        @MockitoBean
+        private GetUrlUseCase getUrlUseCase;
+
+        @MockitoBean
+        private AnalyticsPort analyticsPort;
+
+        @MockitoBean
+        private RateLimiterPort rateLimiter;
+
+        @Test
+        @DisplayName("Should return 404 with error response when URL not found")
+        void shouldReturn404WhenUrlNotFound() throws Exception {
+                // Given
+                when(rateLimiter.isAllowed(any())).thenReturn(true);
+                String nonExistentId = "notfound";
+                when(getUrlUseCase.getOriginalUrl(nonExistentId))
+                                .thenThrow(new UrlNotFoundException(nonExistentId));
+
+                // When/Then
+                mockMvc.perform(get("/" + nonExistentId))
+                                .andExpect(status().isNotFound())
+                                .andExpect(jsonPath("$.status").value(404))
+                                .andExpect(jsonPath("$.error").value("URL Not Found"))
+                                .andExpect(jsonPath("$.message").exists())
+                                .andExpect(jsonPath("$.timestamp").exists());
+        }
+
+        @Test
+        @DisplayName("Should return 400 with validation errors for empty URL")
+        void shouldReturn400ForEmptyUrl() throws Exception {
+                // Given
+                when(rateLimiter.isAllowed(any())).thenReturn(true);
+                ShortenRequest request = new ShortenRequest("");
+
+                // When/Then
+                mockMvc.perform(post("/api/v1/urls")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value(400))
+                                .andExpect(jsonPath("$.error").value("Validation Failed"))
+                                .andExpect(jsonPath("$.validationErrors.originalUrl").exists());
+        }
+
+        @Test
+        @DisplayName("Should return 400 with validation errors for invalid URL format")
+        void shouldReturn400ForInvalidUrlFormat() throws Exception {
+                // Given
+                when(rateLimiter.isAllowed(any())).thenReturn(true);
+                ShortenRequest request = new ShortenRequest("not-a-valid-url");
+
+                // When/Then
+                mockMvc.perform(post("/api/v1/urls")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value(400))
+                                .andExpect(jsonPath("$.error").value("Validation Failed"))
+                                .andExpect(jsonPath("$.validationErrors.originalUrl")
+                                                .value("URL must start with http:// or https://"));
+        }
+
+        @Test
+        @DisplayName("Should return 400 with validation errors for null URL")
+        void shouldReturn400ForNullUrl() throws Exception {
+                // Given
+                when(rateLimiter.isAllowed(any())).thenReturn(true);
+                String requestJson = "{}";
+
+                // When/Then
+                mockMvc.perform(post("/api/v1/urls")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(requestJson))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value(400))
+                                .andExpect(jsonPath("$.error").value("Validation Failed"))
+                                .andExpect(jsonPath("$.validationErrors.originalUrl").exists());
+        }
+
+        @Test
+        @DisplayName("Should return 400 for IllegalArgumentException")
+        void shouldReturn400ForIllegalArgument() throws Exception {
+                // Given
+                when(rateLimiter.isAllowed(any())).thenReturn(true);
+                ShortenRequest request = new ShortenRequest("https://example.com");
+                when(shortenUrlUseCase.shorten(any()))
+                                .thenThrow(new IllegalArgumentException("Invalid input"));
+
+                // When/Then
+                mockMvc.perform(post("/api/v1/urls")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value(400))
+                                .andExpect(jsonPath("$.error").value("Invalid Request"))
+                                .andExpect(jsonPath("$.message").value("Invalid input"));
+        }
+
+        @Test
+        @DisplayName("Should return 500 for unexpected exceptions")
+        void shouldReturn500ForUnexpectedException() throws Exception {
+                // Given
+                when(rateLimiter.isAllowed(any())).thenReturn(true);
+                ShortenRequest request = new ShortenRequest("https://example.com");
+                when(shortenUrlUseCase.shorten(any()))
+                                .thenThrow(new RuntimeException("Unexpected error"));
+
+                // When/Then
+                mockMvc.perform(post("/api/v1/urls")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isInternalServerError())
+                                .andExpect(jsonPath("$.status").value(500))
+                                .andExpect(jsonPath("$.error").value("Internal Server Error"))
+                                .andExpect(jsonPath("$.message")
+                                                .value("An unexpected error occurred. Please try again later."));
+        }
+}
+
+
+===== src/test/java/com/example/urlshortener/infra/adapter/input/rest/UrlControllerRateLimitingIntegrationTest.java =====
+
+package com.example.urlshortener.infra.adapter.input.rest;
+
+import com.example.urlshortener.core.ports.outgoing.RateLimiterPort;
+import com.example.urlshortener.core.ports.incoming.GetUrlUseCase;
+import com.example.urlshortener.core.ports.incoming.ShortenUrlUseCase;
+import com.example.urlshortener.core.ports.outgoing.AnalyticsPort;
+import com.example.urlshortener.infra.adapter.input.rest.dto.ShortenRequest;
+import com.example.urlshortener.infra.adapter.input.rest.dto.ShortenResponse;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+@WebMvcTest(UrlController.class)
+class UrlControllerRateLimitingIntegrationTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockitoBean
+    private ShortenUrlUseCase shortenUrlUseCase;
+
+    @MockitoBean
+    private GetUrlUseCase getUrlUseCase;
+
+    @MockitoBean
+    private AnalyticsPort analyticsPort;
+
+    @MockitoBean
+    private RateLimiterPort rateLimiter;
+
+    @MockitoBean
+    private RedissonClient redissonClient; // not used directly but required for context
+
+    @BeforeEach
+    void setUp() {
+        when(shortenUrlUseCase.shorten(anyString()))
+                .thenReturn(new com.example.urlshortener.core.model.ShortUrl("abc123", "https://example.com",
+                        java.time.LocalDateTime.now()));
+    }
+
+    @Test
+    void whenLimitExceeded_thenReturns429() throws Exception {
+        // First request allowed
+        when(rateLimiter.isAllowed("127.0.0.1")).thenReturn(true);
+        mockMvc.perform(post("/api/v1/urls")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"originalUrl\":\"https://example.com\"}")
+                .with(request -> {
+                    request.setRemoteAddr("127.0.0.1");
+                    return request;
+                }))
+                .andExpect(status().isOk());
+
+        // Second request exceeds limit
+        when(rateLimiter.isAllowed("127.0.0.1")).thenReturn(false);
+        mockMvc.perform(post("/api/v1/urls")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"originalUrl\":\"https://example.com\"}")
+                .with(request -> {
+                    request.setRemoteAddr("127.0.0.1");
+                    return request;
+                }))
+                .andExpect(status().isTooManyRequests());
+    }
+}
+
+
+===== src/test/java/com/example/urlshortener/infra/adapter/input/rest/UrlControllerTest.java =====
+
+package com.example.urlshortener.infra.adapter.input.rest;
+
+import com.example.urlshortener.core.exception.UrlNotFoundException;
+import com.example.urlshortener.core.model.ShortUrl;
+import com.example.urlshortener.core.ports.incoming.GetUrlUseCase;
+import com.example.urlshortener.core.ports.incoming.ShortenUrlUseCase;
+import com.example.urlshortener.core.ports.outgoing.AnalyticsPort;
+import com.example.urlshortener.core.ports.outgoing.RateLimiterPort;
+import com.example.urlshortener.infra.adapter.input.rest.dto.ShortenRequest;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.time.LocalDateTime;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+@WebMvcTest(UrlController.class)
+@DisplayName("UrlController Tests")
+class UrlControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @MockitoBean
+    private ShortenUrlUseCase shortenUrlUseCase;
+
+    @MockitoBean
+    private GetUrlUseCase getUrlUseCase;
+
+    @MockitoBean
+    private AnalyticsPort analyticsPort;
+
+    @MockitoBean
+    private RateLimiterPort rateLimiter;
+
+    private static final String TEST_URL = "https://www.example.com/very/long/url";
+    private static final String TEST_ID = "abc123";
+
+    @Test
+    @DisplayName("POST /api/v1/urls should shorten URL successfully")
+    void shouldShortenUrl() throws Exception {
+        // Given
+        ShortenRequest request = new ShortenRequest(TEST_URL);
+        ShortUrl shortUrl = new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now());
+        when(shortenUrlUseCase.shorten(TEST_URL)).thenReturn(shortUrl);
+        when(rateLimiter.isAllowed(anyString())).thenReturn(true);
+
+        // When/Then
+        mockMvc.perform(post("/api/v1/urls")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(TEST_ID))
+                .andExpect(jsonPath("$.shortUrl").value("http://localhost/" + TEST_ID));
+
+        verify(shortenUrlUseCase).shorten(TEST_URL);
+    }
+
+    @Test
+    @DisplayName("GET /{id} should redirect to original URL")
+    void shouldRedirectToOriginalUrl() throws Exception {
+        // Given
+        when(getUrlUseCase.getOriginalUrl(TEST_ID)).thenReturn(TEST_URL);
+
+        // When/Then
+        mockMvc.perform(get("/" + TEST_ID))
+                .andExpect(status().isFound())
+                .andExpect(header().string("Location", TEST_URL));
+
+        verify(getUrlUseCase).getOriginalUrl(TEST_ID);
+        verify(analyticsPort).track(any());
+    }
+
+    @Test
+    @DisplayName("GET /{id} should return 404 when URL not found")
+    void shouldReturn404WhenUrlNotFound() throws Exception {
+        // Given
+        when(getUrlUseCase.getOriginalUrl(TEST_ID))
+                .thenThrow(new UrlNotFoundException(TEST_ID));
+
+        // When/Then
+        mockMvc.perform(get("/" + TEST_ID))
+                .andExpect(status().isNotFound());
+
+        verify(getUrlUseCase).getOriginalUrl(TEST_ID);
+        verify(analyticsPort, never()).track(any());
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/urls should return 429 when rate limit exceeded")
+    void shouldReturn429WhenRateLimitExceeded() throws Exception {
+        // Given
+        ShortenRequest request = new ShortenRequest(TEST_URL);
+        when(rateLimiter.isAllowed(anyString())).thenReturn(false);
+
+        // When/Then
+        mockMvc.perform(post("/api/v1/urls")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isTooManyRequests());
+
+        verify(shortenUrlUseCase, never()).shorten(anyString());
+    }
+}
+
+
+===== src/test/java/com/example/urlshortener/UrlShortenerIntegrationTest.java =====
+
+package com.example.urlshortener;
+
+import com.example.urlshortener.core.ports.outgoing.RateLimiterPort;
+import com.example.urlshortener.infra.adapter.input.rest.dto.ShortenRequest;
+import com.example.urlshortener.infra.adapter.input.rest.dto.ShortenResponse;
+import io.restassured.RestAssured;
+import io.restassured.http.ContentType;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.CassandraContainer;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
+
+import static io.restassured.RestAssured.given;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.*;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
+
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = com.example.urlshortener.infra.Application.class)
+@Testcontainers
+@DisplayName("URL Shortener Integration Tests")
+class UrlShortenerIntegrationTest {
+
+        @LocalServerPort
+        private int port;
+
+        @Container
+        static CassandraContainer<?> cassandra = new CassandraContainer<>(
+                        DockerImageName.parse("cassandra:4.1"))
+                        .withExposedPorts(9042);
+
+        @Container
+        static GenericContainer<?> redis = new GenericContainer<>(
+                        DockerImageName.parse("redis:alpine"))
+                        .withExposedPorts(6379)
+                        .withCommand("redis-server", "--appendonly", "yes");
+
+        @DynamicPropertySource
+        static void configureProperties(DynamicPropertyRegistry registry) {
+                registry.add("spring.cassandra.contact-points",
+                                () -> cassandra.getHost() + ":" + cassandra.getMappedPort(9042));
+                registry.add("spring.cassandra.local-datacenter", () -> "datacenter1");
+                registry.add("spring.cassandra.keyspace-name", () -> "url_shortener");
+                registry.add("spring.cassandra.schema-action", () -> "create-if-not-exists");
+
+                registry.add("spring.data.redis.host", redis::getHost);
+                registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
+        }
+
+        @MockitoBean
+        private RateLimiterPort rateLimiter;
+
+        @BeforeEach
+        void setUp() {
+                when(rateLimiter.isAllowed(anyString())).thenReturn(true);
+                RestAssured.port = port;
+                RestAssured.basePath = "/";
+        }
+
+        @Test
+        @DisplayName("Should shorten URL and redirect successfully (E2E)")
+        void shouldShortenAndRedirect() {
+                // Given
+                String originalUrl = "https://www.example.com/very/long/url/path";
+                ShortenRequest request = new ShortenRequest(originalUrl);
+
+                // When: Shorten URL
+                ShortenResponse response = given()
+                                .contentType(ContentType.JSON)
+                                .body(request)
+                                .when()
+                                .post("/api/v1/urls")
+                                .then()
+                                .statusCode(200)
+                                .body("id", notNullValue())
+                                .body("id", hasLength(greaterThanOrEqualTo(7)))
+                                .body("shortUrl", startsWith("http://localhost:" + port + "/"))
+                                .extract()
+                                .as(ShortenResponse.class);
+
+                assertThat(response.id()).isNotNull();
+                assertThat(response.shortUrl()).contains(response.id());
+
+                // Then: Redirect to original URL
+                given()
+                                .redirects().follow(false)
+                                .when()
+                                .get("/" + response.id())
+                                .then()
+                                .statusCode(302)
+                                .header("Location", originalUrl);
+        }
+
+        @Test
+        @DisplayName("Should return 404 for non-existent short URL")
+        void shouldReturn404ForNonExistentUrl() {
+                given()
+                                .redirects().follow(false)
+                                .when()
+                                .get("/nonexistent123")
+                                .then()
+                                .statusCode(404);
+        }
+
+        @Test
+        @DisplayName("Should generate unique IDs for multiple URLs")
+        void shouldGenerateUniqueIds() {
+                // Given
+                ShortenRequest request1 = new ShortenRequest("https://example1.com");
+                ShortenRequest request2 = new ShortenRequest("https://example2.com");
+
+                // When
+                String id1 = given()
+                                .contentType(ContentType.JSON)
+                                .body(request1)
+                                .post("/api/v1/urls")
+                                .then()
+                                .statusCode(200)
+                                .extract()
+                                .path("id");
+
+                String id2 = given()
+                                .contentType(ContentType.JSON)
+                                .body(request2)
+                                .post("/api/v1/urls")
+                                .then()
+                                .statusCode(200)
+                                .extract()
+                                .path("id");
+
+                // Then
+                assertThat(id1).isNotEqualTo(id2);
+        }
+
+        @Test
+        @DisplayName("Should cache URLs after first access")
+        void shouldCacheUrls() {
+                // Given
+                String originalUrl = "https://www.cached-example.com";
+                ShortenRequest request = new ShortenRequest(originalUrl);
+
+                String shortId = given()
+                                .contentType(ContentType.JSON)
+                                .body(request)
+                                .post("/api/v1/urls")
+                                .then()
+                                .statusCode(200)
+                                .extract()
+                                .path("id");
+
+                // When: First access (Cache Miss)
+                given()
+                                .redirects().follow(false)
+                                .get("/" + shortId)
+                                .then()
+                                .statusCode(302)
+                                .header("Location", originalUrl);
+
+                // Then: Second access (Cache Hit - should still work)
+                given()
+                                .redirects().follow(false)
+                                .get("/" + shortId)
+                                .then()
+                                .statusCode(302)
+                                .header("Location", originalUrl);
+        }
+
+        @Test
+        @DisplayName("Should handle concurrent requests correctly")
+        void shouldHandleConcurrentRequests() {
+                // Given
+                int concurrentRequests = 50;
+                java.util.Set<String> generatedIds = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+                // When: Create 50 URLs concurrently
+                java.util.stream.IntStream.range(0, concurrentRequests)
+                                .parallel()
+                                .forEach(i -> {
+                                        String id = given()
+                                                        .contentType(ContentType.JSON)
+                                                        .body(new ShortenRequest("https://example.com/concurrent/" + i))
+                                                        .post("/api/v1/urls")
+                                                        .then()
+                                                        .statusCode(200)
+                                                        .extract()
+                                                        .path("id");
+                                        generatedIds.add(id);
+                                });
+
+                // Then: All IDs should be unique
+                assertThat(generatedIds).hasSize(concurrentRequests);
+        }
+
+        @Test
+        @DisplayName("Should handle URLs with special characters")
+        void shouldHandleSpecialCharacters() {
+                // Given
+                String urlWithSpecialChars = "https://example.com/path?param=value&other=123#anchor";
+                ShortenRequest request = new ShortenRequest(urlWithSpecialChars);
+
+                // When
+                String shortId = given()
+                                .contentType(ContentType.JSON)
+                                .body(request)
+                                .post("/api/v1/urls")
+                                .then()
+                                .statusCode(200)
+                                .extract()
+                                .path("id");
+
+                // Then: Should redirect correctly
+                given()
+                                .redirects().follow(false)
+                                .get("/" + shortId)
+                                .then()
+                                .statusCode(302)
+                                .header("Location", urlWithSpecialChars);
+        }
+
+        @Test
+        @DisplayName("Should handle very long URLs")
+        void shouldHandleVeryLongUrls() {
+                // Given: URL with 2000+ characters
+                String longUrl = "https://example.com/very/long/path/" + "a".repeat(2000);
+                ShortenRequest request = new ShortenRequest(longUrl);
+
+                // When
+                String shortId = given()
+                                .contentType(ContentType.JSON)
+                                .body(request)
+                                .post("/api/v1/urls")
+                                .then()
+                                .statusCode(200)
+                                .body("id", hasLength(greaterThanOrEqualTo(7)))
+                                .extract()
+                                .path("id");
+
+                // Then: Should redirect correctly
+                given()
+                                .redirects().follow(false)
+                                .get("/" + shortId)
+                                .then()
+                                .statusCode(302)
+                                .header("Location", longUrl);
+        }
+
+        @Test
+        @DisplayName("Should return consistent results for same URL")
+        void shouldReturnConsistentResults() {
+                // Given
+                String url = "https://example.com/consistent";
+                ShortenRequest request = new ShortenRequest(url);
+
+                // When: Shorten same URL twice
+                String id1 = given()
+                                .contentType(ContentType.JSON)
+                                .body(request)
+                                .post("/api/v1/urls")
+                                .then()
+                                .statusCode(200)
+                                .extract()
+                                .path("id");
+
+                String id2 = given()
+                                .contentType(ContentType.JSON)
+                                .body(request)
+                                .post("/api/v1/urls")
+                                .then()
+                                .statusCode(200)
+                                .extract()
+                                .path("id");
+
+                // Then: Both should work (may be different IDs, but both valid)
+                assertThat(id1).isNotNull();
+                assertThat(id2).isNotNull();
+
+                given().redirects().follow(false).get("/" + id1).then().statusCode(302);
+                given().redirects().follow(false).get("/" + id2).then().statusCode(302);
+        }
+
+        @Test
+        @DisplayName("Should protect against invalid ID attempts (Bloom Filter)")
+        void shouldProtectAgainstInvalidIds() {
+                // Given: IDs that definitely don't exist
+                String[] invalidIds = { "invalid1", "zzzzzzz", "0000000", "XXXXXXX" };
+
+                // When/Then: All should return 404 without hitting DB (Bloom Filter protection)
+                for (String invalidId : invalidIds) {
+                        given()
+                                        .redirects().follow(false)
+                                        .get("/" + invalidId)
+                                        .then()
+                                        .statusCode(404);
+                }
+        }
+}
+
+
+===== src/test/java/com/example/urlshortener/core/service/UrlShortenerServiceTest.java =====
+
+package com.example.urlshortener.core.service;
+
+import com.example.urlshortener.core.exception.UrlNotFoundException;
+import com.example.urlshortener.core.model.ShortUrl;
+import com.example.urlshortener.core.ports.outgoing.IdGeneratorPort;
+import com.example.urlshortener.core.ports.outgoing.MetricsPort;
+import com.example.urlshortener.core.ports.outgoing.UrlCachePort;
+import com.example.urlshortener.core.ports.outgoing.UrlRepositoryPort;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.LocalDateTime;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("UrlShortenerService Tests")
+class UrlShortenerServiceTest {
+
+    @Mock
+    private UrlRepositoryPort urlRepository;
+
+    @Mock
+    private IdGeneratorPort idGenerator;
+
+    @Mock
+    private UrlCachePort urlCache;
+
+    @Mock
+    private MetricsPort metrics;
+
+    private UrlShortenerService service;
+
+    private static final String TEST_URL = "https://www.example.com/very/long/url";
+    private static final String TEST_ID = "abc123";
+
+    @BeforeEach
+    void setUp() {
+        service = new UrlShortenerService(urlRepository, idGenerator, urlCache, metrics);
+    }
+
+    @Test
+    @DisplayName("Should shorten URL successfully")
+    void shouldShortenUrl() {
+        // Given
+        when(idGenerator.generateId()).thenReturn(TEST_ID);
+
+        // When
+        ShortUrl result = service.shorten(TEST_URL);
+
+        // Then
+        assertThat(result).isNotNull();
+        assertThat(result.id()).isEqualTo(TEST_ID);
+        assertThat(result.originalUrl()).isEqualTo(TEST_URL);
+        assertThat(result.createdAt()).isNotNull();
+
+        verify(idGenerator).generateId();
+        verify(urlRepository).save(any(ShortUrl.class));
+    }
+
+    @Test
+    @DisplayName("Should get original URL from cache (Cache Hit)")
+    void shouldGetOriginalUrlFromCache() {
+        // Given
+        when(urlCache.get(TEST_ID)).thenReturn(TEST_URL);
+
+        // When
+        String result = service.getOriginalUrl(TEST_ID);
+
+        // Then
+        assertThat(result).isEqualTo(TEST_URL);
+        verify(urlCache).get(TEST_ID);
+        verify(urlRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("Should get original URL from DB and populate cache (Cache Miss)")
+    void shouldGetOriginalUrlFromDbAndPopulateCache() {
+        // Given
+        when(urlCache.get(TEST_ID)).thenReturn(null);
+        ShortUrl shortUrl = new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now());
+        when(urlRepository.findById(TEST_ID)).thenReturn(Optional.of(shortUrl));
+
+        // When
+        String result = service.getOriginalUrl(TEST_ID);
+
+        // Then
+        assertThat(result).isEqualTo(TEST_URL);
+        verify(urlCache).get(TEST_ID);
+        verify(urlRepository).findById(TEST_ID);
+        verify(urlCache).put(TEST_ID, TEST_URL);
+    }
+
+    @Test
+    @DisplayName("Should throw UrlNotFoundException when URL not found")
+    void shouldThrowExceptionWhenUrlNotFound() {
+        // Given
+        when(urlCache.get(TEST_ID)).thenReturn(null);
+        when(urlRepository.findById(TEST_ID)).thenReturn(Optional.empty());
+
+        // When/Then
+        assertThatThrownBy(() -> service.getOriginalUrl(TEST_ID))
+                .isInstanceOf(UrlNotFoundException.class)
+                .hasMessageContaining(TEST_ID);
+
+        verify(urlCache).get(TEST_ID);
+        verify(urlRepository).findById(TEST_ID);
+        verify(urlCache, never()).put(any(), any());
+    }
+}
+
+
+===== src/test/java/com/example/urlshortener/core/model/UrlTest.java =====
+
+package com.example.urlshortener.core.model;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+@DisplayName("Url Value Object Tests")
+class UrlTest {
+
+    @Test
+    @DisplayName("Should create valid HTTP URL")
+    void shouldCreateValidHttpUrl() {
+        // Given
+        String validUrl = "http://example.com";
+
+        // When
+        Url url = new Url(validUrl);
+
+        // Then
+        assertThat(url.value()).isEqualTo(validUrl);
+    }
+
+    @Test
+    @DisplayName("Should create valid HTTPS URL")
+    void shouldCreateValidHttpsUrl() {
+        // Given
+        String validUrl = "https://example.com/path?param=value";
+
+        // When
+        Url url = new Url(validUrl);
+
+        // Then
+        assertThat(url.value()).isEqualTo(validUrl);
+    }
+
+    @Test
+    @DisplayName("Should trim whitespace")
+    void shouldTrimWhitespace() {
+        // Given
+        String urlWithSpaces = "  https://example.com  ";
+
+        // When
+        Url url = new Url(urlWithSpaces);
+
+        // Then
+        assertThat(url.value()).isEqualTo("https://example.com");
+    }
+
+    @Test
+    @DisplayName("Should reject null URL")
+    void shouldRejectNullUrl() {
+        assertThatThrownBy(() -> new Url(null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessageContaining("URL cannot be null");
+    }
+
+    @Test
+    @DisplayName("Should reject empty URL")
+    void shouldRejectEmptyUrl() {
+        assertThatThrownBy(() -> new Url(""))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("URL cannot be empty");
+    }
+
+    @Test
+    @DisplayName("Should reject blank URL")
+    void shouldRejectBlankUrl() {
+        assertThatThrownBy(() -> new Url("   "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("URL cannot be empty");
+    }
+
+    @Test
+    @DisplayName("Should reject invalid URL format")
+    void shouldRejectInvalidUrlFormat() {
+        assertThatThrownBy(() -> new Url("not-a-valid-url"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid URL format");
+    }
+
+    @Test
+    @DisplayName("Should reject URL without protocol")
+    void shouldRejectUrlWithoutProtocol() {
+        assertThatThrownBy(() -> new Url("example.com"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Invalid URL format");
+    }
+}
+
+
+===== src/main/java/com/example/urlshortener/infra/config/UndertowConfig.java =====
+
+package com.example.urlshortener.infra.config;
+
+import io.undertow.UndertowOptions;
+import org.springframework.boot.web.embedded.undertow.UndertowServletWebServerFactory;
+import org.springframework.boot.web.server.WebServerFactoryCustomizer;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class UndertowConfig implements WebServerFactoryCustomizer<UndertowServletWebServerFactory> {
+
+    @Override
+    public void customize(UndertowServletWebServerFactory factory) {
+        factory.addBuilderCustomizers(builder -> {
+            builder.setServerOption(UndertowOptions.ALWAYS_SET_KEEP_ALIVE, true);
+            // Other tuning options can be added here if needed,
+            // though many are handled via application.yml
+        });
+    }
+}
+
+
+===== src/main/java/com/example/urlshortener/infra/config/OpenApiConfig.java =====
+
+package com.example.urlshortener.infra.config;
+
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Info;
+import io.swagger.v3.oas.models.info.Contact;
+import io.swagger.v3.oas.models.servers.Server;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.List;
+
+@Configuration
+public class OpenApiConfig {
+
+    @Bean
+    public OpenAPI customOpenAPI() {
+        return new OpenAPI()
+                .info(new Info()
+                        .title("High-Performance URL Shortener API")
+                        .version("1.0.0")
+                        .description("""
+                                Ultra-fast URL shortening service built with:
+                                - Java 21 Virtual Threads
+                                - Spring Boot 3.5.7 + Undertow
+                                - Apache Cassandra + Redis
+                                - Bloom Filters & Multi-Level Caching
+
+                                Designed to handle 100M+ writes/day and 1B+ reads/day.
+                                """)
+                        .contact(new Contact()
+                                .name("API Support")
+                                .url("https://github.com/seu-usuario/url-shortener")))
+                .servers(List.of(
+                        new Server().url("http://localhost:8080").description("Local Development")));
+    }
+}
+
+
+===== src/main/java/com/example/urlshortener/infra/config/ShortCodeConfig.java =====
+
+package com.example.urlshortener.infra.config;
+
+import org.hashids.Hashids;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class ShortCodeConfig {
+
+    @Value("${app.shortener.salt}")
+    private String salt;
+
+    @Bean
+    public Hashids hashids() {
+        // MinLength 7 guarantees that even ID "1" generates something like "a1b2c3d"
+        return new Hashids(salt, 7);
+    }
+}
+
+
+===== src/main/java/com/example/urlshortener/infra/config/CassandraConfig.java =====
+
+package com.example.urlshortener.infra.config;
+
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.cassandra.config.AbstractCassandraConfiguration;
+import org.springframework.data.cassandra.repository.config.EnableCassandraRepositories;
+import org.springframework.data.cassandra.config.SchemaAction;
+
+@Configuration
+@EnableCassandraRepositories(basePackages = "com.example.urlshortener.infra.adapter.output.persistence")
+public class CassandraConfig extends AbstractCassandraConfiguration {
+
+    @Override
+    protected String getKeyspaceName() {
+        return "url_shortener";
+    }
+
+    @Override
+    protected String getLocalDataCenter() {
+        return "datacenter1";
+    }
+
+    @Override
+    public String[] getEntityBasePackages() {
+        return new String[] { "com.example.urlshortener.infra.adapter.output.persistence.entity" };
+    }
+
+    @Override
+    public SchemaAction getSchemaAction() {
+        return SchemaAction.CREATE_IF_NOT_EXISTS;
+    }
+}
+
+
+===== src/main/java/com/example/urlshortener/infra/config/RedisConfig.java =====
+
+package com.example.urlshortener.infra.config;
+
+import org.redisson.api.RedissonClient;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.beans.factory.annotation.Value;
+
+@Configuration
+public class RedisConfig {
+
+    @Bean
+    public StringRedisTemplate stringRedisTemplate(RedisConnectionFactory connectionFactory) {
+        return new StringRedisTemplate(connectionFactory);
+    }
+
+}
+
+
+===== src/main/java/com/example/urlshortener/infra/config/NativeHintsConfig.java =====
+
+package com.example.urlshortener.infra.config;
+
+import org.hashids.Hashids;
+import org.springframework.aot.hint.MemberCategory;
+import org.springframework.aot.hint.RuntimeHints;
+import org.springframework.aot.hint.RuntimeHintsRegistrar;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.ImportRuntimeHints;
+
+@Configuration
+@ImportRuntimeHints(NativeHintsConfig.HashidsHints.class)
+public class NativeHintsConfig {
+
+    static class HashidsHints implements RuntimeHintsRegistrar {
+        @Override
+        public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
+            // Garante que o construtor e métodos da Hashids sobrevivam à compilação nativa
+            hints.reflection().registerType(Hashids.class,
+                    MemberCategory.INVOKE_DECLARED_CONSTRUCTORS,
+                    MemberCategory.INVOKE_PUBLIC_METHODS);
+        }
+    }
+}
+
+
+===== src/main/java/com/example/urlshortener/infra/Application.java =====
+
+package com.example.urlshortener.infra;
+
+import com.example.urlshortener.core.ports.incoming.ShortenUrlUseCase;
+import com.example.urlshortener.core.ports.outgoing.IdGeneratorPort;
+import com.example.urlshortener.core.ports.outgoing.MetricsPort;
+import com.example.urlshortener.core.ports.outgoing.UrlRepositoryPort;
+import com.example.urlshortener.core.service.UrlShortenerService;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.Bean;
+
+@SpringBootApplication
+@org.springframework.scheduling.annotation.EnableScheduling
+public class Application {
+
+    public static void main(String[] args) {
+        SpringApplication.run(Application.class, args);
+    }
+
+    @Bean
+    public UrlShortenerService urlShortenerService(UrlRepositoryPort urlRepository, IdGeneratorPort idGenerator,
+            com.example.urlshortener.core.ports.outgoing.UrlCachePort urlCache, MetricsPort metrics) {
+        return new UrlShortenerService(urlRepository, idGenerator, urlCache, metrics);
+    }
+}
+
+
+===== src/main/java/com/example/urlshortener/infra/observability/MetricsService.java =====
+
+package com.example.urlshortener.infra.observability;
+
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import org.springframework.stereotype.Component;
+
+import java.util.concurrent.TimeUnit;
+
+/**
+ * Service for tracking custom business metrics using Micrometer.
+ * Provides methods to record URL shortening operations, cache performance,
+ * and ID generation metrics.
+ */
+@Component
+public class MetricsService {
+
+    private final Counter urlsShortenedCounter;
+    private final Counter cacheHitsCounter;
+    private final Counter cacheMissesCounter;
+    private final Counter bloomFilterRejectionsCounter;
+    private final Timer idGenerationTimer;
+    private final Timer urlRetrievalTimer;
+
+    public MetricsService(MeterRegistry registry) {
+        // URL Shortening Metrics
+        this.urlsShortenedCounter = Counter.builder("urls.shortened.total")
+                .description("Total number of URLs shortened")
+                .tag("service", "url-shortener")
+                .register(registry);
+
+        // Cache Metrics
+        this.cacheHitsCounter = Counter.builder("cache.hits.total")
+                .description("Total number of cache hits")
+                .tag("cache", "redis")
+                .register(registry);
+
+        this.cacheMissesCounter = Counter.builder("cache.misses.total")
+                .description("Total number of cache misses")
+                .tag("cache", "redis")
+                .register(registry);
+
+        this.bloomFilterRejectionsCounter = Counter.builder("bloomfilter.rejections.total")
+                .description("Total number of requests rejected by Bloom Filter")
+                .tag("protection", "cache-penetration")
+                .register(registry);
+
+        // Performance Timers
+        this.idGenerationTimer = Timer.builder("id.generation.duration")
+                .description("Time taken to generate a new ID")
+                .tag("component", "id-generator")
+                .register(registry);
+
+        this.urlRetrievalTimer = Timer.builder("url.retrieval.duration")
+                .description("Time taken to retrieve a URL")
+                .tag("operation", "get")
+                .register(registry);
+    }
+
+    /**
+     * Record a URL shortening operation
+     */
+    public void recordUrlShortened() {
+        urlsShortenedCounter.increment();
+    }
+
+    /**
+     * Record a cache hit
+     */
+    public void recordCacheHit() {
+        cacheHitsCounter.increment();
+    }
+
+    /**
+     * Record a cache miss
+     */
+    public void recordCacheMiss() {
+        cacheMissesCounter.increment();
+    }
+
+    /**
+     * Record a Bloom Filter rejection (cache penetration protection)
+     */
+    public void recordBloomFilterRejection() {
+        bloomFilterRejectionsCounter.increment();
+    }
+
+    /**
+     * Record ID generation time
+     */
+    public void recordIdGeneration(long durationMs) {
+        idGenerationTimer.record(durationMs, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Record URL retrieval time
+     */
+    public void recordUrlRetrieval(long durationMs) {
+        urlRetrievalTimer.record(durationMs, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Execute and time an ID generation operation
+     */
+    public <T> T timeIdGeneration(java.util.function.Supplier<T> operation) {
+        return idGenerationTimer.record(operation);
+    }
+
+    /**
+     * Execute and time a URL retrieval operation
+     */
+    public <T> T timeUrlRetrieval(java.util.function.Supplier<T> operation) {
+        return urlRetrievalTimer.record(operation);
+    }
+}
+
+
+===== src/main/java/com/example/urlshortener/infra/observability/MicrometerMetricsAdapter.java =====
+
+package com.example.urlshortener.infra.observability;
+
+import com.example.urlshortener.core.ports.outgoing.MetricsPort;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.stereotype.Component;
+
+/**
+ * Adapter implementing MetricsPort using Micrometer.
+ * Tracks business metrics for monitoring and observability.
+ */
+@Component
+public class MicrometerMetricsAdapter implements MetricsPort {
+
+    private final Counter urlsShortenedCounter;
+    private final Counter cacheHitsCounter;
+    private final Counter cacheMissesCounter;
+    private final Counter bloomFilterRejectionsCounter;
+
+    public MicrometerMetricsAdapter(MeterRegistry registry) {
+        this.urlsShortenedCounter = Counter.builder("urls.shortened.total")
+                .description("Total number of URLs shortened")
+                .tag("service", "url-shortener")
+                .register(registry);
+
+        this.cacheHitsCounter = Counter.builder("cache.hits.total")
+                .description("Total number of cache hits")
+                .tag("cache", "redis")
+                .register(registry);
+
+        this.cacheMissesCounter = Counter.builder("cache.misses.total")
+                .description("Total number of cache misses")
+                .tag("cache", "redis")
+                .register(registry);
+
+        this.bloomFilterRejectionsCounter = Counter.builder("bloomfilter.rejections.total")
+                .description("Total number of requests rejected by Bloom Filter")
+                .tag("protection", "cache-penetration")
+                .register(registry);
+    }
+
+    @Override
+    public void recordUrlShortened() {
+        urlsShortenedCounter.increment();
+    }
+
+    @Override
+    public void recordCacheHit() {
+        cacheHitsCounter.increment();
+    }
+
+    @Override
+    public void recordCacheMiss() {
+        cacheMissesCounter.increment();
+    }
+
+    @Override
+    public void recordBloomFilterRejection() {
+        bloomFilterRejectionsCounter.increment();
+    }
+}
+
+
+===== src/main/java/com/example/urlshortener/infra/adapter/output/redis/RedisUrlCache.java =====
+
+package com.example.urlshortener.infra.adapter.output.redis;
+
+import com.example.urlshortener.core.ports.outgoing.MetricsPort;
+import com.example.urlshortener.core.ports.outgoing.UrlCachePort;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import org.redisson.api.RBloomFilter;
+import org.redisson.api.RedissonClient;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Component;
+
+import java.time.Duration;
+import java.util.concurrent.ThreadLocalRandom;
+
+@Component
+public class RedisUrlCache implements UrlCachePort {
+
+    private final StringRedisTemplate redisTemplate;
+    private final RedissonClient redisson;
+    private final Cache<String, String> localCache;
+    private final RBloomFilter<String> bloomFilter;
+    private final MetricsPort metrics;
+
+    private static final Duration BASE_TTL = Duration.ofHours(24);
+    private static final long MAX_JITTER_SECONDS = 60;
+
+    public RedisUrlCache(StringRedisTemplate redisTemplate, RedissonClient redisson, MetricsPort metrics) {
+        this.redisTemplate = redisTemplate;
+        this.redisson = redisson;
+        this.metrics = metrics;
+
+        // Caffeine Local Cache: 100 items, 5 seconds TTL
+        this.localCache = Caffeine.newBuilder()
+                .maximumSize(100)
+                .expireAfterWrite(Duration.ofSeconds(5))
+                .build();
+
+        // Bloom Filter: Expected 100M elements, 1% false positive probability
+        this.bloomFilter = redisson.getBloomFilter("url_shortener:bloom_filter");
+        this.bloomFilter.tryInit(100_000_000L, 0.01);
+    }
+
+    @Override
+    public String get(String id) {
+        // 1. Check Local Cache (Hot Keys)
+        String localValue = localCache.getIfPresent(id);
+        if (localValue != null) {
+            return localValue;
+        }
+
+        // 2. Check Bloom Filter (Protection against Cache Penetration)
+        if (!bloomFilter.contains(id)) {
+            metrics.recordBloomFilterRejection();
+            return null; // Definitely doesn't exist
+        }
+
+        // 3. Check Redis
+        String redisValue = redisTemplate.opsForValue().get("url:" + id);
+
+        // Populate Local Cache if found
+        if (redisValue != null) {
+            localCache.put(id, redisValue);
+        }
+
+        return redisValue;
+    }
+
+    @Override
+    public void put(String id, String originalUrl) {
+        // Add to Bloom Filter
+        bloomFilter.add(id);
+
+        // Add to Redis with Jitter (Protection against Cache Stampede)
+        long jitter = ThreadLocalRandom.current().nextLong(MAX_JITTER_SECONDS);
+        Duration ttl = BASE_TTL.plusSeconds(jitter);
+
+        redisTemplate.opsForValue().set("url:" + id, originalUrl, ttl);
+
+        // Add to Local Cache
+        localCache.put(id, originalUrl);
+    }
+}
+
+
+===== src/main/java/com/example/urlshortener/infra/adapter/output/redis/RangeAwareIdGenerator.java =====
+
+package com.example.urlshortener.infra.adapter.output.redis;
+
+import com.example.urlshortener.core.ports.outgoing.IdGeneratorPort;
+import org.hashids.Hashids;
+import org.springframework.context.annotation.Primary;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.stereotype.Component;
+
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.ReentrantLock;
+
+@Component
+@Primary // Make this the default implementation
+public class RangeAwareIdGenerator implements IdGeneratorPort {
+
+    private final StringRedisTemplate redis;
+    private final Hashids hashids;
+    private final AtomicLong currentId = new AtomicLong(0);
+    private volatile long maxIdInCurrentRange = 0;
+    private static final int RANGE_SIZE = 1000;
+    private static final String SEQUENCE_KEY = "global_link_id_seq";
+
+    private final ReentrantLock lock = new ReentrantLock();
+
+    public RangeAwareIdGenerator(StringRedisTemplate redis, Hashids hashids) {
+        this.redis = redis;
+        this.hashids = hashids;
+    }
+
+    @Override
+    public String generateId() {
+        long nextId = getNextUniqueId();
+        return hashids.encode(nextId);
+    }
+
+    private long getNextUniqueId() {
+        long next = currentId.incrementAndGet();
+
+        // If local range is exhausted, fetch new block from Redis
+        if (next > maxIdInCurrentRange) {
+            lock.lock();
+            try {
+                if (currentId.get() > maxIdInCurrentRange) {
+                    // Call Redis INCRBY 1000
+                    Long upperLimit = redis.opsForValue().increment(SEQUENCE_KEY, RANGE_SIZE);
+
+                    if (upperLimit == null) {
+                        throw new IllegalStateException("Failed to increment sequence in Redis");
+                    }
+
+                    maxIdInCurrentRange = upperLimit;
+                    currentId.set(upperLimit - RANGE_SIZE + 1);
+                    return currentId.get();
+                }
+            } finally {
+                lock.unlock();
+            }
+            // Simple retry if another thread already updated
+            return getNextUniqueId();
+        }
+        return next;
+    }
+}
+
+
+===== src/main/java/com/example/urlshortener/infra/adapter/output/redis/RedisRateLimiterAdapter.java =====
+
+package com.example.urlshortener.infra.adapter.output.redis;
+
+import com.example.urlshortener.core.ports.outgoing.RateLimiterPort;
+import org.redisson.api.RAtomicLong;
+import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import java.time.Duration;
+
+/**
+ * Redis based token‑bucket rate limiter. Uses a simple counter per IP address
+ * with a TTL equal to the window size. The limit and window are configurable
+ * via application.yml (properties `rate-limiter.limit` and
+ * `rate-limiter.window`).
+ */
+@Component
+public class RedisRateLimiterAdapter implements RateLimiterPort {
+    private final long limit;
+    private final Duration window;
+    private final RedissonClient redisson;
+
+    public RedisRateLimiterAdapter(
+            RedissonClient redisson,
+            @Value("${rate-limiter.limit:60}") long limit,
+            @Value("${rate-limiter.window:PT1M}") Duration window) {
+        this.redisson = redisson;
+        this.limit = limit;
+        this.window = window;
+    }
+
+    @Override
+    public boolean isAllowed(String ip) {
+        String key = "rl:" + ip;
+        RAtomicLong counter = redisson.getAtomicLong(key);
+        long current = counter.incrementAndGet();
+        if (current == 1) {
+            // first request for this window – set expiry
+            counter.expire(window);
+        }
+        return current <= limit;
+    }
+}
+
+
+===== src/main/java/com/example/urlshortener/infra/adapter/output/analytics/AsyncAnalyticsAdapter.java =====
+
+package com.example.urlshortener.infra.adapter.output.analytics;
+
+import com.example.urlshortener.core.model.ClickEvent;
+import com.example.urlshortener.core.ports.outgoing.AnalyticsPort;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+
+@Component
+public class AsyncAnalyticsAdapter implements AnalyticsPort {
+
+    private static final Logger log = LoggerFactory.getLogger(AsyncAnalyticsAdapter.class);
+    private final BlockingQueue<ClickEvent> eventQueue;
+
+    public AsyncAnalyticsAdapter() {
+        // Capacity of 100k events to handle bursts
+        this.eventQueue = new LinkedBlockingQueue<>(100_000);
+    }
+
+    @Override
+    public void track(ClickEvent event) {
+        // Fire-and-forget: Add to queue and return immediately
+        // Using offer() to avoid blocking the http thread if queue is full
+        if (!eventQueue.offer(event)) {
+            log.warn("Analytics queue full! Dropping event for ID: {}", event.shortCode());
+        }
+    }
+
+    public BlockingQueue<ClickEvent> getQueue() {
+        return eventQueue;
+    }
+}
+
+
+===== src/main/java/com/example/urlshortener/infra/adapter/output/analytics/ClickBatchWorker.java =====
+
+package com.example.urlshortener.infra.adapter.output.analytics;
+
+import com.example.urlshortener.core.model.ClickEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.BlockingQueue;
+
+@Component
+public class ClickBatchWorker {
+
+    private static final Logger log = LoggerFactory.getLogger(ClickBatchWorker.class);
+    private final AsyncAnalyticsAdapter analyticsAdapter;
+
+    // In a real scenario, we would inject a Repository to save these events
+    // private final ClickRepository clickRepository;
+
+    public ClickBatchWorker(AsyncAnalyticsAdapter analyticsAdapter) {
+        this.analyticsAdapter = analyticsAdapter;
+    }
+
+    // Run every 5 seconds
+    @Scheduled(fixedRate = 5000)
+    public void processBatch() {
+        BlockingQueue<ClickEvent> queue = analyticsAdapter.getQueue();
+        if (queue.isEmpty()) {
+            return;
+        }
+
+        List<ClickEvent> batch = new ArrayList<>();
+        queue.drainTo(batch, 1000); // Drain up to 1000 events
+
+        if (!batch.isEmpty()) {
+            log.info("Processing batch of {} click events...", batch.size());
+            // Here we would do a batch insert into Cassandra
+            // clickRepository.saveAll(batch);
+
+            // For now, just log to simulate processing
+            batch.forEach(e -> log.debug("Processed click for {}", e.shortCode()));
+        }
+    }
+}
+
+
+===== src/main/java/com/example/urlshortener/infra/adapter/output/persistence/CassandraUrlRepository.java =====
+
+package com.example.urlshortener.infra.adapter.output.persistence;
+
+import com.example.urlshortener.core.model.ShortUrl;
+import com.example.urlshortener.core.ports.outgoing.UrlRepositoryPort;
+import com.example.urlshortener.infra.adapter.output.persistence.entity.ShortUrlEntity;
+import org.springframework.data.repository.CrudRepository;
+import org.springframework.stereotype.Repository;
+
+interface SpringDataCassandraUrlRepository extends CrudRepository<ShortUrlEntity, String> {
+}
+
+@Repository
+public class CassandraUrlRepository implements UrlRepositoryPort {
+
+    private final SpringDataCassandraUrlRepository springDataRepository;
+
+    public CassandraUrlRepository(SpringDataCassandraUrlRepository springDataRepository) {
+        this.springDataRepository = springDataRepository;
+    }
+
+    @Override
+    public void save(ShortUrl shortUrl) {
+        ShortUrlEntity entity = new ShortUrlEntity(shortUrl.id(), shortUrl.originalUrl(), shortUrl.createdAt());
+        springDataRepository.save(entity);
+    }
+
+    @Override
+    public java.util.Optional<ShortUrl> findById(String id) {
+        return springDataRepository.findById(id)
+                .map(entity -> new ShortUrl(entity.getId(), entity.getOriginalUrl(), entity.getCreatedAt()));
+    }
+}
+
+
+===== src/main/java/com/example/urlshortener/infra/adapter/output/persistence/entity/ShortUrlEntity.java =====
+
+package com.example.urlshortener.infra.adapter.output.persistence.entity;
+
+import org.springframework.data.cassandra.core.mapping.PrimaryKey;
+import org.springframework.data.cassandra.core.mapping.Table;
+
+import java.time.LocalDateTime;
+
+@Table("short_urls")
+public class ShortUrlEntity {
+
+    @PrimaryKey
+    private String id;
+    private String originalUrl;
+    private LocalDateTime createdAt;
+
+    public ShortUrlEntity() {
+    }
+
+    public ShortUrlEntity(String id, String originalUrl, LocalDateTime createdAt) {
+        this.id = id;
+        this.originalUrl = originalUrl;
+        this.createdAt = createdAt;
+    }
+
+    public String getId() {
+        return id;
+    }
+
+    public void setId(String id) {
+        this.id = id;
+    }
+
+    public String getOriginalUrl() {
+        return originalUrl;
+    }
+
+    public void setOriginalUrl(String originalUrl) {
+        this.originalUrl = originalUrl;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+}
+
+
+===== src/main/java/com/example/urlshortener/infra/adapter/input/rest/dto/ShortenRequest.java =====
+
+package com.example.urlshortener.infra.adapter.input.rest.dto;
+
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+
+public record ShortenRequest(
+        @NotBlank(message = "URL cannot be empty") @Pattern(regexp = "^https?://.*", message = "URL must start with http:// or https://") String originalUrl) {
+}
+
+
+===== src/main/java/com/example/urlshortener/infra/adapter/input/rest/dto/ShortenResponse.java =====
+
+package com.example.urlshortener.infra.adapter.input.rest.dto;
+
+public record ShortenResponse(String id, String shortUrl) {
+}
+
+
+===== src/main/java/com/example/urlshortener/infra/adapter/input/rest/UrlController.java =====
+
+package com.example.urlshortener.infra.adapter.input.rest;
+
+import com.example.urlshortener.core.model.ShortUrl;
+import com.example.urlshortener.core.ports.incoming.ShortenUrlUseCase;
+import com.example.urlshortener.core.ports.incoming.GetUrlUseCase;
+import com.example.urlshortener.core.ports.outgoing.AnalyticsPort;
+import com.example.urlshortener.core.ports.outgoing.RateLimiterPort;
+import com.example.urlshortener.infra.adapter.input.rest.dto.ShortenRequest;
+import com.example.urlshortener.infra.adapter.input.rest.dto.ShortenResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@Tag(name = "URL Shortener", description = "High-performance URL shortening and redirection API")
+public class UrlController {
+
+        private final ShortenUrlUseCase shortenUrlUseCase;
+        private final GetUrlUseCase getUrlUseCase;
+        private final AnalyticsPort analyticsPort;
+        private final RateLimiterPort rateLimiter;
+        private final HttpServletRequest request;
+
+        public UrlController(ShortenUrlUseCase shortenUrlUseCase,
+                        GetUrlUseCase getUrlUseCase,
+                        AnalyticsPort analyticsPort,
+                        RateLimiterPort rateLimiter,
+                        HttpServletRequest request) {
+                this.shortenUrlUseCase = shortenUrlUseCase;
+                this.getUrlUseCase = getUrlUseCase;
+                this.analyticsPort = analyticsPort;
+                this.rateLimiter = rateLimiter;
+                this.request = request;
+        }
+
+        @PostMapping("/api/v1/urls")
+        @Operation(summary = "Shorten a URL", description = "Creates a short URL code for the provided long URL. Uses Hashids encoding with Redis-backed ID generation (1000 IDs batched in memory).")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "200", description = "URL successfully shortened", content = @Content(schema = @Schema(implementation = ShortenResponse.class))),
+                        @ApiResponse(responseCode = "400", description = "Invalid URL format", content = @Content),
+                        @ApiResponse(responseCode = "429", description = "Rate limit exceeded", content = @Content)
+        })
+        public ResponseEntity<ShortenResponse> shorten(
+                        @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "URL to be shortened", required = true, content = @Content(schema = @Schema(implementation = ShortenRequest.class))) @jakarta.validation.Valid @RequestBody ShortenRequest request) {
+                String clientIp = this.request.getRemoteAddr();
+                if (!rateLimiter.isAllowed(clientIp)) {
+                        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).build();
+                }
+                ShortUrl shortUrl = shortenUrlUseCase.shorten(request.originalUrl());
+                String baseUrl = org.springframework.web.servlet.support.ServletUriComponentsBuilder
+                                .fromCurrentContextPath().build().toUriString();
+                return ResponseEntity.ok(new ShortenResponse(shortUrl.id(), baseUrl + "/" + shortUrl.id()));
+        }
+
+        @GetMapping("/{id}")
+        @Operation(summary = "Redirect to original URL", description = "Retrieves the original URL and redirects (HTTP 302). Uses multi-level caching: Caffeine (L1, 5s) → Redis (L2, 24h+jitter) → Cassandra. Click events are tracked asynchronously without blocking the redirect.")
+        @ApiResponses(value = {
+                        @ApiResponse(responseCode = "302", description = "Redirect to original URL"),
+                        @ApiResponse(responseCode = "404", description = "Short URL not found", content = @Content)
+        })
+        public ResponseEntity<Void> redirect(
+                        @Parameter(description = "Short URL code (e.g., vE1GpYK)", required = true, example = "vE1GpYK") @PathVariable String id,
+                        HttpServletRequest request) {
+                String originalUrl = getUrlUseCase.getOriginalUrl(id);
+                analyticsPort.track(new com.example.urlshortener.core.model.ClickEvent(
+                                id,
+                                java.time.LocalDateTime.now(),
+                                request.getHeader("User-Agent"),
+                                request.getRemoteAddr()));
+                return ResponseEntity.status(HttpStatus.FOUND).location(java.net.URI.create(originalUrl)).build();
+        }
+}
+
+
+===== src/main/java/com/example/urlshortener/infra/adapter/input/rest/advice/GlobalExceptionHandler.java =====
+
+package com.example.urlshortener.infra.adapter.input.rest.advice;
+
+import com.example.urlshortener.core.exception.UrlNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(UrlNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleUrlNotFound(UrlNotFoundException ex) {
+        log.warn("URL not found: {}", ex.getMessage());
+
+        ErrorResponse error = new ErrorResponse(
+                HttpStatus.NOT_FOUND.value(),
+                "URL Not Found",
+                ex.getMessage(),
+                LocalDateTime.now());
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
+        log.warn("Invalid argument: {}", ex.getMessage());
+
+        ErrorResponse error = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "Invalid Request",
+                ex.getMessage(),
+                LocalDateTime.now());
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ValidationErrorResponse> handleValidationErrors(MethodArgumentNotValidException ex) {
+        log.warn("Validation failed: {}", ex.getMessage());
+
+        Map<String, String> errors = new HashMap<>();
+        ex.getBindingResult().getAllErrors().forEach(error -> {
+            String fieldName = ((FieldError) error).getField();
+            String errorMessage = error.getDefaultMessage();
+            errors.put(fieldName, errorMessage);
+        });
+
+        ValidationErrorResponse errorResponse = new ValidationErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "Validation Failed",
+                "Request validation failed",
+                LocalDateTime.now(),
+                errors);
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        log.warn("Type mismatch: {}", ex.getMessage());
+
+        String message = String.format("Invalid value '%s' for parameter '%s'",
+                ex.getValue(), ex.getName());
+
+        ErrorResponse error = new ErrorResponse(
+                HttpStatus.BAD_REQUEST.value(),
+                "Invalid Parameter Type",
+                message,
+                LocalDateTime.now());
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ErrorResponse> handleGenericException(Exception ex) {
+        log.error("Unexpected error occurred", ex);
+
+        ErrorResponse error = new ErrorResponse(
+                HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                "Internal Server Error",
+                "An unexpected error occurred. Please try again later.",
+                LocalDateTime.now());
+
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+    }
+
+    // Error response DTOs
+    public record ErrorResponse(
+            int status,
+            String error,
+            String message,
+            LocalDateTime timestamp) {
+    }
+
+    public record ValidationErrorResponse(
+            int status,
+            String error,
+            String message,
+            LocalDateTime timestamp,
+            Map<String, String> validationErrors) {
+    }
+}
+
+
+===== src/main/java/com/example/urlshortener/core/service/UrlShortenerService.java =====
+
+package com.example.urlshortener.core.service;
+
+import com.example.urlshortener.core.model.ShortUrl;
+import com.example.urlshortener.core.model.Url;
+import com.example.urlshortener.core.ports.incoming.GetUrlUseCase;
+import com.example.urlshortener.core.ports.incoming.ShortenUrlUseCase;
+import com.example.urlshortener.core.ports.outgoing.IdGeneratorPort;
+import com.example.urlshortener.core.ports.outgoing.MetricsPort;
+import com.example.urlshortener.core.ports.outgoing.UrlCachePort;
+import com.example.urlshortener.core.ports.outgoing.UrlRepositoryPort;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.time.LocalDateTime;
+import java.util.Objects;
+
+public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
+
+    private static final Logger log = LoggerFactory.getLogger(UrlShortenerService.class);
+
+    // Log message constants
+    private static final String LOG_CACHE_HIT = "Cache Hit for ID: {}";
+    private static final String LOG_CACHE_MISS = "Cache Miss for ID: {}. Fetching from DB...";
+
+    private final UrlRepositoryPort urlRepository;
+    private final IdGeneratorPort idGenerator;
+    private final UrlCachePort urlCache;
+    private final MetricsPort metrics;
+
+    public UrlShortenerService(UrlRepositoryPort urlRepository, IdGeneratorPort idGenerator,
+            UrlCachePort urlCache, MetricsPort metrics) {
+        this.urlRepository = urlRepository;
+        this.idGenerator = idGenerator;
+        this.urlCache = urlCache;
+        this.metrics = metrics;
+    }
+
+    @Override
+    public ShortUrl shorten(String originalUrl) {
+        // Input validation
+        Objects.requireNonNull(originalUrl, "URL cannot be null");
+
+        // Validate URL format using Value Object
+        Url validatedUrl = new Url(originalUrl);
+
+        String id = idGenerator.generateId();
+        ShortUrl shortUrl = new ShortUrl(id, validatedUrl.value(), LocalDateTime.now());
+        urlRepository.save(shortUrl);
+
+        // Record metric
+        metrics.recordUrlShortened();
+
+        return shortUrl;
+    }
+
+    @Override
+    public String getOriginalUrl(String id) {
+        // Input validation
+        Objects.requireNonNull(id, "ID cannot be null");
+        if (id.isBlank()) {
+            throw new IllegalArgumentException("ID cannot be empty");
+        }
+
+        // 1. Check Cache
+        String cachedUrl = urlCache.get(id);
+        if (cachedUrl != null) {
+            log.info(LOG_CACHE_HIT, id);
+            metrics.recordCacheHit();
+            return cachedUrl;
+        }
+
+        // 2. Check Database
+        log.info(LOG_CACHE_MISS, id);
+        metrics.recordCacheMiss();
+
+        return urlRepository.findById(id)
+                .map(shortUrl -> {
+                    // 3. Populate Cache
+                    urlCache.put(id, shortUrl.originalUrl());
+                    return shortUrl.originalUrl();
+                })
+                .orElseThrow(() -> new com.example.urlshortener.core.exception.UrlNotFoundException(id));
+    }
+}
+
+
+===== src/main/java/com/example/urlshortener/core/model/Url.java =====
+
+package com.example.urlshortener.core.model;
+
+import java.util.Objects;
+
+/**
+ * Value Object representing a URL with validation.
+ * Immutable and validates URL format on construction.
+ */
+public record Url(String value) {
+
+    private static final String URL_PATTERN = "^https?://.*";
+
+    public Url {
+        Objects.requireNonNull(value, "URL cannot be null");
+
+        // Trim whitespace FIRST
+        value = value.trim();
+
+        if (value.isBlank()) {
+            throw new IllegalArgumentException("URL cannot be empty");
+        }
+
+        if (!value.matches(URL_PATTERN)) {
+            throw new IllegalArgumentException(
+                    "Invalid URL format. Must start with http:// or https://");
+        }
+    }
+
+    @Override
+    public String toString() {
+        return value;
+    }
+}
+
+
+===== src/main/java/com/example/urlshortener/core/model/ShortUrl.java =====
+
+package com.example.urlshortener.core.model;
+
+import java.time.LocalDateTime;
+
+public record ShortUrl(
+    String id,
+    String originalUrl,
+    LocalDateTime createdAt
+) {}
+
+
+===== src/main/java/com/example/urlshortener/core/model/ClickEvent.java =====
+
+package com.example.urlshortener.core.model;
+
+import java.time.LocalDateTime;
+
+public record ClickEvent(
+        String shortCode,
+        LocalDateTime timestamp,
+        String userAgent,
+        String ip) {
+}
+
+
+===== src/main/java/com/example/urlshortener/core/exception/UrlNotFoundException.java =====
+
+package com.example.urlshortener.core.exception;
+
+public class UrlNotFoundException extends RuntimeException {
+    public UrlNotFoundException(String id) {
+        super("URL not found for ID: " + id);
+    }
+}
+
+
+===== src/main/java/com/example/urlshortener/core/ports/outgoing/UrlCachePort.java =====
+
+package com.example.urlshortener.core.ports.outgoing;
+
+public interface UrlCachePort {
+    String get(String id);
+
+    void put(String id, String originalUrl);
+}
+
+
+===== src/main/java/com/example/urlshortener/core/ports/outgoing/RateLimiterPort.java =====
+
+package com.example.urlshortener.core.ports.outgoing;
+
+/**
+ * Port for per‑IP rate limiting.
+ * Implementations decide how to track request counts (e.g., Redis token
+ * bucket).
+ */
+public interface RateLimiterPort {
+    /**
+     * Returns {@code true} if the request from the given IP address is allowed
+     * under the configured rate limit, {@code false} otherwise.
+     */
+    boolean isAllowed(String ip);
+}
+
+
+===== src/main/java/com/example/urlshortener/core/ports/outgoing/AnalyticsPort.java =====
+
+package com.example.urlshortener.core.ports.outgoing;
+
+import com.example.urlshortener.core.model.ClickEvent;
+
+public interface AnalyticsPort {
+    void track(ClickEvent event);
+}
+
+
+===== src/main/java/com/example/urlshortener/core/ports/outgoing/MetricsPort.java =====
+
+package com.example.urlshortener.core.ports.outgoing;
+
+/**
+ * Port for recording application metrics.
+ * Allows the core domain to track business events without depending on
+ * infrastructure.
+ */
+public interface MetricsPort {
+
+    void recordUrlShortened();
+
+    void recordCacheHit();
+
+    void recordCacheMiss();
+
+    void recordBloomFilterRejection();
+}
+
+
+===== src/main/java/com/example/urlshortener/core/ports/outgoing/UrlRepositoryPort.java =====
+
+package com.example.urlshortener.core.ports.outgoing;
+
+import com.example.urlshortener.core.model.ShortUrl;
+
+public interface UrlRepositoryPort {
+    void save(ShortUrl shortUrl);
+
+    java.util.Optional<ShortUrl> findById(String id);
+}
+
+
+===== src/main/java/com/example/urlshortener/core/ports/outgoing/IdGeneratorPort.java =====
+
+package com.example.urlshortener.core.ports.outgoing;
+
+public interface IdGeneratorPort {
+    String generateId();
+}
+
+
+===== src/main/java/com/example/urlshortener/core/ports/incoming/GetUrlUseCase.java =====
+
+package com.example.urlshortener.core.ports.incoming;
+
+public interface GetUrlUseCase {
+    String getOriginalUrl(String id);
+}
+
+
+===== src/main/java/com/example/urlshortener/core/ports/incoming/ShortenUrlUseCase.java =====
+
+package com.example.urlshortener.core.ports.incoming;
+
+import com.example.urlshortener.core.model.ShortUrl;
+
+public interface ShortenUrlUseCase {
+    ShortUrl shorten(String originalUrl);
+}
+
+
+===== src/main/resources/application.yml =====
+
+server:
+  undertow:
+    threads:
+      io: 16           # I/O threads (Usually cores * 2)
+      worker: 200      # Worker threads (Virtual threads handle the heavy load)
+    buffer-size: 1024  # Direct buffer optimization
+    direct-buffers: true
+
+spring:
+  application:
+    name: url-shortener-native
+  threads:
+    virtual:
+      enabled: true  # Enables Virtual Threads across the container (Undertow)
+
+app:
+  shortener:
+    salt: "my-secret-salt-change-me-in-prod" # Should be an env var in production
+
+  # Optimized Configuration for Cassandra and Redis
+  cassandra:
+    keyspace-name: url_shortener
+    local-datacenter: datacenter1
+    connection:
+      connect-timeout: 2s
+      init-query-timeout: 2s
+    schema-action: create-if-not-exists
+  
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 500ms
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+
+rate-limiter:
+  limit: 60
+  window: PT1M
