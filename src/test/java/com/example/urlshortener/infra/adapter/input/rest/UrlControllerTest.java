@@ -47,6 +47,9 @@ class UrlControllerTest {
     @MockitoBean
     private RateLimiterPort rateLimiter;
 
+    @MockitoBean
+    private com.example.urlshortener.infra.observability.MetricsService metricsService;
+
     private static final String TEST_URL = "https://www.example.com/very/long/url";
     private static final String TEST_ID = "abc123";
 

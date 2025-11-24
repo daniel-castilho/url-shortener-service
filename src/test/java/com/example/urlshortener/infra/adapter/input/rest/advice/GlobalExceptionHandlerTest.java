@@ -45,6 +45,9 @@ class GlobalExceptionHandlerTest {
         @MockitoBean
         private RateLimiterPort rateLimiter;
 
+        @MockitoBean
+        private com.example.urlshortener.infra.observability.MetricsService metricsService;
+
         @Test
         @DisplayName("Should return 404 with error response when URL not found")
         void shouldReturn404WhenUrlNotFound() throws Exception {

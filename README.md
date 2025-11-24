@@ -107,6 +107,19 @@ This project is optimized to support **100 million writes/day** and **1 billion 
 - **Batch Processing**: Worker processes events in batches every 5 seconds
 - **Queue Capacity**: 100k events in memory to absorb traffic spikes
 
+### Observability & Monitoring
+
+- **Custom Business Metrics**: Exposed via Micrometer for Prometheus/Grafana
+  - `urls.shortened.total`: Total URLs shortened
+  - `redirects.total`: Total redirects performed
+  - `shorten.latency`: End-to-end latency for shortening (p50, p95, p99)
+  - `redirect.latency`: End-to-end latency for redirects (p50, p95, p99)
+  - `cache.hits.total` / `cache.misses.total`: Redis cache performance
+  - `id.generation.duration`: ID generation time
+  - `bloomfilter.rejections.total`: Cache penetration protection counter
+- **Health Checks**: Circuit breaker status and component health
+- **Endpoints**: Available at `/actuator/prometheus`, `/actuator/health`, `/actuator/metrics`
+
 ---
 
 ## 🚀 How to Run

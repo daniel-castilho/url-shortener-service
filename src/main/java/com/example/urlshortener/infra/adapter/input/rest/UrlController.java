@@ -7,6 +7,7 @@ import com.example.urlshortener.core.ports.outgoing.AnalyticsPort;
 import com.example.urlshortener.core.ports.outgoing.RateLimiterPort;
 import com.example.urlshortener.infra.adapter.input.rest.dto.ShortenRequest;
 import com.example.urlshortener.infra.adapter.input.rest.dto.ShortenResponse;
+import com.example.urlshortener.infra.observability.MetricsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -32,17 +33,20 @@ public class UrlController {
         private final AnalyticsPort analyticsPort;
         private final RateLimiterPort rateLimiter;
         private final HttpServletRequest request;
+        private final MetricsService metricsService;
 
         public UrlController(ShortenUrlUseCase shortenUrlUseCase,
                         GetUrlUseCase getUrlUseCase,
                         AnalyticsPort analyticsPort,
                         RateLimiterPort rateLimiter,
-                        HttpServletRequest request) {
+                        HttpServletRequest request,
+                        MetricsService metricsService) {
                 this.shortenUrlUseCase = shortenUrlUseCase;
                 this.getUrlUseCase = getUrlUseCase;
                 this.analyticsPort = analyticsPort;
                 this.rateLimiter = rateLimiter;
                 this.request = request;
+                this.metricsService = metricsService;
         }
 
         @PostMapping("/api/v1/urls")
@@ -54,14 +58,21 @@ public class UrlController {
         })
         public ResponseEntity<ShortenResponse> shorten(
                         @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "URL to be shortened", required = true, content = @Content(schema = @Schema(implementation = ShortenRequest.class))) @jakarta.validation.Valid @RequestBody ShortenRequest request) {
-                String clientIp = this.request.getRemoteAddr();
-                if (!rateLimiter.isAllowed(clientIp)) {
-                        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).build();
+                long startTime = System.currentTimeMillis();
+                try {
+                        String clientIp = this.request.getRemoteAddr();
+                        if (!rateLimiter.isAllowed(clientIp)) {
+                                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).build();
+                        }
+                        ShortUrl shortUrl = shortenUrlUseCase.shorten(request.originalUrl());
+                        String baseUrl = org.springframework.web.servlet.support.ServletUriComponentsBuilder
+                                        .fromCurrentContextPath().build().toUriString();
+
+                        metricsService.recordUrlShortened();
+                        return ResponseEntity.ok(new ShortenResponse(shortUrl.id(), baseUrl + "/" + shortUrl.id()));
+                } finally {
+                        metricsService.recordShortenLatency(System.currentTimeMillis() - startTime);
                 }
-                ShortUrl shortUrl = shortenUrlUseCase.shorten(request.originalUrl());
-                String baseUrl = org.springframework.web.servlet.support.ServletUriComponentsBuilder
-                                .fromCurrentContextPath().build().toUriString();
-                return ResponseEntity.ok(new ShortenResponse(shortUrl.id(), baseUrl + "/" + shortUrl.id()));
         }
 
         @GetMapping("/{id}")
@@ -73,12 +84,20 @@ public class UrlController {
         public ResponseEntity<Void> redirect(
                         @Parameter(description = "Short URL code (e.g., vE1GpYK)", required = true, example = "vE1GpYK") @PathVariable String id,
                         HttpServletRequest request) {
-                String originalUrl = getUrlUseCase.getOriginalUrl(id);
-                analyticsPort.track(new com.example.urlshortener.core.model.ClickEvent(
-                                id,
-                                java.time.LocalDateTime.now(),
-                                request.getHeader("User-Agent"),
-                                request.getRemoteAddr()));
-                return ResponseEntity.status(HttpStatus.FOUND).location(java.net.URI.create(originalUrl)).build();
+                long startTime = System.currentTimeMillis();
+                try {
+                        String originalUrl = getUrlUseCase.getOriginalUrl(id);
+                        analyticsPort.track(new com.example.urlshortener.core.model.ClickEvent(
+                                        id,
+                                        java.time.LocalDateTime.now(),
+                                        request.getHeader("User-Agent"),
+                                        request.getRemoteAddr()));
+
+                        metricsService.recordRedirect();
+                        return ResponseEntity.status(HttpStatus.FOUND).location(java.net.URI.create(originalUrl))
+                                        .build();
+                } finally {
+                        metricsService.recordRedirectLatency(System.currentTimeMillis() - startTime);
+                }
         }
 }

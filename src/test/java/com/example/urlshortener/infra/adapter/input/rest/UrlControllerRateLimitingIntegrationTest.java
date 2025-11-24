@@ -42,6 +42,9 @@ class UrlControllerRateLimitingIntegrationTest {
     @MockitoBean
     private RedissonClient redissonClient; // not used directly but required for context
 
+    @MockitoBean
+    private com.example.urlshortener.infra.observability.MetricsService metricsService;
+
     @BeforeEach
     void setUp() {
         when(shortenUrlUseCase.shorten(anyString()))

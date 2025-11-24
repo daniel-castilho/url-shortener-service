@@ -16,16 +16,25 @@ import java.util.concurrent.TimeUnit;
 public class MetricsService {
 
     private final Counter urlsShortenedCounter;
+    private final Counter redirectsCounter;
     private final Counter cacheHitsCounter;
     private final Counter cacheMissesCounter;
     private final Counter bloomFilterRejectionsCounter;
     private final Timer idGenerationTimer;
     private final Timer urlRetrievalTimer;
+    private final Timer shortenLatencyTimer;
+    private final Timer redirectLatencyTimer;
 
     public MetricsService(MeterRegistry registry) {
         // URL Shortening Metrics
         this.urlsShortenedCounter = Counter.builder("urls.shortened.total")
                 .description("Total number of URLs shortened")
+                .tag("service", "url-shortener")
+                .register(registry);
+
+        // Redirect Metrics
+        this.redirectsCounter = Counter.builder("redirects.total")
+                .description("Total number of redirects performed")
                 .tag("service", "url-shortener")
                 .register(registry);
 
@@ -55,6 +64,19 @@ public class MetricsService {
                 .description("Time taken to retrieve a URL")
                 .tag("operation", "get")
                 .register(registry);
+
+        // Latency Timers with Percentiles
+        this.shortenLatencyTimer = Timer.builder("shorten.latency")
+                .description("End-to-end latency for URL shortening operation")
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .tag("operation", "shorten")
+                .register(registry);
+
+        this.redirectLatencyTimer = Timer.builder("redirect.latency")
+                .description("End-to-end latency for redirect operation")
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .tag("operation", "redirect")
+                .register(registry);
     }
 
     /**
@@ -62,6 +84,13 @@ public class MetricsService {
      */
     public void recordUrlShortened() {
         urlsShortenedCounter.increment();
+    }
+
+    /**
+     * Record a redirect operation
+     */
+    public void recordRedirect() {
+        redirectsCounter.increment();
     }
 
     /**
@@ -100,6 +129,20 @@ public class MetricsService {
     }
 
     /**
+     * Record end-to-end latency for URL shortening operation
+     */
+    public void recordShortenLatency(long durationMs) {
+        shortenLatencyTimer.record(durationMs, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Record end-to-end latency for redirect operation
+     */
+    public void recordRedirectLatency(long durationMs) {
+        redirectLatencyTimer.record(durationMs, TimeUnit.MILLISECONDS);
+    }
+
+    /**
      * Execute and time an ID generation operation
      */
     public <T> T timeIdGeneration(java.util.function.Supplier<T> operation) {
@@ -111,5 +154,19 @@ public class MetricsService {
      */
     public <T> T timeUrlRetrieval(java.util.function.Supplier<T> operation) {
         return urlRetrievalTimer.record(operation);
+    }
+
+    /**
+     * Execute and time a URL shortening operation
+     */
+    public <T> T timeShortenOperation(java.util.function.Supplier<T> operation) {
+        return shortenLatencyTimer.record(operation);
+    }
+
+    /**
+     * Execute and time a redirect operation
+     */
+    public <T> T timeRedirectOperation(java.util.function.Supplier<T> operation) {
+        return redirectLatencyTimer.record(operation);
     }
 }
