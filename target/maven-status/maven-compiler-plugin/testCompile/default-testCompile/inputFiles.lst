@@ -1,4 +1,5 @@
 /home/castilho/projects/url-shortener/url-shortener-service/src/test/java/com/example/urlshortener/UrlShortenerIntegrationTest.java
+/home/castilho/projects/url-shortener/url-shortener-service/src/test/java/com/example/urlshortener/core/model/UrlTest.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/test/java/com/example/urlshortener/core/service/UrlShortenerServiceTest.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/test/java/com/example/urlshortener/infra/adapter/input/rest/UrlControllerTest.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/test/java/com/example/urlshortener/infra/adapter/output/persistence/CassandraIntegrationTest.java

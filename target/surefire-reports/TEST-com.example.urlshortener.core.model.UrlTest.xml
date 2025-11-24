@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" version="3.0.2" name="com.example.urlshortener.core.service.UrlShortenerServiceTest" time="0.357" tests="4" errors="0" skipped="0" failures="0">
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report.xsd" version="3.0.2" name="com.example.urlshortener.core.model.UrlTest" time="0.019" tests="8" errors="0" skipped="0" failures="0">
   <properties>
     <property name="java.specification.version" value="21"/>
     <property name="sun.jnu.encoding" value="UTF-8"/>
@@ -65,17 +65,12 @@
     <property name="java.class.version" value="65.0"/>
     <property name="LOGGED_APPLICATION_NAME" value="[url-shortener-native] "/>
   </properties>
-  <testcase name="shouldGetOriginalUrlFromCache" classname="UrlShortenerService Tests" time="0.329">
-    <system-out><![CDATA[2025-11-23T21:20:09.906-05:00  INFO 319049 --- [url-shortener-native] [           main] c.e.u.core.service.UrlShortenerService   : Cache Hit for ID: abc123
-]]></system-out>
-  </testcase>
-  <testcase name="shouldThrowExceptionWhenUrlNotFound" classname="UrlShortenerService Tests" time="0.015">
-    <system-out><![CDATA[2025-11-23T21:20:09.911-05:00  INFO 319049 --- [url-shortener-native] [           main] c.e.u.core.service.UrlShortenerService   : Cache Miss for ID: abc123. Fetching from DB...
-]]></system-out>
-  </testcase>
-  <testcase name="shouldGetOriginalUrlFromDbAndPopulateCache" classname="UrlShortenerService Tests" time="0.004">
-    <system-out><![CDATA[2025-11-23T21:20:09.926-05:00  INFO 319049 --- [url-shortener-native] [           main] c.e.u.core.service.UrlShortenerService   : Cache Miss for ID: abc123. Fetching from DB...
-]]></system-out>
-  </testcase>
-  <testcase name="shouldShortenUrl" classname="UrlShortenerService Tests" time="0.005"/>
+  <testcase name="shouldCreateValidHttpsUrl" classname="Url Value Object Tests" time="0.001"/>
+  <testcase name="shouldRejectBlankUrl" classname="Url Value Object Tests" time="0.002"/>
+  <testcase name="shouldRejectInvalidUrlFormat" classname="Url Value Object Tests" time="0.001"/>
+  <testcase name="shouldRejectNullUrl" classname="Url Value Object Tests" time="0.002"/>
+  <testcase name="shouldRejectEmptyUrl" classname="Url Value Object Tests" time="0.001"/>
+  <testcase name="shouldTrimWhitespace" classname="Url Value Object Tests" time="0.001"/>
+  <testcase name="shouldRejectUrlWithoutProtocol" classname="Url Value Object Tests" time="0.002"/>
+  <testcase name="shouldCreateValidHttpUrl" classname="Url Value Object Tests" time="0.001"/>
 </testsuite>

@@ -1,6 +1,7 @@
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/exception/UrlNotFoundException.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/model/ClickEvent.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/model/ShortUrl.java
+/home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/model/Url.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/ports/incoming/GetUrlUseCase.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/ports/incoming/ShortenUrlUseCase.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/ports/outgoing/AnalyticsPort.java

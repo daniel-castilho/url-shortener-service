@@ -1,4 +1,5 @@
 com/example/urlshortener/infra/adapter/input/rest/UrlControllerTest.class
+com/example/urlshortener/core/model/UrlTest.class
 com/example/urlshortener/core/service/UrlShortenerServiceTest.class
 com/example/urlshortener/infra/adapter/output/persistence/CassandraIntegrationTest.class
 com/example/urlshortener/infra/adapter/output/redis/RedisIntegrationTest.class
