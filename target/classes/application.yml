@@ -44,3 +44,7 @@ management:
       show-details: always
       probes:
         enabled: true
+
+rate-limiter:
+  limit: 60
+  window: PT1M

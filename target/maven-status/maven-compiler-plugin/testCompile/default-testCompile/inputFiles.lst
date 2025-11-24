@@ -1,9 +1,0 @@
-/home/castilho/projects/url-shortener/url-shortener-service/src/test/java/com/example/urlshortener/UrlShortenerIntegrationTest.java
-/home/castilho/projects/url-shortener/url-shortener-service/src/test/java/com/example/urlshortener/core/model/UrlTest.java
-/home/castilho/projects/url-shortener/url-shortener-service/src/test/java/com/example/urlshortener/core/service/UrlShortenerServiceTest.java
-/home/castilho/projects/url-shortener/url-shortener-service/src/test/java/com/example/urlshortener/infra/adapter/input/rest/UrlControllerTest.java
-/home/castilho/projects/url-shortener/url-shortener-service/src/test/java/com/example/urlshortener/infra/adapter/input/rest/advice/GlobalExceptionHandlerTest.java
-/home/castilho/projects/url-shortener/url-shortener-service/src/test/java/com/example/urlshortener/infra/adapter/output/persistence/CassandraIntegrationTest.java
-/home/castilho/projects/url-shortener/url-shortener-service/src/test/java/com/example/urlshortener/infra/adapter/output/redis/RangeAwareIdGeneratorTest.java
-/home/castilho/projects/url-shortener/url-shortener-service/src/test/java/com/example/urlshortener/infra/adapter/output/redis/RedisIntegrationTest.java
-/home/castilho/projects/url-shortener/url-shortener-service/src/test/java/com/example/urlshortener/infra/adapter/output/redis/RedisUrlCacheTest.java

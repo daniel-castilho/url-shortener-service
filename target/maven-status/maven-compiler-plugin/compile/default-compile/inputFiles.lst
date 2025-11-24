@@ -7,6 +7,7 @@
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/ports/outgoing/AnalyticsPort.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/ports/outgoing/IdGeneratorPort.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/ports/outgoing/MetricsPort.java
+/home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/ports/outgoing/RateLimiterPort.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/ports/outgoing/UrlCachePort.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/ports/outgoing/UrlRepositoryPort.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/service/UrlShortenerService.java
@@ -20,6 +21,7 @@
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/adapter/output/persistence/CassandraUrlRepository.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/adapter/output/persistence/entity/ShortUrlEntity.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/adapter/output/redis/RangeAwareIdGenerator.java
+/home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/adapter/output/redis/RedisRateLimiterAdapter.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/adapter/output/redis/RedisUrlCache.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/config/CassandraConfig.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/config/OpenApiConfig.java
