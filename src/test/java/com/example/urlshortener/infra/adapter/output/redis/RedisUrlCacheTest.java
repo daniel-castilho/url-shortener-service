@@ -1,5 +1,6 @@
 package com.example.urlshortener.infra.adapter.output.redis;
 
+import com.example.urlshortener.core.ports.outgoing.MetricsPort;
 import com.github.benmanes.caffeine.cache.Cache;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -36,6 +37,9 @@ class RedisUrlCacheTest {
     @Mock
     private ValueOperations<String, String> valueOperations;
 
+    @Mock
+    private MetricsPort metrics;
+
     private RedisUrlCache cache;
 
     private static final String TEST_ID = "abc123";
@@ -47,7 +51,7 @@ class RedisUrlCacheTest {
         when(bloomFilter.tryInit(anyLong(), anyDouble())).thenReturn(true);
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
 
-        cache = new RedisUrlCache(redisTemplate, redisson);
+        cache = new RedisUrlCache(redisTemplate, redisson, metrics);
     }
 
     @Test

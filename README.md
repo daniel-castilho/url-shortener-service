@@ -52,12 +52,15 @@ src/main/java/com/example/urlshortener
     │       └── redis              # Redis Adapters
     │           ├── RangeAwareIdGenerator.java
     │           └── RedisUrlCache.java
-    └── config                     # Spring Configurations
-        ├── CassandraConfig.java
-        ├── OpenApiConfig.java
-        ├── RedisConfig.java
-        ├── ShortCodeConfig.java
-        └── UndertowConfig.java
+    ├── config                     # Spring Configurations
+    │   ├── CassandraConfig.java
+    │   ├── OpenApiConfig.java
+    │   ├── RedisConfig.java
+    │   ├── ShortCodeConfig.java
+    │   └── UndertowConfig.java
+    └── observability              # Metrics & Monitoring
+        ├── MetricsService.java
+        └── MicrometerMetricsAdapter.java
 ```
 
 ---
@@ -234,6 +237,42 @@ The interface allows you to:
 - View request/response schemas
 - Understand HTTP status codes
 - See usage examples
+
+---
+
+## 📊 Observability & Metrics
+
+The application exposes **custom business metrics** via Micrometer for monitoring and observability.
+
+### Available Metrics
+
+**Business Metrics:**
+- `urls.shortened.total` - Total number of URLs shortened
+- `cache.hits.total` - Cache hit count (Redis L2)
+- `cache.misses.total` - Cache miss count
+- `bloomfilter.rejections.total` - Requests blocked by Bloom Filter (cache penetration protection)
+
+**Access Metrics:**
+```bash
+# Prometheus format (for Grafana)
+curl http://localhost:8080/actuator/prometheus
+
+# Individual metric
+curl http://localhost:8080/actuator/metrics/urls.shortened.total
+
+# All available metrics
+curl http://localhost:8080/actuator/metrics
+```
+
+### Grafana Dashboard
+
+Import the metrics into Grafana for real-time monitoring:
+1. Configure Prometheus to scrape `/actuator/prometheus`
+2. Create dashboard with panels for:
+   - URL shortening rate (requests/sec)
+   - Cache hit ratio (hits / (hits + misses))
+   - Bloom Filter effectiveness
+   - Response time percentiles (p50, p95, p99)
 
 ---
 

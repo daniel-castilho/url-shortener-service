@@ -1,5 +1,6 @@
 package com.example.urlshortener.infra.adapter.output.redis;
 
+import com.example.urlshortener.core.ports.outgoing.MetricsPort;
 import com.example.urlshortener.core.ports.outgoing.UrlCachePort;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -18,13 +19,15 @@ public class RedisUrlCache implements UrlCachePort {
     private final RedissonClient redisson;
     private final Cache<String, String> localCache;
     private final RBloomFilter<String> bloomFilter;
+    private final MetricsPort metrics;
 
     private static final Duration BASE_TTL = Duration.ofHours(24);
     private static final long MAX_JITTER_SECONDS = 60;
 
-    public RedisUrlCache(StringRedisTemplate redisTemplate, RedissonClient redisson) {
+    public RedisUrlCache(StringRedisTemplate redisTemplate, RedissonClient redisson, MetricsPort metrics) {
         this.redisTemplate = redisTemplate;
         this.redisson = redisson;
+        this.metrics = metrics;
 
         // Caffeine Local Cache: 100 items, 5 seconds TTL
         this.localCache = Caffeine.newBuilder()
@@ -47,6 +50,7 @@ public class RedisUrlCache implements UrlCachePort {
 
         // 2. Check Bloom Filter (Protection against Cache Penetration)
         if (!bloomFilter.contains(id)) {
+            metrics.recordBloomFilterRejection();
             return null; // Definitely doesn't exist
         }
 

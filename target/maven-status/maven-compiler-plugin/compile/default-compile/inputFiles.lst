@@ -6,6 +6,7 @@
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/ports/incoming/ShortenUrlUseCase.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/ports/outgoing/AnalyticsPort.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/ports/outgoing/IdGeneratorPort.java
+/home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/ports/outgoing/MetricsPort.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/ports/outgoing/UrlCachePort.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/ports/outgoing/UrlRepositoryPort.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/service/UrlShortenerService.java
@@ -25,3 +26,5 @@
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/config/RedisConfig.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/config/ShortCodeConfig.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/config/UndertowConfig.java
+/home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/observability/MetricsService.java
+/home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/observability/MicrometerMetricsAdapter.java

@@ -5,6 +5,7 @@ import com.example.urlshortener.core.model.Url;
 import com.example.urlshortener.core.ports.incoming.GetUrlUseCase;
 import com.example.urlshortener.core.ports.incoming.ShortenUrlUseCase;
 import com.example.urlshortener.core.ports.outgoing.IdGeneratorPort;
+import com.example.urlshortener.core.ports.outgoing.MetricsPort;
 import com.example.urlshortener.core.ports.outgoing.UrlCachePort;
 import com.example.urlshortener.core.ports.outgoing.UrlRepositoryPort;
 import org.slf4j.Logger;
@@ -24,11 +25,14 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
     private final UrlRepositoryPort urlRepository;
     private final IdGeneratorPort idGenerator;
     private final UrlCachePort urlCache;
+    private final MetricsPort metrics;
 
-    public UrlShortenerService(UrlRepositoryPort urlRepository, IdGeneratorPort idGenerator, UrlCachePort urlCache) {
+    public UrlShortenerService(UrlRepositoryPort urlRepository, IdGeneratorPort idGenerator,
+            UrlCachePort urlCache, MetricsPort metrics) {
         this.urlRepository = urlRepository;
         this.idGenerator = idGenerator;
         this.urlCache = urlCache;
+        this.metrics = metrics;
     }
 
     @Override
@@ -42,6 +46,9 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
         String id = idGenerator.generateId();
         ShortUrl shortUrl = new ShortUrl(id, validatedUrl.value(), LocalDateTime.now());
         urlRepository.save(shortUrl);
+
+        // Record metric
+        metrics.recordUrlShortened();
 
         return shortUrl;
     }
@@ -58,11 +65,14 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
         String cachedUrl = urlCache.get(id);
         if (cachedUrl != null) {
             log.info(LOG_CACHE_HIT, id);
+            metrics.recordCacheHit();
             return cachedUrl;
         }
 
         // 2. Check Database
         log.info(LOG_CACHE_MISS, id);
+        metrics.recordCacheMiss();
+
         return urlRepository.findById(id)
                 .map(shortUrl -> {
                     // 3. Populate Cache

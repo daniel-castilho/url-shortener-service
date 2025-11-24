@@ -1,8 +1,0 @@
-[engine:junit-jupiter]/[class:com.example.urlshortener.core.model.UrlTest]/[method:shouldCreateValidHttpsUrl()]
-[engine:junit-jupiter]/[class:com.example.urlshortener.core.model.UrlTest]/[method:shouldRejectBlankUrl()]
-[engine:junit-jupiter]/[class:com.example.urlshortener.core.model.UrlTest]/[method:shouldRejectInvalidUrlFormat()]
-[engine:junit-jupiter]/[class:com.example.urlshortener.core.model.UrlTest]/[method:shouldRejectNullUrl()]
-[engine:junit-jupiter]/[class:com.example.urlshortener.core.model.UrlTest]/[method:shouldRejectEmptyUrl()]
-[engine:junit-jupiter]/[class:com.example.urlshortener.core.model.UrlTest]/[method:shouldTrimWhitespace()]
-[engine:junit-jupiter]/[class:com.example.urlshortener.core.model.UrlTest]/[method:shouldRejectUrlWithoutProtocol()]
-[engine:junit-jupiter]/[class:com.example.urlshortener.core.model.UrlTest]/[method:shouldCreateValidHttpUrl()]

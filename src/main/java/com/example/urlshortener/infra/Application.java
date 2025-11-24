@@ -2,6 +2,7 @@ package com.example.urlshortener.infra;
 
 import com.example.urlshortener.core.ports.incoming.ShortenUrlUseCase;
 import com.example.urlshortener.core.ports.outgoing.IdGeneratorPort;
+import com.example.urlshortener.core.ports.outgoing.MetricsPort;
 import com.example.urlshortener.core.ports.outgoing.UrlRepositoryPort;
 import com.example.urlshortener.core.service.UrlShortenerService;
 import org.springframework.boot.SpringApplication;
@@ -18,7 +19,7 @@ public class Application {
 
     @Bean
     public UrlShortenerService urlShortenerService(UrlRepositoryPort urlRepository, IdGeneratorPort idGenerator,
-            com.example.urlshortener.core.ports.outgoing.UrlCachePort urlCache) {
-        return new UrlShortenerService(urlRepository, idGenerator, urlCache);
+            com.example.urlshortener.core.ports.outgoing.UrlCachePort urlCache, MetricsPort metrics) {
+        return new UrlShortenerService(urlRepository, idGenerator, urlCache, metrics);
     }
 }

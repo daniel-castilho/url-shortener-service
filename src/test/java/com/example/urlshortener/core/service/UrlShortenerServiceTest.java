@@ -3,13 +3,13 @@ package com.example.urlshortener.core.service;
 import com.example.urlshortener.core.exception.UrlNotFoundException;
 import com.example.urlshortener.core.model.ShortUrl;
 import com.example.urlshortener.core.ports.outgoing.IdGeneratorPort;
+import com.example.urlshortener.core.ports.outgoing.MetricsPort;
 import com.example.urlshortener.core.ports.outgoing.UrlCachePort;
 import com.example.urlshortener.core.ports.outgoing.UrlRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -35,7 +35,9 @@ class UrlShortenerServiceTest {
     @Mock
     private UrlCachePort urlCache;
 
-    @InjectMocks
+    @Mock
+    private MetricsPort metrics;
+
     private UrlShortenerService service;
 
     private static final String TEST_URL = "https://www.example.com/very/long/url";
@@ -43,7 +45,7 @@ class UrlShortenerServiceTest {
 
     @BeforeEach
     void setUp() {
-        // Common setup if needed
+        service = new UrlShortenerService(urlRepository, idGenerator, urlCache, metrics);
     }
 
     @Test
