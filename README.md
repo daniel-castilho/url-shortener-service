@@ -17,13 +17,47 @@ The project is structured to isolate the domain from infrastructure:
 
 ```
 src/main/java/com/example/urlshortener
-├── core          # 🧠 Domain (Pure Java)
-│   ├── model     # Domain Entities
-│   ├── ports     # Interfaces (Input/Output)
-│   └── service   # Use Cases
-└── infra         # ⚙️ Infrastructure (Spring Boot)
-    ├── adapter   # Port Implementations (Web, DB, Redis)
-    └── config    # Configurations (Undertow, Cassandra, etc.)
+├── core                           # 🧠 Domain (Pure Java)
+│   ├── exception                  # Domain Exceptions
+│   │   └── UrlNotFoundException.java
+│   ├── model                      # Domain Entities
+│   │   ├── ClickEvent.java
+│   │   └── ShortUrl.java
+│   ├── ports                      # Interfaces (Input/Output)
+│   │   ├── incoming               # Use Cases
+│   │   │   ├── GetUrlUseCase.java
+│   │   │   └── ShortenUrlUseCase.java
+│   │   └── outgoing               # Repository Ports
+│   │       ├── AnalyticsPort.java
+│   │       ├── IdGeneratorPort.java
+│   │       ├── UrlCachePort.java
+│   │       └── UrlRepositoryPort.java
+│   └── service                    # Use Case Implementations
+│       └── UrlShortenerService.java
+└── infra                          # ⚙️ Infrastructure (Spring Boot)
+    ├── Application.java           # Main Spring Boot Application
+    ├── adapter                    # Port Implementations
+    │   ├── input                  # Inbound Adapters
+    │   │   └── rest               # REST Controllers + DTOs
+    │   │       ├── UrlController.java
+    │   │       ├── advice/GlobalExceptionHandler.java
+    │   │       └── dto/{ShortenRequest, ShortenResponse}.java
+    │   └── output                 # Outbound Adapters
+    │       ├── analytics          # Async Analytics
+    │       │   ├── AsyncAnalyticsAdapter.java
+    │       │   └── ClickBatchWorker.java
+    │       ├── persistence        # Cassandra Repository
+    │       │   ├── CassandraUrlRepository.java
+    │       │   └── UrlEntity.java
+    │       └── redis              # Redis Adapters
+    │           ├── RangeAwareIdGenerator.java
+    │           └── RedisUrlCache.java
+    └── config                     # Spring Configurations
+        ├── CassandraConfig.java
+        ├── OpenApiConfig.java
+        ├── RedisConfig.java
+        ├── ShortCodeConfig.java
+        └── UndertowConfig.java
 ```
 
 ---
