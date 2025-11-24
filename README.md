@@ -156,11 +156,31 @@ This project is optimized to support **100 million writes/day** and **1 billion 
 
 ### ⚡ Native Build (GraalVM)
 
-To generate an ultra-optimized native binary:
+To generate an ultra-optimized native binary with instant startup (~100ms) and low memory footprint (~50MB):
 
+**Prerequisites:**
+- GraalVM 21+ with Native Image installed
+- Set `JAVA_HOME` to GraalVM location
+
+**Build Command:**
 ```bash
-mvn -Pnative native:compile
+mvn clean package -Pnative
+```
+
+**Run the Native Binary:**
+```bash
 ./target/url-shortener-service
+```
+
+**Expected Results:**
+- **Startup Time**: ~100ms (vs ~3-5s JVM)
+- **Memory Usage**: ~50-80MB (vs ~200-300MB JVM)
+- **Performance**: Similar throughput to JVM after warm-up
+
+**Troubleshooting:**
+If you encounter issues, try with verbose logging:
+```bash
+mvn clean package -Pnative -X
 ```
 
 ### 🐳 Docker Deployment
