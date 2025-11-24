@@ -30,6 +30,7 @@ public class RedisRateLimiterAdapter implements RateLimiterPort {
     }
 
     @Override
+    @io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker(name = "rateLimiterCb", fallbackMethod = "allowRequestOnFailure")
     public boolean isAllowed(String ip) {
         String key = "rl:" + ip;
         RAtomicLong counter = redisson.getAtomicLong(key);
@@ -39,5 +40,11 @@ public class RedisRateLimiterAdapter implements RateLimiterPort {
             counter.expire(window);
         }
         return current <= limit;
+    }
+
+    public boolean allowRequestOnFailure(String ip, Throwable t) {
+        // Fail open: allow request if Redis is down
+        // In a real app, you might want to log this error
+        return true;
     }
 }

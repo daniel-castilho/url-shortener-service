@@ -19,12 +19,14 @@ public class CassandraUrlRepository implements UrlRepositoryPort {
     }
 
     @Override
+    @io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker(name = "databaseCb")
     public void save(ShortUrl shortUrl) {
         ShortUrlEntity entity = new ShortUrlEntity(shortUrl.id(), shortUrl.originalUrl(), shortUrl.createdAt());
         springDataRepository.save(entity);
     }
 
     @Override
+    @io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker(name = "databaseCb")
     public java.util.Optional<ShortUrl> findById(String id) {
         return springDataRepository.findById(id)
                 .map(entity -> new ShortUrl(entity.getId(), entity.getOriginalUrl(), entity.getCreatedAt()));

@@ -76,6 +76,7 @@ src/main/java/com/example/urlshortener
 *   **Redisson**: Advanced Redis client with Bloom Filter support.
 *   **Caffeine**: In-memory local cache (L1) for hot URLs.
 *   **Hashids**: Sequential ID obfuscation into short codes.
+*   **Resilience4j**: Circuit breakers for fault tolerance and cascading failure prevention.
 *   **GraalVM**: Native compilation (AOT) support for instant startup and low memory consumption.
 
 ---
@@ -89,6 +90,10 @@ This project is optimized to support **100 million writes/day** and **1 billion 
 - **Bloom Filter**: Prevents Cache Penetration attacks (invalid IDs don't reach the database)
 - **TTL Jitter**: Avoids Cache Stampede by adding randomness to expiration time
 - **Caffeine L1 Cache**: 5-second local cache for the top 100 most accessed links
+- **Circuit Breakers (Resilience4j)**: Protects against cascading failures
+  - `rateLimiterCb`: Protects Redis-based rate limiter and ID generator. **Fails open** (allows requests) if Redis is unavailable
+  - `databaseCb`: Protects Cassandra operations. **Fails fast** if database is unavailable
+  - Exposed via Actuator endpoints: `/actuator/health` and `/actuator/circuitbreakers`
 
 ### ID Generation Strategy
 
@@ -327,6 +332,20 @@ Main configurations are in `src/main/resources/application.yml`.
       limit: 60      # Requests per window
       window: PT1M   # Window duration (ISO-8601 format, e.g., 1 Minute)
     ```
+*   **Circuit Breakers (Resilience4j)**: Configurable thresholds and timeouts.
+    ```yaml
+    resilience4j:
+      circuitbreaker:
+        instances:
+          rateLimiterCb:      # For Redis rate limiter & ID generator
+            failureRateThreshold: 40
+            waitDurationInOpenState: 10s
+          databaseCb:          # For Cassandra operations
+            failureRateThreshold: 50
+            waitDurationInOpenState: 20s
+    ```
+    Monitor status at: `http://localhost:8080/actuator/circuitbreakers`
+
 
 ---
 

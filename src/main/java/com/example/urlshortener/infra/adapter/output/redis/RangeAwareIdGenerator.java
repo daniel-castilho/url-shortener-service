@@ -28,9 +28,21 @@ public class RangeAwareIdGenerator implements IdGeneratorPort {
     }
 
     @Override
+    @io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker(name = "rateLimiterCb", fallbackMethod = "generateIdFallback")
     public String generateId() {
         long nextId = getNextUniqueId();
         return hashids.encode(nextId);
+    }
+
+    /**
+     * Emergency fallback: generates IDs without Redis using timestamp + thread ID.
+     * This ensures the service continues working even if Redis is down.
+     */
+    public String generateIdFallback(Throwable t) {
+        long timestamp = System.currentTimeMillis();
+        long threadId = Thread.currentThread().threadId();
+        long emergencyId = (timestamp << 20) | (threadId & 0xFFFFF); // Combine timestamp + thread bits
+        return hashids.encode(emergencyId);
     }
 
     private long getNextUniqueId() {

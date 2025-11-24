@@ -36,13 +36,39 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info, metrics, prometheus
+        include: health, info, metrics, prometheus, circuitbreakers
   endpoint:
     health:
       show-details: always
       probes:
         enabled: true
+      show-components: always
+  health:
+    circuitbreakers:
+      enabled: true
 
 rate-limiter:
   limit: 60
   window: PT1M
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 5s
+        failureRateThreshold: 50
+        eventConsumerBufferSize: 10
+    instances:
+      rateLimiterCb:
+        baseConfig: default
+        failureRateThreshold: 40
+        waitDurationInOpenState: 10s
+      databaseCb:
+        baseConfig: default
+        failureRateThreshold: 50
+        waitDurationInOpenState: 20s
