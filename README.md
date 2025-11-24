@@ -142,6 +142,38 @@ mvn -Pnative native:compile
 ./target/url-shortener-service
 ```
 
+### 🐳 Docker Deployment
+
+**Build Docker Image:**
+```bash
+docker build -t url-shortener:latest .
+```
+
+**Run with Docker Compose (Recommended):**
+```bash
+docker-compose up -d
+```
+
+This will start:
+- Cassandra (port 9042)
+- Redis (port 6379)
+- URL Shortener Service (port 8080)
+
+**Run Standalone Container:**
+```bash
+docker run -d \
+  -p 8080:8080 \
+  -e SPRING_CASSANDRA_CONTACT_POINTS=cassandra:9042 \
+  -e SPRING_DATA_REDIS_HOST=redis \
+  --name url-shortener \
+  url-shortener:latest
+```
+
+**Health Check:**
+```bash
+curl http://localhost:8080/actuator/health
+```
+
 ---
 
 ## 🔌 API Endpoints

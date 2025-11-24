@@ -1,0 +1,31 @@
+# Ignore build artifacts
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Ignore IDE files
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.settings/
+.classpath
+.project
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore logs
+*.log
+logs/
+
+# Ignore test reports
+surefire-reports/
+
+# Ignore Docker volumes
+.docker/
+
+# Ignore environment files
+.env
+.env.local

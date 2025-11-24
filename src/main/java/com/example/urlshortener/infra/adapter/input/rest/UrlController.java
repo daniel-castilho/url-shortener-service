@@ -39,7 +39,7 @@ public class UrlController {
             @ApiResponse(responseCode = "400", description = "Invalid URL format", content = @Content)
     })
     public ResponseEntity<ShortenResponse> shorten(
-            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "URL to be shortened", required = true, content = @Content(schema = @Schema(implementation = ShortenRequest.class))) @RequestBody ShortenRequest request) {
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "URL to be shortened", required = true, content = @Content(schema = @Schema(implementation = ShortenRequest.class))) @jakarta.validation.Valid @RequestBody ShortenRequest request) {
         ShortUrl shortUrl = shortenUrlUseCase.shorten(request.originalUrl());
         String baseUrl = org.springframework.web.servlet.support.ServletUriComponentsBuilder.fromCurrentContextPath()
                 .build().toUriString();
