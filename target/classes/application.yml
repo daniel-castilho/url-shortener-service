@@ -1,0 +1,46 @@
+server:
+  undertow:
+    threads:
+      io: 16           # Threads de I/O (Geralmente qtd de Cores * 2)
+      worker: 200      # Worker threads (Virtual threads assumem a carga pesada)
+    buffer-size: 1024  # Otimização de buffer direto
+    direct-buffers: true
+
+spring:
+  application:
+    name: url-shortener-native
+
+app:
+  shortener:
+    salt: "my-secret-salt-change-me-in-prod" # Should be an env var in production
+  
+  # A MÁGICA DO JAVA 21+
+  threads:
+    virtual:
+      enabled: true  # Ativa Virtual Threads em todo o container (Undertow)
+
+  # Configuração Otimizada para Cassandra e Redis
+  cassandra:
+    keyspace-name: url_shortener
+    local-datacenter: datacenter1
+    connection:
+      connect-timeout: 2s
+      init-query-timeout: 2s
+    schema-action: create-if-not-exists
+  
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 500ms
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true

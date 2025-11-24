@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.example.urlshortener.infra.adapter.output.redis.RedisIntegrationTest
+-------------------------------------------------------------------------------
+Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 6.007 s -- in com.example.urlshortener.infra.adapter.output.redis.RedisIntegrationTest
