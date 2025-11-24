@@ -6,6 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -18,6 +19,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import com.example.urlshortener.core.ports.outgoing.RateLimiterPort;
 
 @SpringBootTest
 @Testcontainers
@@ -37,6 +39,9 @@ class RedisIntegrationTest {
 
     @Autowired
     private StringRedisTemplate redisTemplate;
+
+    @MockitoBean
+    private RateLimiterPort rateLimiter;
 
     private RangeAwareIdGenerator idGenerator;
     private Hashids hashids;

@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.beans.factory.annotation.Value;
 
 @Configuration
 public class RedisConfig {
@@ -14,10 +15,4 @@ public class RedisConfig {
         return new StringRedisTemplate(connectionFactory);
     }
 
-    @Bean
-    public com.example.urlshortener.core.ports.outgoing.RateLimiterPort rateLimiterPort(RedissonClient redisson,
-            @Value("${rate-limiter.limit:60}") long limit,
-            @Value("${rate-limiter.window:PT1M}") java.time.Duration window) {
-        return new com.example.urlshortener.infra.adapter.output.redis.RedisRateLimiterAdapter(redisson, limit, window);
-    }
 }

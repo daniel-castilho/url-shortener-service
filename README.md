@@ -321,6 +321,12 @@ Main configurations are in `src/main/resources/application.yml`.
 *   **Undertow**: Tuned for performance with direct buffers.
 *   **Virtual Threads**: Enabled globally (`spring.threads.virtual.enabled: true`).
 *   **Cassandra/Redis**: Configured for `localhost` by default.
+*   **Rate Limiter**: Configurable via `application.yml`.
+    ```yaml
+    rate-limiter:
+      limit: 60      # Requests per window
+      window: PT1M   # Window duration (ISO-8601 format, e.g., 1 Minute)
+    ```
 
 ---
 

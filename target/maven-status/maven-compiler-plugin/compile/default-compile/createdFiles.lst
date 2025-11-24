@@ -1,3 +1,4 @@
+com/example/urlshortener/infra/config/ShortCodeConfig.class
 com/example/urlshortener/infra/adapter/output/redis/RedisRateLimiterAdapter.class
 com/example/urlshortener/core/ports/incoming/GetUrlUseCase.class
 com/example/urlshortener/infra/adapter/input/rest/advice/GlobalExceptionHandler.class
@@ -5,6 +6,7 @@ com/example/urlshortener/core/ports/outgoing/AnalyticsPort.class
 com/example/urlshortener/infra/adapter/input/rest/advice/GlobalExceptionHandler$ErrorResponse.class
 com/example/urlshortener/core/model/Url.class
 com/example/urlshortener/core/model/ShortUrl.class
+com/example/urlshortener/infra/config/RedisConfig.class
 com/example/urlshortener/core/ports/outgoing/MetricsPort.class
 com/example/urlshortener/infra/adapter/output/persistence/CassandraUrlRepository.class
 com/example/urlshortener/infra/adapter/output/persistence/entity/ShortUrlEntity.class
@@ -23,8 +25,11 @@ com/example/urlshortener/infra/Application.class
 com/example/urlshortener/core/ports/incoming/ShortenUrlUseCase.class
 com/example/urlshortener/infra/adapter/output/redis/RangeAwareIdGenerator.class
 com/example/urlshortener/core/ports/outgoing/UrlCachePort.class
+com/example/urlshortener/infra/observability/MicrometerMetricsAdapter.class
 com/example/urlshortener/infra/config/OpenApiConfig.class
 com/example/urlshortener/infra/config/CassandraConfig.class
+com/example/urlshortener/infra/observability/MetricsService.class
 com/example/urlshortener/core/model/ClickEvent.class
 com/example/urlshortener/core/ports/outgoing/UrlRepositoryPort.class
+com/example/urlshortener/infra/config/UndertowConfig.class
 com/example/urlshortener/core/exception/UrlNotFoundException.class

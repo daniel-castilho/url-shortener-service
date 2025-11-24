@@ -5,21 +5,21 @@ import com.example.urlshortener.core.model.ShortUrl;
 import com.example.urlshortener.core.ports.incoming.GetUrlUseCase;
 import com.example.urlshortener.core.ports.incoming.ShortenUrlUseCase;
 import com.example.urlshortener.core.ports.outgoing.AnalyticsPort;
+import com.example.urlshortener.core.ports.outgoing.RateLimiterPort;
 import com.example.urlshortener.infra.adapter.input.rest.dto.ShortenRequest;
-import com.example.urlshortener.infra.adapter.input.rest.dto.ShortenResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -35,14 +35,17 @@ class UrlControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @MockBean
+    @MockitoBean
     private ShortenUrlUseCase shortenUrlUseCase;
 
-    @MockBean
+    @MockitoBean
     private GetUrlUseCase getUrlUseCase;
 
-    @MockBean
+    @MockitoBean
     private AnalyticsPort analyticsPort;
+
+    @MockitoBean
+    private RateLimiterPort rateLimiter;
 
     private static final String TEST_URL = "https://www.example.com/very/long/url";
     private static final String TEST_ID = "abc123";
@@ -54,6 +57,7 @@ class UrlControllerTest {
         ShortenRequest request = new ShortenRequest(TEST_URL);
         ShortUrl shortUrl = new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now());
         when(shortenUrlUseCase.shorten(TEST_URL)).thenReturn(shortUrl);
+        when(rateLimiter.isAllowed(anyString())).thenReturn(true);
 
         // When/Then
         mockMvc.perform(post("/api/v1/urls")
@@ -94,5 +98,21 @@ class UrlControllerTest {
 
         verify(getUrlUseCase).getOriginalUrl(TEST_ID);
         verify(analyticsPort, never()).track(any());
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/urls should return 429 when rate limit exceeded")
+    void shouldReturn429WhenRateLimitExceeded() throws Exception {
+        // Given
+        ShortenRequest request = new ShortenRequest(TEST_URL);
+        when(rateLimiter.isAllowed(anyString())).thenReturn(false);
+
+        // When/Then
+        mockMvc.perform(post("/api/v1/urls")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isTooManyRequests());
+
+        verify(shortenUrlUseCase, never()).shorten(anyString());
     }
 }

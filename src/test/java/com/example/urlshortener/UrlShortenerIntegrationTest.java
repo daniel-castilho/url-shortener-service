@@ -1,5 +1,6 @@
 package com.example.urlshortener;
 
+import com.example.urlshortener.core.ports.outgoing.RateLimiterPort;
 import com.example.urlshortener.infra.adapter.input.rest.dto.ShortenRequest;
 import com.example.urlshortener.infra.adapter.input.rest.dto.ShortenResponse;
 import io.restassured.RestAssured;
@@ -7,6 +8,7 @@ import io.restassured.http.ContentType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -20,6 +22,8 @@ import org.testcontainers.utility.DockerImageName;
 import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, classes = com.example.urlshortener.infra.Application.class)
 @Testcontainers
@@ -52,8 +56,12 @@ class UrlShortenerIntegrationTest {
                 registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
         }
 
+        @MockitoBean
+        private RateLimiterPort rateLimiter;
+
         @BeforeEach
         void setUp() {
+                when(rateLimiter.isAllowed(anyString())).thenReturn(true);
                 RestAssured.port = port;
                 RestAssured.basePath = "/";
         }

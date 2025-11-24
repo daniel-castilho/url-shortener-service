@@ -12,7 +12,7 @@ import org.mockito.Mockito;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -27,25 +27,26 @@ class UrlControllerRateLimitingIntegrationTest {
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean
+    @MockitoBean
     private ShortenUrlUseCase shortenUrlUseCase;
 
-    @MockBean
+    @MockitoBean
     private GetUrlUseCase getUrlUseCase;
 
-    @MockBean
+    @MockitoBean
     private AnalyticsPort analyticsPort;
 
-    @MockBean
+    @MockitoBean
     private RateLimiterPort rateLimiter;
 
-    @MockBean
+    @MockitoBean
     private RedissonClient redissonClient; // not used directly but required for context
 
     @BeforeEach
     void setUp() {
         when(shortenUrlUseCase.shorten(anyString()))
-                .thenReturn(new com.example.urlshortener.core.model.ShortUrl("abc123"));
+                .thenReturn(new com.example.urlshortener.core.model.ShortUrl("abc123", "https://example.com",
+                        java.time.LocalDateTime.now()));
     }
 
     @Test
