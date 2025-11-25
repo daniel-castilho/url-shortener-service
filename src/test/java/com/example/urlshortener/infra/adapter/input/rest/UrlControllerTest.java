@@ -160,4 +160,22 @@ class UrlControllerTest {
 
         verify(shortenUrlUseCase, never()).shorten(anyString(), any(), any());
     }
+
+    @Test
+    @DisplayName("POST /api/v1/urls should return 409 when alias already exists")
+    void shouldReturn409WhenAliasAlreadyExists() throws Exception {
+        // Given
+        String customAlias = "existing-alias";
+        ShortenRequest request = new ShortenRequest(TEST_URL, customAlias);
+        when(rateLimiter.isAllowed(anyString())).thenReturn(true);
+        when(shortenUrlUseCase.shorten(eq(TEST_URL), eq(customAlias), isNull()))
+                .thenThrow(new com.example.urlshortener.core.exception.AliasAlreadyExistsException(customAlias));
+
+        // When/Then
+        mockMvc.perform(post("/api/v1/urls")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.error").value("Alias Already Exists"));
+    }
 }

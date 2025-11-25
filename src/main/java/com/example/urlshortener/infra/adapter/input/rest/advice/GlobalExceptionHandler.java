@@ -60,6 +60,20 @@ public class GlobalExceptionHandler {
                 return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).body(error);
         }
 
+        @ExceptionHandler(com.example.urlshortener.core.exception.AliasAlreadyExistsException.class)
+        public ResponseEntity<ErrorResponse> handleAliasAlreadyExists(
+                        com.example.urlshortener.core.exception.AliasAlreadyExistsException ex) {
+                log.warn("Alias already exists: {}", ex.getMessage());
+
+                ErrorResponse error = new ErrorResponse(
+                                HttpStatus.CONFLICT.value(),
+                                "Alias Already Exists",
+                                ex.getMessage(),
+                                LocalDateTime.now());
+
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+        }
+
         @ExceptionHandler(MethodArgumentNotValidException.class)
         public ResponseEntity<ValidationErrorResponse> handleValidationErrors(MethodArgumentNotValidException ex) {
                 log.warn("Validation failed: {}", ex.getMessage());
