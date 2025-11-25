@@ -8,6 +8,7 @@ import com.example.urlshortener.core.ports.incoming.ShortenUrlUseCase;
 import com.example.urlshortener.core.ports.outgoing.MetricsPort;
 import com.example.urlshortener.core.ports.outgoing.UrlCachePort;
 import com.example.urlshortener.core.ports.outgoing.UrlRepositoryPort;
+import com.example.urlshortener.core.ports.outgoing.UserRepositoryPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,15 +27,21 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
     private final UrlCachePort urlCache;
     private final MetricsPort metrics;
     private final UrlIdGenerator urlIdGenerator;
+    private final QuotaService quotaService;
+    private final UserRepositoryPort userRepository;
 
     public UrlShortenerService(UrlRepositoryPort urlRepository,
             UrlCachePort urlCache,
             MetricsPort metrics,
-            UrlIdGenerator urlIdGenerator) {
+            UrlIdGenerator urlIdGenerator,
+            QuotaService quotaService,
+            UserRepositoryPort userRepository) {
         this.urlRepository = urlRepository;
         this.urlCache = urlCache;
         this.metrics = metrics;
         this.urlIdGenerator = urlIdGenerator;
+        this.quotaService = quotaService;
+        this.userRepository = userRepository;
     }
 
     @Override
@@ -45,11 +52,23 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
         // Validate URL format using Value Object
         Url validatedUrl = new Url(originalUrl);
 
+        // Check Quota if user is authenticated and custom alias is requested
+        if (userId != null && customAlias != null && !customAlias.isBlank()) {
+            userRepository.findById(userId).ifPresent(user -> {
+                quotaService.checkVanityUrlQuota(user, customAlias);
+            });
+        }
+
         // Delegate ID generation to the decoupled module
         String id = urlIdGenerator.generateId(customAlias, userId);
 
         ShortUrl shortUrl = new ShortUrl(id, validatedUrl.value(), LocalDateTime.now(), userId);
         urlRepository.save(shortUrl);
+
+        // Increment usage if user is authenticated and custom alias was used
+        if (userId != null && customAlias != null && !customAlias.isBlank()) {
+            userRepository.findById(userId).ifPresent(quotaService::incrementVanityUrlUsage);
+        }
 
         // Record metric
         metrics.recordUrlShortened();

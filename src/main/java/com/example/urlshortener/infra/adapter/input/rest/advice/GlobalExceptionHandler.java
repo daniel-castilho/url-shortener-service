@@ -46,6 +46,20 @@ public class GlobalExceptionHandler {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
         }
 
+        @ExceptionHandler(com.example.urlshortener.core.exception.QuotaExceededException.class)
+        public ResponseEntity<ErrorResponse> handleQuotaExceeded(
+                        com.example.urlshortener.core.exception.QuotaExceededException ex) {
+                log.warn("Quota exceeded: {}", ex.getMessage());
+
+                ErrorResponse error = new ErrorResponse(
+                                HttpStatus.PAYMENT_REQUIRED.value(),
+                                "Quota Exceeded",
+                                ex.getMessage(),
+                                LocalDateTime.now());
+
+                return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).body(error);
+        }
+
         @ExceptionHandler(MethodArgumentNotValidException.class)
         public ResponseEntity<ValidationErrorResponse> handleValidationErrors(MethodArgumentNotValidException ex) {
                 log.warn("Validation failed: {}", ex.getMessage());

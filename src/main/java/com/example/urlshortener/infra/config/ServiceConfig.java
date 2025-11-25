@@ -4,6 +4,8 @@ import com.example.urlshortener.core.idgeneration.UrlIdGenerator;
 import com.example.urlshortener.core.ports.outgoing.MetricsPort;
 import com.example.urlshortener.core.ports.outgoing.UrlCachePort;
 import com.example.urlshortener.core.ports.outgoing.UrlRepositoryPort;
+import com.example.urlshortener.core.ports.outgoing.UserRepositoryPort;
+import com.example.urlshortener.core.service.QuotaService;
 import com.example.urlshortener.core.service.UrlShortenerService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,7 +17,9 @@ public class ServiceConfig {
     public UrlShortenerService urlShortenerService(UrlRepositoryPort urlRepository,
             UrlCachePort urlCache,
             MetricsPort metrics,
-            UrlIdGenerator urlIdGenerator) {
-        return new UrlShortenerService(urlRepository, urlCache, metrics, urlIdGenerator);
+            UrlIdGenerator urlIdGenerator,
+            QuotaService quotaService,
+            UserRepositoryPort userRepository) {
+        return new UrlShortenerService(urlRepository, urlCache, metrics, urlIdGenerator, quotaService, userRepository);
     }
 }

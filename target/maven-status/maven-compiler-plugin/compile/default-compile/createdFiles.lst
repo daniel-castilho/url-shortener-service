@@ -2,6 +2,7 @@ com/example/urlshortener/infra/config/ShortCodeConfig.class
 com/example/urlshortener/infra/adapter/output/redis/RedisRateLimiterAdapter.class
 com/example/urlshortener/infra/adapter/output/persistence/exception/RepositoryException.class
 com/example/urlshortener/infra/adapter/input/rest/dto/auth/AuthResponse$AuthResponseBuilder.class
+com/example/urlshortener/core/service/QuotaService.class
 com/example/urlshortener/infra/config/RedisConfig.class
 com/example/urlshortener/infra/adapter/output/persistence/entity/ShortUrlEntity.class
 com/example/urlshortener/infra/adapter/input/rest/advice/GlobalExceptionHandler$ValidationErrorResponse.class
@@ -20,6 +21,7 @@ com/example/urlshortener/core/idgeneration/CompositeUrlIdGenerator.class
 com/example/urlshortener/core/model/User.class
 com/example/urlshortener/infra/config/NativeHintsConfig.class
 com/example/urlshortener/core/service/UserService.class
+com/example/urlshortener/core/exception/QuotaExceededException.class
 com/example/urlshortener/infra/observability/MicrometerMetricsAdapter.class
 com/example/urlshortener/infra/config/OpenApiConfig.class
 com/example/urlshortener/infra/observability/MetricsService.class

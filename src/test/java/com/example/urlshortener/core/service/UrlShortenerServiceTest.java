@@ -5,6 +5,7 @@ import com.example.urlshortener.core.model.ShortUrl;
 import com.example.urlshortener.core.ports.outgoing.MetricsPort;
 import com.example.urlshortener.core.ports.outgoing.UrlCachePort;
 import com.example.urlshortener.core.ports.outgoing.UrlRepositoryPort;
+import com.example.urlshortener.core.ports.outgoing.UserRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,6 +37,12 @@ class UrlShortenerServiceTest {
     @Mock
     private UrlIdGenerator urlIdGenerator;
 
+    @Mock
+    private QuotaService quotaService;
+
+    @Mock
+    private UserRepositoryPort userRepository;
+
     private UrlShortenerService service;
 
     private static final String TEST_URL = "https://www.example.com/very/long/url";
@@ -43,7 +50,8 @@ class UrlShortenerServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new UrlShortenerService(urlRepository, urlCache, metrics, urlIdGenerator);
+        service = new UrlShortenerService(urlRepository, urlCache, metrics, urlIdGenerator, quotaService,
+                userRepository);
     }
 
     @Test
