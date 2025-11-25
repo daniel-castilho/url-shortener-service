@@ -18,7 +18,8 @@ import java.util.Optional;
  *
  * Responsabilidades:
  * - Persistir e recuperar URLs encurtadas do MongoDB
- * - Converter entre domain model (ShortUrl) e persistence entity (ShortUrlEntity)
+ * - Converter entre domain model (ShortUrl) e persistence entity
+ * (ShortUrlEntity)
  * - Encapsular exceções específicas do MongoDB
  *
  * Aplicação de padrões:
@@ -39,7 +40,7 @@ public class MongoUrlRepository implements UrlRepositoryPort {
      * Construtor com injeção de dependências.
      *
      * @param mongoTemplate template do Spring Data MongoDB para operações
-     * @param mapper mapper para conversão domain ↔ entity
+     * @param mapper        mapper para conversão domain ↔ entity
      */
     public MongoUrlRepository(MongoTemplate mongoTemplate, ShortUrlMapper mapper) {
         this.mongoTemplate = mongoTemplate;
@@ -92,6 +93,28 @@ public class MongoUrlRepository implements UrlRepositoryPort {
         } catch (Exception e) {
             logger.error("Erro ao buscar URL encurtada no MongoDB: {}", id, e);
             throw new RepositoryException("Falha ao recuperar URL encurtada", e);
+        }
+
+    }
+
+    /**
+     * Verifica se uma URL encurtada existe por seu identificador.
+     *
+     * @param id o identificador único
+     * @return true se existir, false caso contrário
+     * @throws RepositoryException se ocorrer erro ao consultar o MongoDB
+     */
+    @Override
+    @CircuitBreaker(name = "databaseCb")
+    public boolean existsById(String id) {
+        try {
+            return mongoTemplate.exists(
+                    org.springframework.data.mongodb.core.query.Query.query(
+                            org.springframework.data.mongodb.core.query.Criteria.where("_id").is(id)),
+                    ShortUrlEntity.class);
+        } catch (Exception e) {
+            logger.error("Erro ao verificar existência de URL encurtada no MongoDB: {}", id, e);
+            throw new RepositoryException("Falha ao verificar existência de URL encurtada", e);
         }
     }
 }

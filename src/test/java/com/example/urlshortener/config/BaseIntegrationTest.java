@@ -1,6 +1,6 @@
 package com.example.urlshortener.config;
 
-import com.example.urlshortener.infra.Application;
+import com.example.urlshortener.Application;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -30,11 +30,17 @@ public abstract class BaseIntegrationTest {
         @org.springframework.beans.factory.annotation.Autowired
         private org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
 
+        @org.springframework.beans.factory.annotation.Autowired
+        private com.example.urlshortener.infra.adapter.output.redis.RedisUrlCache redisUrlCache;
+
         @org.junit.jupiter.api.BeforeEach
         @org.junit.jupiter.api.AfterEach
         void cleanup() {
                 mongoTemplate.getDb().drop();
                 redisTemplate.getConnectionFactory().getConnection().serverCommands().flushAll();
+                if (redisUrlCache != null) {
+                        redisUrlCache.resetBloomFilter();
+                }
         }
 
         @DynamicPropertySource

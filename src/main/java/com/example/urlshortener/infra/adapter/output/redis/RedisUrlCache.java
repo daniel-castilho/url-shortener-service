@@ -102,4 +102,13 @@ public class RedisUrlCache implements UrlCachePort {
         // Add to Local Cache
         localCache.put(id, originalUrl);
     }
+
+    public void resetBloomFilter() {
+        try {
+            this.bloomFilter.delete();
+            this.bloomFilter.tryInit(100_000_000L, 0.01);
+        } catch (Exception e) {
+            log.error("Failed to reset Bloom Filter", e);
+        }
+    }
 }

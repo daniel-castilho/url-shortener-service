@@ -1,10 +1,12 @@
 package com.example.urlshortener.infra.adapter.input.rest;
 
 import com.example.urlshortener.core.model.ShortUrl;
-import com.example.urlshortener.core.ports.incoming.ShortenUrlUseCase;
+import com.example.urlshortener.core.model.User;
 import com.example.urlshortener.core.ports.incoming.GetUrlUseCase;
+import com.example.urlshortener.core.ports.incoming.ShortenUrlUseCase;
 import com.example.urlshortener.core.ports.outgoing.AnalyticsPort;
 import com.example.urlshortener.core.ports.outgoing.RateLimiterPort;
+import com.example.urlshortener.core.ports.outgoing.UserRepositoryPort;
 import com.example.urlshortener.infra.adapter.input.rest.dto.ShortenRequest;
 import com.example.urlshortener.infra.adapter.input.rest.dto.ShortenResponse;
 import com.example.urlshortener.infra.observability.MetricsService;
@@ -18,6 +20,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -34,26 +39,29 @@ public class UrlController {
         private final RateLimiterPort rateLimiter;
         private final HttpServletRequest request;
         private final MetricsService metricsService;
+        private final UserRepositoryPort userRepository;
 
         public UrlController(ShortenUrlUseCase shortenUrlUseCase,
                         GetUrlUseCase getUrlUseCase,
                         AnalyticsPort analyticsPort,
                         RateLimiterPort rateLimiter,
                         HttpServletRequest request,
-                        MetricsService metricsService) {
+                        MetricsService metricsService,
+                        UserRepositoryPort userRepository) {
                 this.shortenUrlUseCase = shortenUrlUseCase;
                 this.getUrlUseCase = getUrlUseCase;
                 this.analyticsPort = analyticsPort;
                 this.rateLimiter = rateLimiter;
                 this.request = request;
                 this.metricsService = metricsService;
+                this.userRepository = userRepository;
         }
 
         @PostMapping("/api/v1/urls")
-        @Operation(summary = "Shorten a URL", description = "Creates a short URL code for the provided long URL. Uses Hashids encoding with Redis-backed ID generation (1000 IDs batched in memory).")
+        @Operation(summary = "Shorten a URL", description = "Creates a short URL code. Supports anonymous usage and authenticated usage with custom aliases (vanity URLs).")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "URL successfully shortened", content = @Content(schema = @Schema(implementation = ShortenResponse.class))),
-                        @ApiResponse(responseCode = "400", description = "Invalid URL format", content = @Content),
+                        @ApiResponse(responseCode = "400", description = "Invalid URL or custom alias", content = @Content),
                         @ApiResponse(responseCode = "429", description = "Rate limit exceeded", content = @Content)
         })
         public ResponseEntity<ShortenResponse> shorten(
@@ -64,7 +72,19 @@ public class UrlController {
                         if (!rateLimiter.isAllowed(clientIp)) {
                                 return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).build();
                         }
-                        ShortUrl shortUrl = shortenUrlUseCase.shorten(request.originalUrl());
+
+                        String userId = null;
+                        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+                        if (authentication != null && authentication.isAuthenticated() &&
+                                        !(authentication instanceof AnonymousAuthenticationToken)) {
+                                String email = authentication.getName();
+                                userId = userRepository.findByEmail(email)
+                                                .map(User::id)
+                                                .orElse(null);
+                        }
+
+                        ShortUrl shortUrl = shortenUrlUseCase.shorten(request.originalUrl(), request.customAlias(),
+                                        userId);
                         String baseUrl = org.springframework.web.servlet.support.ServletUriComponentsBuilder
                                         .fromCurrentContextPath().build().toUriString();
 
@@ -76,7 +96,7 @@ public class UrlController {
         }
 
         @GetMapping("/{id}")
-        @Operation(summary = "Redirect to original URL", description = "Retrieves the original URL and redirects (HTTP 302). Uses multi-level caching: Caffeine (L1, 5s) → Redis (L2, 24h+jitter) → MongoDB. Click events are tracked asynchronously without blocking the redirect.")
+        @Operation(summary = "Redirect to original URL", description = "Retrieves the original URL and redirects (HTTP 302).")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "302", description = "Redirect to original URL"),
                         @ApiResponse(responseCode = "404", description = "Short URL not found", content = @Content)

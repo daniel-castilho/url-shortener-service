@@ -63,6 +63,18 @@ public record User(
      * Check if user can create vanity URLs
      */
     public boolean canCreateVanityUrls() {
-        return hasActiveSubscription();
+        if (!hasActiveSubscription()) {
+            return false;
+        }
+
+        if (plan.isUnlimited()) {
+            return true;
+        }
+
+        int limit = plan.getVanityUrlsPerMonth();
+        int usage = plan == SubscriptionPlan.FREE ? quotaUsage.getVanityUrlsCreatedTotal()
+                : quotaUsage.getVanityUrlsCreatedThisMonth();
+
+        return usage < limit;
     }
 }

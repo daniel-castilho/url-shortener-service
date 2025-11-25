@@ -1,10 +1,10 @@
 package com.example.urlshortener.core.service;
 
+import com.example.urlshortener.core.idgeneration.UrlIdGenerator;
 import com.example.urlshortener.core.model.ShortUrl;
 import com.example.urlshortener.core.model.Url;
 import com.example.urlshortener.core.ports.incoming.GetUrlUseCase;
 import com.example.urlshortener.core.ports.incoming.ShortenUrlUseCase;
-import com.example.urlshortener.core.ports.outgoing.IdGeneratorPort;
 import com.example.urlshortener.core.ports.outgoing.MetricsPort;
 import com.example.urlshortener.core.ports.outgoing.UrlCachePort;
 import com.example.urlshortener.core.ports.outgoing.UrlRepositoryPort;
@@ -23,28 +23,32 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
     private static final String LOG_CACHE_MISS = "Cache Miss for ID: {}. Fetching from DB...";
 
     private final UrlRepositoryPort urlRepository;
-    private final IdGeneratorPort idGenerator;
     private final UrlCachePort urlCache;
     private final MetricsPort metrics;
+    private final UrlIdGenerator urlIdGenerator;
 
-    public UrlShortenerService(UrlRepositoryPort urlRepository, IdGeneratorPort idGenerator,
-                               UrlCachePort urlCache, MetricsPort metrics) {
+    public UrlShortenerService(UrlRepositoryPort urlRepository,
+            UrlCachePort urlCache,
+            MetricsPort metrics,
+            UrlIdGenerator urlIdGenerator) {
         this.urlRepository = urlRepository;
-        this.idGenerator = idGenerator;
         this.urlCache = urlCache;
         this.metrics = metrics;
+        this.urlIdGenerator = urlIdGenerator;
     }
 
     @Override
-    public ShortUrl shorten(String originalUrl) {
+    public ShortUrl shorten(String originalUrl, String customAlias, String userId) {
         // Input validation
         Objects.requireNonNull(originalUrl, "URL cannot be null");
 
         // Validate URL format using Value Object
         Url validatedUrl = new Url(originalUrl);
 
-        String id = idGenerator.generateId();
-        ShortUrl shortUrl = new ShortUrl(id, validatedUrl.value(), LocalDateTime.now());
+        // Delegate ID generation to the decoupled module
+        String id = urlIdGenerator.generateId(customAlias, userId);
+
+        ShortUrl shortUrl = new ShortUrl(id, validatedUrl.value(), LocalDateTime.now(), userId);
         urlRepository.save(shortUrl);
 
         // Record metric

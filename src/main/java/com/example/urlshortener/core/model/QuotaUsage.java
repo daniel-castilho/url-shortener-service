@@ -19,11 +19,11 @@ public class QuotaUsage {
         this.vanityUrlsCreatedTotal = 0;
         this.apiCallsThisMonth = 0;
         this.customDomainsCount = 0;
-        this.quotaResetDate = calculateNextResetDate();
+        this.quotaResetDate = calculateNextResetDate(LocalDateTime.now());
     }
 
-    private LocalDateTime calculateNextResetDate() {
-        return LocalDateTime.now()
+    public static LocalDateTime calculateNextResetDate(LocalDateTime fromDate) {
+        return fromDate
                 .plusMonths(1)
                 .withDayOfMonth(1)
                 .withHour(0)
@@ -35,7 +35,7 @@ public class QuotaUsage {
     public void resetMonthlyQuota() {
         this.vanityUrlsCreatedThisMonth = 0;
         this.apiCallsThisMonth = 0;
-        this.quotaResetDate = calculateNextResetDate();
+        this.quotaResetDate = calculateNextResetDate(LocalDateTime.now());
     }
 
     public boolean needsReset() {

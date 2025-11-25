@@ -39,7 +39,7 @@ class UrlShortenerIntegrationTest extends BaseIntegrationTest {
         void shouldShortenAndRedirect() {
                 // Given
                 String originalUrl = "https://www.example.com/very/long/url/path";
-                ShortenRequest request = new ShortenRequest(originalUrl);
+                ShortenRequest request = new ShortenRequest(originalUrl, null);
 
                 // When: Shorten URL
                 ShortenResponse response = given()
@@ -83,8 +83,8 @@ class UrlShortenerIntegrationTest extends BaseIntegrationTest {
         @DisplayName("Should generate unique IDs for multiple URLs")
         void shouldGenerateUniqueIds() {
                 // Given
-                ShortenRequest request1 = new ShortenRequest("https://example1.com");
-                ShortenRequest request2 = new ShortenRequest("https://example2.com");
+                ShortenRequest request1 = new ShortenRequest("https://example1.com", null);
+                ShortenRequest request2 = new ShortenRequest("https://example2.com", null);
 
                 // When
                 String id1 = given()
@@ -114,7 +114,7 @@ class UrlShortenerIntegrationTest extends BaseIntegrationTest {
         void shouldCacheUrls() {
                 // Given
                 String originalUrl = "https://www.cached-example.com";
-                ShortenRequest request = new ShortenRequest(originalUrl);
+                ShortenRequest request = new ShortenRequest(originalUrl, null);
 
                 String shortId = given()
                                 .contentType(ContentType.JSON)
@@ -155,7 +155,8 @@ class UrlShortenerIntegrationTest extends BaseIntegrationTest {
                                 .forEach(i -> {
                                         String id = given()
                                                         .contentType(ContentType.JSON)
-                                                        .body(new ShortenRequest("https://example.com/concurrent/" + i))
+                                                        .body(new ShortenRequest("https://example.com/concurrent/" + i,
+                                                                        null))
                                                         .post("/api/v1/urls")
                                                         .then()
                                                         .statusCode(200)
@@ -173,7 +174,7 @@ class UrlShortenerIntegrationTest extends BaseIntegrationTest {
         void shouldHandleSpecialCharacters() {
                 // Given
                 String urlWithSpecialChars = "https://example.com/path?param=value&other=123#anchor";
-                ShortenRequest request = new ShortenRequest(urlWithSpecialChars);
+                ShortenRequest request = new ShortenRequest(urlWithSpecialChars, null);
 
                 // When
                 String shortId = given()
@@ -199,7 +200,7 @@ class UrlShortenerIntegrationTest extends BaseIntegrationTest {
         void shouldHandleVeryLongUrls() {
                 // Given: URL with 2000+ characters
                 String longUrl = "https://example.com/very/long/path/" + "a".repeat(2000);
-                ShortenRequest request = new ShortenRequest(longUrl);
+                ShortenRequest request = new ShortenRequest(longUrl, null);
 
                 // When
                 String shortId = given()
@@ -226,7 +227,7 @@ class UrlShortenerIntegrationTest extends BaseIntegrationTest {
         void shouldReturnConsistentResults() {
                 // Given
                 String url = "https://example.com/consistent";
-                ShortenRequest request = new ShortenRequest(url);
+                ShortenRequest request = new ShortenRequest(url, null);
 
                 // When: Shorten same URL twice
                 String id1 = given()

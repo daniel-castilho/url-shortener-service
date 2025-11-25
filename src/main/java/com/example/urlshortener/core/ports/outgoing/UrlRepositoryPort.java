@@ -8,7 +8,8 @@ import java.util.Optional;
  * Porto de saída que define o contrato para persistência de URLs encurtadas.
  *
  * Esta é uma abstração que permite o core da aplicação (domain layer)
- * permanecer independente de detalhes de infraestrutura (qual banco de dados é usado).
+ * permanecer independente de detalhes de infraestrutura (qual banco de dados é
+ * usado).
  *
  * Segue o padrão Ports & Adapters (Clean Architecture):
  * - Port: Esta interface agnóstica de banco de dados
@@ -28,7 +29,8 @@ public interface UrlRepositoryPort {
      *
      * @param shortUrl a URL encurtada a ser salva
      * @throws IllegalArgumentException se os dados forem inválidos
-     * @throws RuntimeException (ou subclasses específicas) em caso de erro de persistência
+     * @throws RuntimeException         (ou subclasses específicas) em caso de erro
+     *                                  de persistência
      */
     void save(ShortUrl shortUrl);
 
@@ -37,7 +39,16 @@ public interface UrlRepositoryPort {
      *
      * @param id o identificador único da URL encurtada
      * @return Optional contendo a URL se encontrada, ou empty se não existir
-     * @throws RuntimeException (ou subclasses específicas) em caso de erro ao consultar
+     * @throws RuntimeException (ou subclasses específicas) em caso de erro ao
+     *                          consultar
      */
     Optional<ShortUrl> findById(String id);
+
+    /**
+     * Verifica se uma URL encurtada existe por seu identificador.
+     *
+     * @param id o identificador único
+     * @return true se existir, false caso contrário
+     */
+    boolean existsById(String id);
 }

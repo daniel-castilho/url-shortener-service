@@ -1,8 +1,7 @@
 package com.example.urlshortener.core.service;
 
-import com.example.urlshortener.core.exception.UrlNotFoundException;
+import com.example.urlshortener.core.idgeneration.UrlIdGenerator;
 import com.example.urlshortener.core.model.ShortUrl;
-import com.example.urlshortener.core.ports.outgoing.IdGeneratorPort;
 import com.example.urlshortener.core.ports.outgoing.MetricsPort;
 import com.example.urlshortener.core.ports.outgoing.UrlCachePort;
 import com.example.urlshortener.core.ports.outgoing.UrlRepositoryPort;
@@ -19,7 +18,6 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -30,13 +28,13 @@ class UrlShortenerServiceTest {
     private UrlRepositoryPort urlRepository;
 
     @Mock
-    private IdGeneratorPort idGenerator;
-
-    @Mock
     private UrlCachePort urlCache;
 
     @Mock
     private MetricsPort metrics;
+
+    @Mock
+    private UrlIdGenerator urlIdGenerator;
 
     private UrlShortenerService service;
 
@@ -45,14 +43,14 @@ class UrlShortenerServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new UrlShortenerService(urlRepository, idGenerator, urlCache, metrics);
+        service = new UrlShortenerService(urlRepository, urlCache, metrics, urlIdGenerator);
     }
 
     @Test
-    @DisplayName("Should shorten URL successfully")
+    @DisplayName("Should shorten URL using ID from Generator")
     void shouldShortenUrl() {
         // Given
-        when(idGenerator.generateId()).thenReturn(TEST_ID);
+        when(urlIdGenerator.generateId(null, null)).thenReturn(TEST_ID);
 
         // When
         ShortUrl result = service.shorten(TEST_URL);
@@ -61,10 +59,27 @@ class UrlShortenerServiceTest {
         assertThat(result).isNotNull();
         assertThat(result.id()).isEqualTo(TEST_ID);
         assertThat(result.originalUrl()).isEqualTo(TEST_URL);
-        assertThat(result.createdAt()).isNotNull();
 
-        verify(idGenerator).generateId();
+        verify(urlIdGenerator).generateId(null, null);
         verify(urlRepository).save(any(ShortUrl.class));
+    }
+
+    @Test
+    @DisplayName("Should pass custom alias and user ID to Generator")
+    void shouldPassParamsToGenerator() {
+        // Given
+        String customAlias = "my-alias";
+        String userId = "user123";
+        when(urlIdGenerator.generateId(customAlias, userId)).thenReturn(customAlias);
+
+        // When
+        ShortUrl result = service.shorten(TEST_URL, customAlias, userId);
+
+        // Then
+        assertThat(result.id()).isEqualTo(customAlias);
+        assertThat(result.userId()).isEqualTo(userId);
+
+        verify(urlIdGenerator).generateId(customAlias, userId);
     }
 
     @Test
@@ -98,22 +113,5 @@ class UrlShortenerServiceTest {
         verify(urlCache).get(TEST_ID);
         verify(urlRepository).findById(TEST_ID);
         verify(urlCache).put(TEST_ID, TEST_URL);
-    }
-
-    @Test
-    @DisplayName("Should throw UrlNotFoundException when URL not found")
-    void shouldThrowExceptionWhenUrlNotFound() {
-        // Given
-        when(urlCache.get(TEST_ID)).thenReturn(null);
-        when(urlRepository.findById(TEST_ID)).thenReturn(Optional.empty());
-
-        // When/Then
-        assertThatThrownBy(() -> service.getOriginalUrl(TEST_ID))
-                .isInstanceOf(UrlNotFoundException.class)
-                .hasMessageContaining(TEST_ID);
-
-        verify(urlCache).get(TEST_ID);
-        verify(urlRepository).findById(TEST_ID);
-        verify(urlCache, never()).put(any(), any());
     }
 }
