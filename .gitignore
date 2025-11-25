@@ -53,3 +53,4 @@ spring-boot-devtools.properties
 *.cache
 target/
 *.class
+target/
