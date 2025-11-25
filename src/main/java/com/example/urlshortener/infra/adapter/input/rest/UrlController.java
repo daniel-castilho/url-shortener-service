@@ -62,6 +62,7 @@ public class UrlController {
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "200", description = "URL successfully shortened", content = @Content(schema = @Schema(implementation = ShortenResponse.class))),
                         @ApiResponse(responseCode = "400", description = "Invalid URL or custom alias", content = @Content),
+                        @ApiResponse(responseCode = "409", description = "Custom alias already exists", content = @Content),
                         @ApiResponse(responseCode = "429", description = "Rate limit exceeded", content = @Content)
         })
         public ResponseEntity<ShortenResponse> shorten(

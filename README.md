@@ -12,7 +12,8 @@ The project is built on **Clean Architecture** with strict separation of concern
 ┌─────────────────────────────────────────────┐
 │      ⚙️ Infrastructure Adapter Layer        │
 │  (MongoUrlRepository, ShortUrlMapper,       │
-│   REST Controllers, Redis Cache)            │
+│   REST Controllers, Redis Cache,            │
+│   Security/JWT, QuotaService)               │
 │   ✅ Spring, MongoDB, Redis - Only Here    │
 └─────────────────────────────────────────────┘
 ```
@@ -36,31 +37,6 @@ src/main/java/com/example/urlshortener
 │   │   └── ShortUrl.java         # Record - immutable value object
 │   ├── ports                      # Abstractions (Input/Output contracts)
 │   │   ├── incoming               # Input ports (Use Cases)
-│   │   │   ├── GetUrlUseCase.java
-│   │   │   └── ShortenUrlUseCase.java
-│   │   └── outgoing               # Output ports (Repositories, Caches)
-│   │       ├── AnalyticsPort.java
-│   │       ├── IdGeneratorPort.java
-│   │       ├── UrlCachePort.java
-│   │       └── UrlRepositoryPort.java  # ← MongoDB adapter implements this
-│   └── service                    # Use Case implementations
-│       └── UrlShortenerService.java
-│
-└── infra                          # ⚙️ INFRASTRUCTURE (Spring Boot + DB)
-    ├── Application.java           # Main Spring Application
-    ├── adapter                    # Port Implementations
-    │   ├── input                  # Inbound adapters
-    │   │   └── rest               # REST layer (Controllers + DTOs)
-    │   │       ├── UrlController.java
-    │   │       ├── advice/GlobalExceptionHandler.java
-    │   │       └── dto/...
-    │   └── output                 # Outbound adapters
-    │       ├── analytics          # Async click tracking
-    │       ├── persistence        # 🆕 MongoDB Adapter
-    │       │   ├── MongoUrlRepository.java     # Implements UrlRepositoryPort
-    │       │   ├── entity/ShortUrlEntity.java  # Persistence entity
-    │       │   ├── mapper/ShortUrlMapper.java  # Domain ↔ Entity conversion
-    │       │   ├── exception/RepositoryException.java
     │       │   └── config/MongoCollections.java
     │       └── redis              # Cache & ID generation
     │           ├── RangeAwareIdGenerator.java
@@ -90,6 +66,7 @@ src/main/java/com/example/urlshortener
 *   **Caffeine**: In-memory local cache (L1) - 5s TTL
 *   **Hashids**: Sequential ID obfuscation into short codes
 *   **Resilience4j**: Circuit breakers (fault tolerance)
+*   **Spring Security + JWT**: Stateless authentication and authorization
 *   **GraalVM**: Native compilation for 100ms startup, 50MB memory
 
 ---
@@ -345,11 +322,61 @@ curl http://localhost:8080/actuator/health
 }
 ```
 
-**Response:**
-```json
 {
   "id": "vE1GpYK",
   "shortUrl": "http://localhost:8080/vE1GpYK"
+}
+```
+
+### Shorten with Custom Alias (Authenticated)
+
+`POST /api/v1/urls`
+
+**Headers:**
+`Authorization: Bearer <jwt_token>`
+
+**Request Body:**
+```json
+{
+  "originalUrl": "https://www.google.com",
+  "customAlias": "my-google"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "my-google",
+  "shortUrl": "http://localhost:8080/my-google"
+}
+```
+
+### Authentication Endpoints
+
+#### Register
+`POST /api/v1/auth/register`
+```json
+{
+  "email": "user@example.com",
+  "password": "password123",
+  "role": "USER"
+}
+```
+
+#### Login
+`POST /api/v1/auth/login`
+```json
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+#### Refresh Token
+`POST /api/v1/auth/refresh`
+```json
+{
+  "refreshToken": "eyJhbGciOiJIUzI1NiJ9..."
 }
 ```
 

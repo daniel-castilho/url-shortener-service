@@ -216,7 +216,7 @@ spring.data.mongodb.uri: mongodb://localhost:27017/url_shortener_test
 
 ### 6.3 Produção
 ```bash
-export MONGODB_URI="mongodb+srv://user:pass@cluster.mongodb.net/url_shortener"
+export MONGODB_URI="mongodb+srv://<username>:<password>@cluster.mongodb.net/url_shortener"
 export SHORTENER_SALT="production-secret-salt-from-vault"
 ```
 
