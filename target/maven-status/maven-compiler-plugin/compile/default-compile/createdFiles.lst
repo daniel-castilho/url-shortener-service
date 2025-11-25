@@ -8,6 +8,7 @@ com/example/urlshortener/infra/adapter/output/persistence/entity/ShortUrlEntity.
 com/example/urlshortener/infra/adapter/input/rest/advice/GlobalExceptionHandler$ValidationErrorResponse.class
 com/example/urlshortener/infra/adapter/output/analytics/AsyncAnalyticsAdapter.class
 com/example/urlshortener/core/service/UrlShortenerService.class
+com/example/urlshortener/core/exception/AliasAlreadyExistsException.class
 com/example/urlshortener/Application.class
 com/example/urlshortener/infra/adapter/input/rest/dto/ShortenRequest.class
 com/example/urlshortener/infra/adapter/output/persistence/config/MongoCollections.class
@@ -62,3 +63,4 @@ com/example/urlshortener/infra/adapter/output/persistence/UserEntity.class
 com/example/urlshortener/infra/adapter/input/rest/dto/auth/RegisterRequest.class
 com/example/urlshortener/core/model/ClickEvent.class
 com/example/urlshortener/infra/security/JwtTokenProvider.class
+com/example/urlshortener/core/validation/ReservedWordsValidator.class

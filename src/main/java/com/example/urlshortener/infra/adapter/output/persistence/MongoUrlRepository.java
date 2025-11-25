@@ -1,11 +1,13 @@
 package com.example.urlshortener.infra.adapter.output.persistence;
 
+import com.example.urlshortener.core.exception.AliasAlreadyExistsException;
 import com.example.urlshortener.core.model.ShortUrl;
 import com.example.urlshortener.core.ports.outgoing.UrlRepositoryPort;
 import com.example.urlshortener.infra.adapter.output.persistence.entity.ShortUrlEntity;
 import com.example.urlshortener.infra.adapter.output.persistence.exception.RepositoryException;
 import com.example.urlshortener.infra.adapter.output.persistence.mapper.ShortUrlMapper;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import org.springframework.dao.DuplicateKeyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -60,6 +62,9 @@ public class MongoUrlRepository implements UrlRepositoryPort {
             ShortUrlEntity entity = mapper.toPersistence(shortUrl);
             mongoTemplate.save(entity);
             logger.debug("URL encurtada salva com sucesso: {}", shortUrl.id());
+        } catch (DuplicateKeyException e) {
+            logger.warn("Tentativa de criar alias duplicado: {}", shortUrl.id());
+            throw new AliasAlreadyExistsException(shortUrl.id());
         } catch (IllegalArgumentException e) {
             logger.error("Dados inválidos ao salvar URL encurtada", e);
             throw new RepositoryException("Dados inválidos para persistência", e);

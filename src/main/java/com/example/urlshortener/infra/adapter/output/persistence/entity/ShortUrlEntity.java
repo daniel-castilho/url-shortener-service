@@ -41,6 +41,11 @@ public class ShortUrlEntity {
      */
     private LocalDateTime createdAt;
 
+    @Indexed
+    private String userId;
+
+    private boolean isCustomAlias;
+
     /**
      * Construtor sem argumentos necessário para desserialização do MongoDB.
      */
@@ -50,14 +55,17 @@ public class ShortUrlEntity {
     /**
      * Construtor com todos os campos.
      *
-     * @param id identificador único da URL encurtada
+     * @param id          identificador único da URL encurtada
      * @param originalUrl URL original a ser armazenada
-     * @param createdAt data/hora de criação do encurtamento
+     * @param createdAt   data/hora de criação do encurtamento
      */
-    public ShortUrlEntity(String id, String originalUrl, LocalDateTime createdAt) {
+    public ShortUrlEntity(String id, String originalUrl, LocalDateTime createdAt, String userId,
+            boolean isCustomAlias) {
         this.id = id;
         this.originalUrl = originalUrl;
         this.createdAt = createdAt;
+        this.userId = userId;
+        this.isCustomAlias = isCustomAlias;
     }
 
     // ...existing code...
@@ -83,5 +91,21 @@ public class ShortUrlEntity {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getUserId() {
+        return userId;
+    }
+
+    public void setUserId(String userId) {
+        this.userId = userId;
+    }
+
+    public boolean isCustomAlias() {
+        return isCustomAlias;
+    }
+
+    public void setCustomAlias(boolean customAlias) {
+        isCustomAlias = customAlias;
     }
 }

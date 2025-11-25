@@ -6,6 +6,7 @@ import com.example.urlshortener.core.ports.outgoing.UrlCachePort;
 import com.example.urlshortener.core.ports.outgoing.UrlRepositoryPort;
 import com.example.urlshortener.core.ports.outgoing.UserRepositoryPort;
 import com.example.urlshortener.core.service.QuotaService;
+import com.example.urlshortener.core.validation.ReservedWordsValidator;
 import com.example.urlshortener.core.service.UrlShortenerService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,7 +20,9 @@ public class ServiceConfig {
             MetricsPort metrics,
             UrlIdGenerator urlIdGenerator,
             QuotaService quotaService,
-            UserRepositoryPort userRepository) {
-        return new UrlShortenerService(urlRepository, urlCache, metrics, urlIdGenerator, quotaService, userRepository);
+            UserRepositoryPort userRepository,
+            ReservedWordsValidator reservedWordsValidator) {
+        return new UrlShortenerService(urlRepository, urlCache, metrics, urlIdGenerator, quotaService, userRepository,
+                reservedWordsValidator);
     }
 }

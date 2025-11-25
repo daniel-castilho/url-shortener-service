@@ -29,19 +29,22 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
     private final UrlIdGenerator urlIdGenerator;
     private final QuotaService quotaService;
     private final UserRepositoryPort userRepository;
+    private final com.example.urlshortener.core.validation.ReservedWordsValidator reservedWordsValidator;
 
     public UrlShortenerService(UrlRepositoryPort urlRepository,
             UrlCachePort urlCache,
             MetricsPort metrics,
             UrlIdGenerator urlIdGenerator,
             QuotaService quotaService,
-            UserRepositoryPort userRepository) {
+            UserRepositoryPort userRepository,
+            com.example.urlshortener.core.validation.ReservedWordsValidator reservedWordsValidator) {
         this.urlRepository = urlRepository;
         this.urlCache = urlCache;
         this.metrics = metrics;
         this.urlIdGenerator = urlIdGenerator;
         this.quotaService = quotaService;
         this.userRepository = userRepository;
+        this.reservedWordsValidator = reservedWordsValidator;
     }
 
     @Override
@@ -53,16 +56,27 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
         Url validatedUrl = new Url(originalUrl);
 
         // Check Quota if user is authenticated and custom alias is requested
-        if (userId != null && customAlias != null && !customAlias.isBlank()) {
-            userRepository.findById(userId).ifPresent(user -> {
-                quotaService.checkVanityUrlQuota(user, customAlias);
-            });
+        boolean isCustomAlias = false;
+        if (customAlias != null && !customAlias.isBlank()) {
+            // Validate reserved words
+            reservedWordsValidator.validate(customAlias);
+
+            if (userId != null) {
+                userRepository.findById(userId).ifPresent(user -> {
+                    quotaService.checkVanityUrlQuota(user, customAlias);
+                });
+                isCustomAlias = true;
+            } else {
+                // Anonymous users cannot create custom aliases (enforced by controller, but
+                // good to check here)
+                throw new IllegalArgumentException("Authentication required for custom aliases");
+            }
         }
 
         // Delegate ID generation to the decoupled module
         String id = urlIdGenerator.generateId(customAlias, userId);
 
-        ShortUrl shortUrl = new ShortUrl(id, validatedUrl.value(), LocalDateTime.now(), userId);
+        ShortUrl shortUrl = new ShortUrl(id, validatedUrl.value(), LocalDateTime.now(), userId, isCustomAlias);
         urlRepository.save(shortUrl);
 
         // Increment usage if user is authenticated and custom alias was used

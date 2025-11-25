@@ -1,4 +1,5 @@
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/Application.java
+/home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/exception/AliasAlreadyExistsException.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/exception/QuotaExceededException.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/exception/UrlNotFoundException.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/idgeneration/CompositeUrlIdGenerator.java
@@ -25,6 +26,7 @@
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/service/QuotaService.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/service/UrlShortenerService.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/service/UserService.java
+/home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/core/validation/ReservedWordsValidator.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/adapter/input/rest/AuthController.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/adapter/input/rest/UrlController.java
 /home/castilho/projects/url-shortener/url-shortener-service/src/main/java/com/example/urlshortener/infra/adapter/input/rest/advice/GlobalExceptionHandler.java

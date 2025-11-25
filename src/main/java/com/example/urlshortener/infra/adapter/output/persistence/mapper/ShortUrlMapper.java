@@ -14,7 +14,8 @@ import org.springframework.stereotype.Component;
 public class ShortUrlMapper {
 
     /**
-     * Converte um objeto de domínio (ShortUrl) para entidade de persistência (ShortUrlEntity).
+     * Converte um objeto de domínio (ShortUrl) para entidade de persistência
+     * (ShortUrlEntity).
      *
      * @param domain o objeto de domínio contendo os dados da URL encurtada
      * @return a entidade preparada para persistência no MongoDB
@@ -26,14 +27,16 @@ public class ShortUrlMapper {
         }
 
         return new ShortUrlEntity(
-            domain.id(),
-            domain.originalUrl(),
-            domain.createdAt()
-        );
+                domain.id(),
+                domain.originalUrl(),
+                domain.createdAt(),
+                domain.userId(),
+                domain.isCustomAlias());
     }
 
     /**
-     * Converte uma entidade de persistência (ShortUrlEntity) para objeto de domínio (ShortUrl).
+     * Converte uma entidade de persistência (ShortUrlEntity) para objeto de domínio
+     * (ShortUrl).
      *
      * @param entity a entidade recuperada do MongoDB
      * @return o objeto de domínio com os dados da entidade
@@ -45,10 +48,10 @@ public class ShortUrlMapper {
         }
 
         return new ShortUrl(
-            entity.getId(),
-            entity.getOriginalUrl(),
-            entity.getCreatedAt()
-        );
+                entity.getId(),
+                entity.getOriginalUrl(),
+                entity.getCreatedAt(),
+                entity.getUserId(),
+                entity.isCustomAlias());
     }
 }
-

@@ -43,6 +43,9 @@ class UrlShortenerServiceTest {
     @Mock
     private UserRepositoryPort userRepository;
 
+    @Mock
+    private com.example.urlshortener.core.validation.ReservedWordsValidator reservedWordsValidator;
+
     private UrlShortenerService service;
 
     private static final String TEST_URL = "https://www.example.com/very/long/url";
@@ -51,7 +54,7 @@ class UrlShortenerServiceTest {
     @BeforeEach
     void setUp() {
         service = new UrlShortenerService(urlRepository, urlCache, metrics, urlIdGenerator, quotaService,
-                userRepository);
+                userRepository, reservedWordsValidator);
     }
 
     @Test
