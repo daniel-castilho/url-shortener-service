@@ -51,3 +51,5 @@ spring-boot-devtools.properties
 *.tmp
 *.bak
 *.cache
+target/
+*.class

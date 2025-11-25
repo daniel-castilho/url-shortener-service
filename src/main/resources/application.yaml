@@ -23,10 +23,28 @@ spring:
     port: ${REDIS_PORT:6379}
     timeout: 500ms
 
+# ========================================
+# Application Configuration
+# ========================================
 app:
   shortener:
-    salt: ${SHORTENER_SALT:my-secret-salt-change-me-in-prod} # Should be an env var in production
+    # IMPORTANT: Change this in production via environment variable SHORTENER_SALT
+    # This salt is used for Hashids encoding
+    salt: ${SHORTENER_SALT:my-secret-salt-change-me-in-prod}
+  
+  jwt:
+    # CRITICAL: MUST be set via environment variable in production
+    # Minimum 32 characters required for HS256
+    # Example: export APP_JWT_SECRET="your-super-secret-key-at-least-32-chars-long"
+    secret: ${APP_JWT_SECRET:9a4f2c8d3b7a1e6f4c5d8e9a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c}
+    
+    # Token expiration times
+    expiration-ms: ${APP_JWT_EXPIRATION_MS:86400000}        # 24 hours (in milliseconds)
+    refresh-expiration-ms: ${APP_JWT_REFRESH_EXPIRATION_MS:604800000}  # 7 days (in milliseconds)
 
+# ========================================
+# Observability & Monitoring
+# ========================================
 management:
   endpoints:
     web:
@@ -42,10 +60,16 @@ management:
     circuitbreakers:
       enabled: true
 
+# ========================================
+# Rate Limiting
+# ========================================
 rate-limiter:
-  limit: 60
-  window: PT1M
+  limit: 60      # Maximum requests per window
+  window: PT1M   # Time window (ISO-8601 Duration format: 1 Minute)
 
+# ========================================
+# Resilience4j Circuit Breakers
+# ========================================
 resilience4j:
   circuitbreaker:
     configs:
