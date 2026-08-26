@@ -5,7 +5,7 @@ All notable changes to URL Shortener Service will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project
 intends to follow [Semantic Versioning](https://semver.org/) starting from its first tag.
 
-## [Unreleased]
+## [0.4.0] - 2026-08-26
 
 ### Added
 
