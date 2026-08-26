@@ -1,527 +1,261 @@
-The project is built on **Clean Architecture** with strict separation of concerns:
+# URL Shortener Service
+
+![Java](https://img.shields.io/badge/Java-21-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.5.7-6DB33F?style=for-the-badge&logo=spring&logoColor=white)
+![Maven](https://img.shields.io/badge/Maven-3.8+-C71A36?style=for-the-badge&logo=apache-maven&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+
+URL Shortener Service is a high-performance link-shortening API built with **Java 21**, **Spring Boot 3.5.7**
+and a **Hexagonal Architecture (Ports & Adapters)**. Its business core (`core` package) is free of
+framework and adapter dependencies — the shortening logic talks only to abstractions (ports), which
+keeps the application testable, swappable and independent of the persistence, cache and web
+technologies used by the `infra` layer.
+
+## Table of Contents
+
+- [Tech Stack](#tech-stack)
+- [Architecture](#architecture)
+- [Requirements](#requirements)
+- [Getting Started](#getting-started)
+- [Commands](#commands)
+- [Testing](#testing)
+- [API & Documentation](#api--documentation)
+- [Current State](#current-state)
+- [Roadmap](#roadmap)
+- [Documentation](#documentation)
+
+## Tech Stack
+
+| Category | Technology |
+| :--- | :--- |
+| **Language & Framework** | ![Java](https://img.shields.io/badge/Java-21-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white) ![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.5.7-6DB33F?style=for-the-badge&logo=spring&logoColor=white) |
+| **Web Server** | ![Undertow](https://img.shields.io/badge/Undertow-1F77B4?style=for-the-badge) ![Virtual Threads](https://img.shields.io/badge/Virtual_Threads_(Loom)-00C4CC?style=for-the-badge) |
+| **Build & Dependencies** | ![Maven](https://img.shields.io/badge/Maven-3.8+-C71A36?style=for-the-badge&logo=apache-maven&logoColor=white) |
+| **Database** | ![MongoDB](https://img.shields.io/badge/MongoDB_6.0-47A248?style=for-the-badge&logo=mongodb&logoColor=white) |
+| **Cache** | ![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white) ![Redisson](https://img.shields.io/badge/Redisson-4A90E2?style=for-the-badge) ![Caffeine](https://img.shields.io/badge/Caffeine-DA5B0B?style=for-the-badge) |
+| **Security** | ![Spring Security](https://img.shields.io/badge/Spring_Security-6DB33F?style=for-the-badge&logo=spring-security&logoColor=white) ![JWT](https://img.shields.io/badge/JWT-000000?style=for-the-badge&logo=json-web-tokens&logoColor=white) |
+| **Resilience** | ![Resilience4j](https://img.shields.io/badge/Resilience4j-008282?style=for-the-badge) |
+| **Observability** | ![Micrometer](https://img.shields.io/badge/Micrometer-0067B8?style=for-the-badge) ![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=prometheus&logoColor=white) |
+| **API Docs** | ![Swagger](https://img.shields.io/badge/Swagger-85EA2D?style=for-the-badge&logo=swagger&logoColor=black) |
+| **Testing** | ![JUnit 5](https://img.shields.io/badge/JUnit5-25A162?style=for-the-badge&logo=junit5&logoColor=white) ![Mockito](https://img.shields.io/badge/Mockito-D43A2A?style=for-the-badge&logo=mockito&logoColor=white) ![Testcontainers](https://img.shields.io/badge/Testcontainers-262261?style=for-the-badge&logo=testcontainers&logoColor=white) ![RestAssured](https://img.shields.io/badge/REST_Assured-000000?style=for-the-badge&logo=rest-assured&logoColor=white) |
+
+- **Web:** Spring Web + **Undertow** (non-blocking I/O, direct buffers) with **Virtual Threads** enabled.
+- **Data:** Spring Data MongoDB (`auto-index-creation: false`; schema managed by `IndexMigration`) and Spring Data Redis.
+- **Cache:** **Caffeine** local (L1, 100 items / 5s TTL) → **Redis** (L2, 24h TTL + jitter) →
+  MongoDB. A **Redisson Bloom Filter** short-circuits lookups for codes that certainly do not exist.
+- **ID generation (locked identity model):** cryptographically random **Base62** codes
+  (`SecureRandom`, alphabet `0-9A-Za-z`, default length **7** via `app.shortener.code-length`).
+  Collisions retry on the unique `_id`. **No Hashids, no Redis counter, no sequential codes.**
+  The same original URL may be shortened many times (no unique index on `originalUrl`).
+  `409 Conflict` means only “custom alias already exists”. See `docs/data-model-decisions.md`.
+- **Resilience:** Resilience4j circuit breakers for the rate limiter / ID generator and the database.
+- **Security:** Spring Security + **jjwt** 0.12 (HS256, access + refresh tokens), **BCrypt** hashing.
+- **API docs:** springdoc-openapi (Swagger UI) + **Actuator** (`health`, `metrics`, `prometheus`,
+  `circuitbreakers`).
+
+## Architecture
+
+The application follows a hexagonal (Ports & Adapters) layout with a strict inward dependency rule:
 
 ```
-┌─────────────────────────────────────────────┐
-│         🧠 Core Domain Layer                │
-│  (ShortUrl record, UrlRepositoryPort,       │
-│   UrlShortenerService, Business Logic)      │
-│   ✅ Pure Java - No Framework Dependencies  │
-└─────────────────────────────────────────────┘
-                        ↑ implements
-                        │
-┌─────────────────────────────────────────────┐
-│      ⚙️ Infrastructure Adapter Layer        │
-│  (MongoUrlRepository, ShortUrlMapper,       │
-│   REST Controllers, Redis Cache,            │
-│   Security/JWT, QuotaService)               │
-│   ✅ Spring, MongoDB, Redis - Only Here    │
-└─────────────────────────────────────────────┘
+src/main/java/com/example/urlshortener/
+├── Application.java                      # Spring Boot entry point
+├── core/                                 # 🧠 DOMAIN — pure business logic
+│   ├── exception/                        # Domain exceptions (UrlNotFound, AliasExists, QuotaExceeded)
+│   ├── idgeneration/                     # UrlIdGenerator + strategies (random / vanity) — composite
+│   ├── model/                            # Entities & value objects (ShortUrl, Url, User, ClickEvent…)
+│   ├── ports/
+│   │   ├── incoming/                     # Use-case contracts (ShortenUrlUseCase, GetUrlUseCase)
+│   │   └── outgoing/                     # Outbound ports (Repository, Cache, Metrics, Analytics, RateLimiter…)
+│   ├── service/                          # Use-case orchestration (UrlShortenerService, QuotaService)
+│   └── validation/                       # ReservedWordsValidator
+└── infra/                                # ⚙️ ADAPTERS — framework & cloud
+    ├── adapter/
+    │   ├── input/rest/                   # REST controllers, DTOs, GlobalExceptionHandler
+    │   └── output/
+    │       ├── analytics/                # Async click-event queue + batched worker
+    │       ├── persistence/              # Mongo repositories, entities & mappers
+    │       └── redis/                    # Redis cache, bloom filter, rate limiter
+    ├── config/                           # Spring beans, security, Undertow, OpenAPI, native hints
+    ├── observability/                    # Micrometer metrics service & adapter
+    └── security/                         # JWT filter, token provider, UserDetailsService
 ```
 
-### Benefits of This Architecture
+**Boundary rules:**
 
-- ✅ **Core is Independent**: Business logic knows nothing about MongoDB/Redis/Spring
-- ✅ **Easy Testing**: Unit tests use mocks, integration tests use Testcontainers
-- ✅ **Technology Agnostic**: Replace MongoDB with PostgreSQL in 1 file change
-- ✅ **SOLID Compliant**: Single Responsibility, Open/Closed, Dependency Inversion
+- `core/` must never import `ca.tyny.urlshortener.infra.*` nor any framework adapter. It depends
+  only on its own models, ports and services.
+- `core/` services depend on **outbound ports** (interfaces) — not on concrete implementations — so
+  Mongo, Redis and the cache are swappable behind those ports.
+- `infra/` implements the outbound ports and exposes them through `config` beans.
 
-### 📂 Directory Structure
+> **Known exception (tracked in the roadmap):** `core/service/UserService` currently imports
+> `infra` classes directly (`MongoUserRepository`, `JwtTokenProvider`, REST DTOs) and `core/` mixes
+> in a few Spring annotations. The intended boundary is enforced for the URL-shortening flow; the
+> user-service layer is the remaining piece to refactor.
 
-```
-src/main/java/com/example/urlshortener
-├── core                           # 🧠 DOMAIN (Pure Business Logic)
-│   ├── exception                  # Domain-specific exceptions
-│   │   └── UrlNotFoundException.java
-│   ├── model                      # Domain entities
-│   │   ├── ClickEvent.java
-│   │   └── ShortUrl.java         # Record - immutable value object
-│   ├── ports                      # Abstractions (Input/Output contracts)
-│   │   ├── incoming               # Input ports (Use Cases)
-    │       │   └── config/MongoCollections.java
-    │       └── redis              # Cache & ID generation
-    │           ├── RangeAwareIdGenerator.java
-    │           └── RedisUrlCache.java
-    └── config                     # Spring configurations
-        ├── OpenApiConfig.java
-        ├── RedisConfig.java
-        ├── ShortCodeConfig.java
-        ├── UndertowConfig.java
-        └── NativeHintsConfig.java
-```
+## Requirements
 
----
+- JDK 21
+- Maven 3.8+ (this project does **not** bundle a `./mvnw` wrapper)
+- Docker and Docker Compose
 
-## 🛠️ Tech Stack
+## Getting Started
 
-*   **Java 21**: Latest language features + Virtual Threads
-*   **Spring Boot 3.5.7**: Base framework
-*   **Undertow**: High-performance web server (non-blocking I/O)
-*   **Virtual Threads (Project Loom)**: Lightweight, scalable concurrency
-*   **MongoDB 6.0**: NoSQL document database (migrated from Cassandra)
-    - Indexes optimized for fast lookups
-    - Automatic index creation via Spring Data
-    - GraalVM native image compatible
-*   **Redis**: Cache (L2), atomic ID generation, Bloom Filter
-*   **Redisson**: Advanced Redis client with Bloom Filter
-*   **Caffeine**: In-memory local cache (L1) - 5s TTL
-*   **Hashids**: Sequential ID obfuscation into short codes
-*   **Resilience4j**: Circuit breakers (fault tolerance)
-*   **Spring Security + JWT**: Stateless authentication and authorization
-*   **GraalVM**: Native compilation for 100ms startup, 50MB memory
+### 1. Start the external services
 
----
+With Docker running, start MongoDB and Redis via Docker Compose:
 
-## 📋 Architecture Quality Metrics
-
-✅ **Clean Code**: 9/10 - Clear naming, SRP, DRY  
-✅ **Clean Architecture**: 10/10 - Perfect layer separation  
-✅ **SOLID Principles**: 9/10 - All 5 principles applied  
-✅ **Design Patterns**: 9/10 - Repository, Mapper, Circuit Breaker  
-✅ **Error Handling**: 10/10 - Exceptions encapsulated  
-✅ **Testability**: 10/10 - Full unit + integration test coverage  
-✅ **Documentation**: 9/10 - Architecture docs + JavaDoc  
-
-**Overall Score: 9.2/10 - Production Ready**
-
----
-
-## 📚 Architecture Documentation
-
-Comprehensive documentation for developers:
-
-1. **[MONGODB_ARCHITECTURE.md](MONGODB_ARCHITECTURE.md)** - Complete architectural guide
-   - Padrões de design implementados
-   - Princípios SOLID detalhados
-   - Performance e monitoramento
-   - Próximos passos recomendados
-
-2. **[AUDIT_FINAL_REPORT.md](AUDIT_FINAL_REPORT.md)** - Auditoria de qualidade
-   - Validação contra Clean Code/Architecture/SOLID
-   - Score de cada critério
-   - Benefícios da arquitetura
-
-3. **[VALIDATION_CHECKLIST.md](VALIDATION_CHECKLIST.md)** - Checklist de validação
-   - 15 categorias de validação
-   - 100+ items verificados
-   - Resultado final (9.2/10)
-
-4. **[LESSONS_LEARNED.md](LESSONS_LEARNED.md)** - Lições aprendidas
-   - Por que cada padrão é importante
-   - 12 lições aplicáveis a qualquer projeto
-
----
-
-## 🛡️ High-Scale Features
-
-Optimized for **100 million writes/day** and **1 billion reads/day**:
-
-### Protection Patterns
-
-- **Bloom Filter**: Prevents Cache Penetration attacks (invalid IDs don't reach the database)
-- **TTL Jitter**: Avoids Cache Stampede by adding randomness to expiration time
-- **Caffeine L1 Cache**: 5-second local cache for the top 100 most accessed links
-- **Circuit Breakers (Resilience4j)**: Protects against cascading failures
-  - `rateLimiterCb`: Protects Redis-based rate limiter and ID generator. **Fails open** (allows requests) if Redis is unavailable
-  - `databaseCb`: Protects Cassandra operations. **Fails fast** if database is unavailable
-  - Exposed via Actuator endpoints: `/actuator/health` and `/actuator/circuitbreakers`
-
-### ID Generation Strategy
-
-- **Counter-Based Shuffle**: Redis provides sequential IDs in batches of 1,000
-- **Hashids Encoding**: IDs are obfuscated into 7+ character codes (e.g., `vE1GpYK`)
-- **Zero Collision**: Mathematical uniqueness guaranteed without database lookup
-
-### Async Analytics
-
-- **Fire-and-Forget**: Clicks are tracked without blocking redirection
-- **Batch Processing**: Worker processes events in batches every 5 seconds
-- **Queue Capacity**: 100k events in memory to absorb traffic spikes
-
-### Observability & Monitoring
-
-- **Custom Business Metrics**: Exposed via Micrometer for Prometheus/Grafana
-  - `urls.shortened.total`: Total URLs shortened
-  - `redirects.total`: Total redirects performed
-  - `shorten.latency`: End-to-end latency for shortening (p50, p95, p99)
-  - `redirect.latency`: End-to-end latency for redirects (p50, p95, p99)
-  - `cache.hits.total` / `cache.misses.total`: Redis cache performance
-  - `id.generation.duration`: ID generation time
-  - `bloomfilter.rejections.total`: Cache penetration protection counter
-- **Health Checks**: Circuit breaker status and component health
-- **Endpoints**: Available at `/actuator/prometheus`, `/actuator/health`, `/actuator/metrics`
-
----
-
-## 🚀 How to Run
-
-### Prerequisites
-
-*   Java 21 JDK
-*   Maven
-*   Docker & Docker Compose
-
-### 🔧 Build and Execution
-
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/your-username/url-shortener-service.git
-    cd url-shortener-service
-    ```
-
-2.  **Start infrastructure (Cassandra + Redis):**
-    ```bash
-    docker-compose up -d
-    ```
-    *Wait a few moments for Cassandra to initialize and create the keyspace.*
-
-3.  **Compile the project:**
-    ```bash
-    mvn clean install
-    ```
-
-4.  **Run the application:**
-    ```bash
-    mvn spring-boot:run
-    ```
-
-### ⚡ Native Build (GraalVM)
-
-To generate an ultra-optimized native binary with instant startup (~100ms) and low memory footprint (~50MB):
-
-**Prerequisites:**
-- GraalVM 21+ with Native Image installed
-- Set `JAVA_HOME` to GraalVM location
-
-**Build Command:**
-```bash
-mvn clean package -Pnative
-```
-
-**Run the Native Binary:**
-```bash
-./target/url-shortener-service
-```
-
-**Expected Results:**
-- **Startup Time**: ~100ms (vs ~3-5s JVM)
-- **Memory Usage**: ~50-80MB (vs ~200-300MB JVM)
-- **Performance**: Similar throughput to JVM after warm-up
-
-**Troubleshooting:**
-If you encounter issues, try with verbose logging:
-```bash
-mvn clean package -Pnative -X
-```
-
-#### 📊 Native Image: Technical Deep Dive
-
-**What is GraalVM Native Image?**
-
-Native Image is an **Ahead-of-Time (AOT) compiler** that transforms your Java application into a standalone native executable. Unlike the traditional JVM (which uses Just-In-Time compilation), Native Image:
-
-1. **Analyzes** all reachable code at build time
-2. **Compiles** everything to machine code (x86-64, ARM, etc.)
-3. **Eliminates** unused code (dead code elimination)
-4. **Packages** a minimal runtime (no JIT, no classloading)
-
-**Key Advantages:**
-
-| Metric | JVM | Native Image | Improvement |
-|--------|-----|--------------|-------------|
-| **Startup Time** | 3-5 seconds | ~100ms | **30-50x faster** |
-| **Memory Usage** | 200-300MB | 50-80MB | **60-75% reduction** |
-| **Container Size** | ~300MB | ~100MB | **66% smaller** |
-| **Cold Start** | Slow (JIT warm-up) | Instant | **Consistent latency** |
-
-**Why is it faster?**
-
-- ✅ **No JVM overhead**: No bytecode interpretation, no JIT compilation threads
-- ✅ **Pre-initialized classes**: Many classes are initialized at build-time
-- ✅ **Optimized GC**: Uses Serial GC (simpler, lower footprint)
-- ✅ **Dead code eliminated**: Only what you use is included
-
-**When to use Native Image:**
-
-- ✅ **Microservices** with frequent scaling (Kubernetes, serverless)
-- ✅ **Serverless functions** (AWS Lambda, Google Cloud Functions) where cold starts matter
-- ✅ **CLI tools** where instant feedback is expected
-- ✅ **Edge computing** with limited resources
-- ✅ **Cost optimization** (3x more replicas per node = 66% cost reduction)
-
-**Trade-offs to consider:**
-
-| Aspect | Impact | Mitigation |
-|--------|--------|------------|
-| **Build Time** | 5-10 minutes (vs 30s JVM) | Run native builds in CI/CD only |
-| **Reflection** | Requires explicit hints | Spring Boot AOT + `NativeHintsConfig` |
-| **Peak Throughput** | JVM C2 compiler is better long-term | Native is "good enough" for most cases |
-| **Debug Experience** | No bytecode, compiled binary | Use JVM for development |
-| **Dynamic Class Loading** | Not supported (closed-world) | Design for static dependency injection |
-
-**Best Practices implemented in this project:**
-
-- ✅ `ReentrantLock` instead of `synchronized` (Virtual Thread friendly)
-- ✅ `NativeHintsConfig` for Hashids library
-- ✅ Undertow server (more native-friendly than Tomcat)
-- ✅ Spring Boot 3.5+ with automatic AOT processing
-- ✅ Resilience4j, Micrometer, and Cassandra drivers are native-compatible
-
-**Real-world impact for this URL Shortener:**
-
-- **Development**: Use JVM (`mvn spring-boot:run`)
-- **Production (Kubernetes)**: Use Native Image for:
-  - Instant pod restarts during deploys
-  - 3x higher pod density (lower costs)
-  - Predictable p99 latency (no JIT spikes)
-
-
-### 🐳 Docker Deployment
-
-**Build Docker Image:**
-```bash
-docker build -t url-shortener:latest .
-```
-
-**Run with Docker Compose (Recommended):**
-```bash
+```sh
 docker-compose up -d
 ```
 
-This will start:
-- Cassandra (port 9042)
-- Redis (port 6379)
-- URL Shortener Service (port 8080)
+This starts `mongo:6.0` and `redis:alpine`. MongoDB indexes are managed by the application's
+`IndexMigration` on startup (`auto-index-creation` is off).
 
-**Run Standalone Container:**
-```bash
-docker run -d \
-  -p 8080:8080 \
-  -e SPRING_CASSANDRA_CONTACT_POINTS=cassandra:9042 \
-  -e SPRING_DATA_REDIS_HOST=redis \
-  --name url-shortener \
-  url-shortener:latest
+### 2. Run the application
+
+```sh
+mvn spring-boot:run
 ```
 
-**Health Check:**
-```bash
-curl http://localhost:8080/actuator/health
+Also available as a container (multi-stage `Dockerfile`, non-root user, healthcheck):
+
+```sh
+docker build -t url-shortener-service .
+docker run --network url-shortener-url-shortener-net -p 8080:8080 url-shortener-service
 ```
 
----
+The application is available at `http://localhost:8080` (Swagger UI, see below).
 
-## 🔌 API Endpoints
+> The default config in `src/main/resources/application.yaml` points MongoDB and Redis at
+> `localhost` and ships a **dev-only** `APP_JWT_SECRET`. Override it via environment variables in
+> production — the JWT provider validates the secret at startup and warns when the bundled default
+> is used. Short codes do **not** use a salt.
 
-### Shorten URL
+## Commands
 
-`POST /api/v1/urls`
+| Purpose | Command |
+| :--- | :--- |
+| Run the dev server | `mvn spring-boot:run` |
+| Run unit tests (no Docker needed) | `mvn test` |
+| Run the integration suite (needs Docker + Testcontainers) | `mvn test -Dtest='*IT'` |
+| Full gate (unit + IT + jar) | `mvn verify` |
+| Build the jar | `mvn clean package` |
+| Build the GraalVM native binary | `mvn clean package -Pnative` |
+| Start external services (Mongo + Redis) | `docker-compose up -d` |
+| Stop external services | `docker-compose down` |
 
-**Request Body:**
-```json
-{
-  "originalUrl": "https://www.google.com/search?q=spring+boot+undertow"
-}
-```
+## Testing
 
-{
-  "id": "vE1GpYK",
-  "shortUrl": "http://localhost:8080/vE1GpYK"
-}
-```
+- **Unit tests** — exercise the `core` layer (models, ID generation, services, quota) with JUnit 5 +
+  Mockito, no Spring context, no I/O. Run with `mvn test`.
+- **Integration tests** — use **Testcontainers** to boot real MongoDB and Redis in Docker and validate
+  persistence, cache, rate limiting and the redirect path. Target naming is `*IT` (run with
+  `mvn test -Dtest='*IT'` or `mvn verify`).
 
-### Shorten with Custom Alias (Authenticated)
+## API & Documentation
 
-`POST /api/v1/urls`
+### Interactive documentation (Swagger UI)
 
-**Headers:**
-`Authorization: Bearer <jwt_token>`
+With the application running, open the API docs:
 
-**Request Body:**
-```json
-{
-  "originalUrl": "https://www.google.com",
-  "customAlias": "my-google"
-}
-```
+- **URL:** [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
 
-**Response:**
-```json
-{
-  "id": "my-google",
-  "shortUrl": "http://localhost:8080/my-google"
-}
-```
+### Endpoint summary
 
-### Authentication Endpoints
+| Domain | Method | Endpoint | Description |
+| :--- | :--- | :--- | :--- |
+| **Auth** | `POST` | `/api/v1/auth/register` | Register a new user (name, e-mail, password ≥ 6 chars) and return an access + refresh token. Fails `400` if the e-mail is already in use. |
+| | `POST` | `/api/v1/auth/login` | Authenticate and return an access + refresh token. |
+| | `POST` | `/api/v1/auth/refresh` | Exchange a valid refresh token for a new access token. |
+| **URLs** | `POST` | `/api/v1/urls` | Shorten a URL. Anonymous allowed; `customAlias` (vanity) requires authentication. `429` on rate limit. |
+| **Redirect** | `GET` | `/{id}` | Resolve a short code and redirect (`302`) to the original URL. `404` if unknown, and never blocks on analytics. |
 
-#### Register
-`POST /api/v1/auth/register`
-```json
-{
-  "email": "user@example.com",
-  "password": "password123",
-  "role": "USER"
-}
-```
+### Monitoring endpoints (Actuator)
 
-#### Login
-`POST /api/v1/auth/login`
-```json
-{
-  "email": "user@example.com",
-  "password": "password123"
-}
-```
+- **Health:** `GET /actuator/health` (status + details)
+- **Metrics:** `GET /actuator/metrics` and `GET /actuator/prometheus` (Micrometer / Prometheus)
+- **Circuit breakers:** `GET /actuator/circuitbreakers` (Resilience4j state)
 
-#### Refresh Token
-`POST /api/v1/auth/refresh`
-```json
-{
-  "refreshToken": "eyJhbGciOiJIUzI1NiJ9..."
-}
-```
+Custom business metrics exposed via Micrometer include `urls.shortened.total`, `redirects.total`,
+`shorten.latency` (p50/p95/p99), `redirect.latency`, `cache.hits.total` / `cache.misses.total`, and
+`bloomfilter.rejections.total`.
 
-### Redirect (Access Short URL)
+## Current State
 
-`GET /{id}`
+Implemented on `main`:
 
-**Example:**
-```bash
-curl -v http://localhost:8080/vE1GpYK
-# HTTP/1.1 302 Found
-# Location: https://www.google.com/search?q=spring+boot+undertow
-```
+- **URL shortening & redirection** — `POST /api/v1/urls` creates a short code; `GET /{id}` performs a
+  `302` redirect. URL input is validated against a value object (requires `http://`/`https://`).
+  The same long URL may be shortened repeatedly; each call yields a **distinct** code.
+- **ID generation (locked model)** — random **Base62** (`SecureRandom`), default length 7, bounded
+  retry on `_id` collision. Generated codes and vanity aliases are namespace-isolated (length /
+  alphabet / reserved words). `409` is **only** “custom alias already exists”.
+  Code landing of this contract is tracked as `AGENTS.md` debt items 3, 4, 7 (stories I1–I6); do not
+  treat a Redis counter, Hashids, or unique-on-URL as the product design.
+  Stories I1–I6 are **landed** in this codebase (Base62 + collision retry, no URL dedup, namespace isolation).
+- **Custom aliases (vanity URLs)** — authenticated users can create custom slugs; blocked reserved
+  words, plan-minimum alias length, and quota enforcement per subscription plan (`FREE`/`SILVER`/
+  `GOLD`/`DIAMOND`).
+- **Multi-level caching** — Caffeine L1 → Redis L2 with **TTL jitter** (anti-stampede) and a Redisson
+  **Bloom filter** to short-circuit lookups of non-existent codes.
+- **Async click tracking** — redirects enqueue click events fire-and-forget into an in-memory queue;
+  a scheduled worker drains them in batches (currently logged; **persistence is planned** — see
+  Roadmap).
+- **Rate limiting** — per-IP token-bucket over Redis on the shorten endpoint, configurable via
+  `rate-limiter.limit` / `rate-limiter.window`. Fails open (does not block) if Redis is unavailable.
+- **Fault tolerance** — Resilience4j circuit breakers (`databaseCb` fail-fast for Mongo,
+  `rateLimiterCb` fail-open for the rate limiter / ID generator), exposed via Actuator.
+- **Auth & users** — stateless JWT (HS256, access + refresh), BCrypt password hashing, `FREE` plan by
+  default.
+- **Observability** — Micrometer metrics + Prometheus endpoint, latency percentiles, health and
+  circuit-breaker endpoints.
+- **API docs** — springdoc OpenAPI / Swagger UI, bean validation and structured error responses via a
+  global exception handler.
 
-**Logs (first time):**
-```
-Cache Miss for ID: vE1GpYK. Fetching from DB...
-Processing batch of 1 click events...
-```
+> **Scope note adapted from the original README:** the architecture, caching, resiliency and
+> observability structure is in place, but several claims in the previous README (e.g. "invalid IDs
+> never reach the database", persisted analytics, a fully framework-free `core`) were only partially
+> true. The documentation now reflects the code as it stands, and the gaps are listed in the Roadmap.
 
-**Logs (second time):**
-```
-Cache Hit for ID: vE1GpYK
-```
+## Roadmap
 
----
+Deliberately not implemented yet — candidate backlog, in priority order:
 
-## 📖 API Documentation (Swagger)
+- **Real analytics persistence** — persist `click_events` and a click counter (`$inc`), instead of the
+  current fire-and-forget in-memory queue that is dropped when full.
+- **Rate limiting on the redirect path** (`GET /{id}`) — currently only the shorten endpoint is
+  throttled.
+- **TTL / link expiration** — add `expiresAt` (with a MongoDB TTL index) and enforce it at redirect
+  time.
+- **Land the locked identity model in code** — stories I1–I6: random Base62 + collision retry, drop
+  the unique index on `originalUrl`, isolate generated codes from vanity aliases (debt items 3, 4, 7).
+  The **contract** is documented in this README and `docs/data-model-decisions.md`.
+  **Status: landed** in this codebase.
+- **Fix the framework-free `core` claim** — refactor `UserService` to depend on ports/domain objects
+  and remove Spring annotations from the domain layer; remove inline fully-qualified class names.
+- **Validate the destination** — strengthen URL validation (enforce HTTPS, block internal/private IPs
+  to mitigate SSRF) and add an extensibility hook for destination reputation checks.
+- **Tighten operational exposure** — restrict `/actuator/**` and Swagger in production; manage schema
+  and index creation via versioned migrations instead of `auto-index-creation`.
+- **Fix the GraalVM native build** — correct the `mainClass` in the `native` profile, and verify the
+  documented startup/memory targets under load.
+- **CI** — add a workflow that runs `mvn verify` with Testcontainers and the architecture-boundary
+  grep.
 
-Interactive API documentation is available via **Swagger UI**:
+## Documentation
 
-**Swagger UI**: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
-
-**OpenAPI JSON**: [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
-
-The interface allows you to:
-- Test all endpoints directly from the browser
-- View request/response schemas
-- Understand HTTP status codes
-- See usage examples
-
----
-
-## 📊 Observability & Metrics
-
-The application exposes **custom business metrics** via Micrometer for monitoring and observability.
-
-### Available Metrics
-
-**Business Metrics:**
-- `urls.shortened.total` - Total number of URLs shortened
-- `cache.hits.total` - Cache hit count (Redis L2)
-- `cache.misses.total` - Cache miss count
-- `bloomfilter.rejections.total` - Requests blocked by Bloom Filter (cache penetration protection)
-
-**Access Metrics:**
-```bash
-# Prometheus format (for Grafana)
-curl http://localhost:8080/actuator/prometheus
-
-# Individual metric
-curl http://localhost:8080/actuator/metrics/urls.shortened.total
-
-# All available metrics
-curl http://localhost:8080/actuator/metrics
-```
-
-### Grafana Dashboard
-
-Import the metrics into Grafana for real-time monitoring:
-1. Configure Prometheus to scrape `/actuator/prometheus`
-2. Create dashboard with panels for:
-   - URL shortening rate (requests/sec)
-   - Cache hit ratio (hits / (hits + misses))
-   - Bloom Filter effectiveness
-   - Response time percentiles (p50, p95, p99)
-
----
-
-## 🧪 Tests
-
-The project has complete coverage of **unit tests** and **integration tests**.
-
-### Unit Tests
-
-Test isolated components using mocks:
-- `UrlShortenerServiceTest`: Business logic
-- `RangeAwareIdGeneratorTest`: ID generation
-- `RedisUrlCacheTest`: Multi-level cache
-- `UrlControllerTest`: REST endpoints
-
-```bash
-mvn test -Dtest="*Test"
-```
-
-### Integration Tests
-
-Use **Testcontainers** to spin up real Redis and Cassandra in Docker:
-- `UrlShortenerIntegrationTest`: Complete E2E flow
-- `RedisIntegrationTest`: ID persistence and batching
-- `CassandraIntegrationTest`: URL persistence
-
-```bash
-mvn test -Dtest="*IntegrationTest"
-```
-
-**Requirements:**
-- Docker running (for Testcontainers)
-
-### Run All Tests
-
-```bash
-mvn test
-```
-
----
-
-## ⚙️ Configuration
-
-Main configurations are in `src/main/resources/application.yml`.
-
-*   **Undertow**: Tuned for performance with direct buffers.
-*   **Virtual Threads**: Enabled globally (`spring.threads.virtual.enabled: true`).
-*   **Cassandra/Redis**: Configured for `localhost` by default.
-*   **Rate Limiter**: Configurable via `application.yml`.
-    ```yaml
-    rate-limiter:
-      limit: 60      # Requests per window
-      window: PT1M   # Window duration (ISO-8601 format, e.g., 1 Minute)
-    ```
-*   **Circuit Breakers (Resilience4j)**: Configurable thresholds and timeouts.
-    ```yaml
-    resilience4j:
-      circuitbreaker:
-        instances:
-          rateLimiterCb:      # For Redis rate limiter & ID generator
-            failureRateThreshold: 40
-            waitDurationInOpenState: 10s
-          databaseCb:          # For Cassandra operations
-            failureRateThreshold: 50
-            waitDurationInOpenState: 20s
-    ```
-    Monitor status at: `http://localhost:8080/actuator/circuitbreakers`
-
-
----
-
-Made with ❤️ and extreme performance.
+| Document | Purpose |
+| :--- | :--- |
+| `README.md` | This file — overview, architecture, setup and testing |
+| `AGENTS.md` | Contributor/agent rules, architecture, debt matrix |
+| `docs/data-model-decisions.md` | Locked identity model (Base62, no URL dedup, namespace isolation) |
+| `docs/coding-standards.md` | Day-to-day Java/Spring conventions |
+| `docs/testing-playbook.md` | How to design, run and maintain tests |
+| `docs/twelve-factor.md` | Twelve-factor compliance |
+| `docs/release-runbook.md` | Operate and release the service |
+| `docs/lessons.md` | Durable engineering lessons |
+| `MONGODB_ARCHITECTURE.md` | MongoDB layering notes (Portuguese prose being migrated to English) |
+| `docker-compose.yaml` | MongoDB + Redis for local development |
+| `pom.xml` | Dependency, build and native-image configuration |

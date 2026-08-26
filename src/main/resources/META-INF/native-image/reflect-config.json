@@ -1,12 +1,12 @@
 [
     {
-        "name": "com.example.urlshortener.infra.adapter.input.rest.dto.ShortenRequest",
+        "name": "ca.tyny.urlshortener.infra.adapter.input.rest.dto.ShortenRequest",
         "allDeclaredFields": true,
         "allPublicMethods": true,
         "allDeclaredConstructors": true
     },
     {
-        "name": "com.example.urlshortener.infra.adapter.input.rest.dto.ShortenResponse",
+        "name": "ca.tyny.urlshortener.infra.adapter.input.rest.dto.ShortenResponse",
         "allDeclaredFields": true,
         "allPublicMethods": true,
         "allDeclaredConstructors": true

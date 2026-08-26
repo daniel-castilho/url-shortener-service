@@ -15,7 +15,7 @@ spring:
   data:
     mongodb:
       uri: ${MONGODB_URI:mongodb://localhost:27017/url_shortener}
-      auto-index-creation: true
+      auto-index-creation: false
       connect-timeout: 10000ms
       socket-timeout: 30000ms
   redis:
@@ -28,9 +28,8 @@ spring:
 # ========================================
 app:
   shortener:
-    # IMPORTANT: Change this in production via environment variable SHORTENER_SALT
-    # This salt is used for Hashids encoding
-    salt: ${SHORTENER_SALT:my-secret-salt-change-me-in-prod}
+    code-length: ${SHORTENER_CODE_LENGTH:7}
+    # salt: removed (SHORTENER_SALT no longer used once Hashids is dropped)
   
   jwt:
     # CRITICAL: MUST be set via environment variable in production

@@ -217,7 +217,7 @@ spring.data.mongodb.uri: mongodb://localhost:27017/url_shortener_test
 ### 6.3 Produção
 ```bash
 export MONGODB_URI="mongodb+srv://<username>:<password>@cluster.mongodb.net/url_shortener"
-export SHORTENER_SALT="production-secret-salt-from-vault"
+export APP_JWT_SECRET="production-secret-from-vault"
 ```
 
 **Benefício**: Sem mudança de código, configure por environment.
@@ -284,11 +284,16 @@ logger.error("Erro ao salvar URL encurtada no MongoDB", e);
 
 ### 9.1 Índices
 ```java
-@Indexed(unique = true)
-private String originalUrl;
+@Id
+private String id;          // unique: short code identity
+
+@Indexed
+private String userId;      // non-unique: user listing
+
+// originalUrl is NOT unique — same URL may be shortened many times
 ```
 
-**Benefício**: Busca rápida, garante unicidade.
+**Benefício**: `_id` is the identity key; no unique-on-URL dedup.
 
 ### 9.2 Connection Pooling
 ```yaml

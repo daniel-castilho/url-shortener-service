@@ -8,7 +8,7 @@
         <version>3.5.7</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
-    <groupId>com.example</groupId>
+    <groupId>ca.tyny</groupId>
     <artifactId>url-shortener-service</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>url-shortener-service</name>
@@ -58,13 +58,6 @@
             <groupId>io.github.resilience4j</groupId>
             <artifactId>resilience4j-spring-boot3</artifactId>
             <version>2.2.0</version>
-        </dependency>
-
-        <!-- Hashids for ShortCode Obfuscation -->
-        <dependency>
-            <groupId>org.hashids</groupId>
-            <artifactId>hashids</artifactId>
-            <version>1.0.3</version>
         </dependency>
 
         <!-- Developer Tools -->
@@ -183,6 +176,28 @@
                     </buildArgs>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>**/*IT.java</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>3.5.4</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 
@@ -217,7 +232,7 @@
                         </executions>
                         <configuration>
                             <imageName>${project.artifactId}</imageName>
-                            <mainClass>com.example.urlshortener.infra.Application</mainClass>
+                            <mainClass>ca.tyny.urlshortener.Application</mainClass>
                             <buildArgs>
                                 <buildArg>--enable-url-protocols=http,https</buildArg>
                                 <buildArg>-H:+ReportExceptionStackTraces</buildArg>
