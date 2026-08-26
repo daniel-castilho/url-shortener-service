@@ -53,6 +53,20 @@ public class MongoUserRepository implements UserRepositoryPort {
         mongoTemplate.remove(query, UserEntity.class);
     }
 
+    /**
+     * Atomically increments the vanity-URL quota counters (monthly + total)
+     * using $inc on the embedded quotaUsage document. Concurrent increments
+     * are never lost; a missing user is a no-op.
+     */
+    @Override
+    public void incrementVanityUsage(String id) {
+        org.springframework.data.mongodb.core.query.Update update =
+                new org.springframework.data.mongodb.core.query.Update()
+                        .inc("quotaUsage.vanityUrlsCreatedThisMonth", 1)
+                        .inc("quotaUsage.vanityUrlsCreatedTotal", 1);
+        mongoTemplate.updateFirst(new Query(Criteria.where("_id").is(id)), update, UserEntity.class);
+    }
+
     // Mappers
 
     private UserEntity toEntity(User user) {

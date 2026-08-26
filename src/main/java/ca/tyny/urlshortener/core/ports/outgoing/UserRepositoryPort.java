@@ -48,4 +48,15 @@ public interface UserRepositoryPort {
      * @param id the user ID
      */
     void deleteById(String id);
+
+    /**
+     * Atomically increments the vanity-URL quota counters for a user.
+     *
+     * The implementation must use a server-side atomic increment (e.g. MongoDB
+     * {@code $inc}) on both the monthly and total counters — never
+     * read-modify-write, which loses updates under concurrency.
+     *
+     * @param userId the user ID
+     */
+    void incrementVanityUsage(String userId);
 }

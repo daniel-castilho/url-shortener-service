@@ -51,4 +51,15 @@ public interface UrlRepositoryPort {
      * @return true se existir, false caso contrário
      */
     boolean existsById(String id);
+
+    /**
+     * Incrementa atomicamente o contador de cliques de uma URL encurtada.
+     *
+     * A implementação deve usar um incremento atômico do lado do armazenamento
+     * (ex.: {@code $inc} no MongoDB), nunca leitura-seguida-de-escrita, para não
+     * perder incrementos sob concorrência. Se o código não existir, é no-op.
+     *
+     * @param id o identificador único da URL encurtada
+     */
+    void incrementClickCount(String id);
 }

@@ -45,10 +45,9 @@ public class QuotaService {
     }
 
     public void incrementVanityUrlUsage(User user) {
-        QuotaUsage usage = user.quotaUsage();
-        usage.setVanityUrlsCreatedThisMonth(usage.getVanityUrlsCreatedThisMonth() + 1);
-        usage.setVanityUrlsCreatedTotal(usage.getVanityUrlsCreatedTotal() + 1);
-        userRepository.save(user);
+        // Atomic server-side increment ($inc) — read-modify-write loses updates
+        // under concurrency (AGENTS.md debt item 14).
+        userRepository.incrementVanityUsage(user.id());
     }
 
     private void resetMonthlyQuota(User user) {

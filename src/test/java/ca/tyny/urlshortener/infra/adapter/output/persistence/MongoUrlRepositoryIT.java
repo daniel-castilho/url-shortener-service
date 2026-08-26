@@ -74,4 +74,60 @@ class MongoUrlRepositoryIT extends BaseIntegrationTest {
         assertThat(retrieved).isPresent();
         assertThat(retrieved.get().originalUrl()).isEqualTo(special);
     }
+
+    @Test
+    @DisplayName("Should increment clickCount atomically")
+    void shouldIncrementClickCount() {
+        repository.save(new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now()));
+
+        repository.incrementClickCount(TEST_ID);
+        repository.incrementClickCount(TEST_ID);
+
+        Optional<ShortUrl> retrieved = repository.findById(TEST_ID);
+        assertThat(retrieved).isPresent();
+        assertThat(retrieved.get().clickCount()).isEqualTo(2L);
+    }
+
+    @Test
+    @DisplayName("Should not lose increments under concurrency")
+    void shouldNotLoseConcurrentIncrements() throws Exception {
+        repository.save(new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now()));
+
+        int threads = 10;
+        int incrementsPerThread = 10;
+        java.util.concurrent.ExecutorService executor =
+                java.util.concurrent.Executors.newFixedThreadPool(threads);
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch done = new java.util.concurrent.CountDownLatch(threads);
+        for (int t = 0; t < threads; t++) {
+            executor.submit(() -> {
+                try {
+                    start.await();
+                    for (int i = 0; i < incrementsPerThread; i++) {
+                        repository.incrementClickCount(TEST_ID);
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    done.countDown();
+                }
+            });
+        }
+        start.countDown();
+        assertThat(done.await(30, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+        executor.shutdown();
+
+        Optional<ShortUrl> retrieved = repository.findById(TEST_ID);
+        assertThat(retrieved).isPresent();
+        assertThat(retrieved.get().clickCount())
+                .isEqualTo((long) threads * incrementsPerThread);
+    }
+
+    @Test
+    @DisplayName("Should be a no-op when incrementing a non-existent code")
+    void shouldBeNoOpForMissingCode() {
+        repository.incrementClickCount("missing999");
+
+        assertThat(repository.findById("missing999")).isEmpty();
+    }
 }

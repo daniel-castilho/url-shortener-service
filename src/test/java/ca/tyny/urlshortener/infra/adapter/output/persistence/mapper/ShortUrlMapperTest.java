@@ -95,4 +95,28 @@ class ShortUrlMapperTest {
         assertThat(converted.userId()).isEqualTo(original.userId());
         assertThat(converted.isCustomAlias()).isEqualTo(original.isCustomAlias());
     }
+
+    @Test
+    @DisplayName("Should round-trip clickCount across domain and entity")
+    void shouldRoundTripClickCount() {
+        LocalDateTime now = LocalDateTime.now();
+        ShortUrl domain = new ShortUrl("abc123", "https://example.com", now, "user1", true).withClickCount(42);
+
+        ShortUrlEntity entity = mapper.toPersistence(domain);
+        assertThat(entity.getClickCount()).isEqualTo(42);
+
+        ShortUrl converted = mapper.toDomain(entity);
+        assertThat(converted.clickCount()).isEqualTo(42);
+    }
+
+    @Test
+    @DisplayName("Should default clickCount to zero for legacy constructors")
+    void shouldDefaultClickCountToZero() {
+        ShortUrl viaFourArgs = new ShortUrl("abc123", "https://example.com", LocalDateTime.now(), "user1");
+        ShortUrlEntity viaSixArgs =
+                new ShortUrlEntity("abc123", "https://example.com", "hash", LocalDateTime.now(), "user1", true);
+
+        assertThat(viaFourArgs.clickCount()).isZero();
+        assertThat(viaSixArgs.getClickCount()).isZero();
+    }
 }

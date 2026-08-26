@@ -87,13 +87,10 @@ class QuotaServiceTest {
     }
 
     @Test
-    @DisplayName("Should increment usage")
+    @DisplayName("Should delegate increment to atomic repository update")
     void shouldIncrementUsage() {
-        int initialUsage = freeUser.quotaUsage().getVanityUrlsCreatedTotal();
-
         quotaService.incrementVanityUrlUsage(freeUser);
 
-        assertEquals(initialUsage + 1, freeUser.quotaUsage().getVanityUrlsCreatedTotal());
-        verify(userRepository).save(freeUser);
+        verify(userRepository).incrementVanityUsage(freeUser.id());
     }
 }

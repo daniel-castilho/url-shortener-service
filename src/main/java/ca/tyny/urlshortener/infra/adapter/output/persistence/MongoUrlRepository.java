@@ -122,4 +122,31 @@ public class MongoUrlRepository implements UrlRepositoryPort {
             throw new RepositoryException("Failed to check short URL existence", e);
         }
     }
+
+    /**
+     * Atomically increments the click counter for a short URL.
+     *
+     * Uses a server-side $inc so concurrent increments are never lost.
+     * A missing code is a no-op (no document is created).
+     *
+     * @param id the unique identifier of the short URL
+     * @throws RepositoryException if a database error occurs
+     */
+    @Override
+    @CircuitBreaker(name = "databaseCb")
+    public void incrementClickCount(String id) {
+        try {
+            org.springframework.data.mongodb.core.query.Update update =
+                    new org.springframework.data.mongodb.core.query.Update().inc("clickCount", 1);
+            mongoTemplate.updateFirst(
+                    org.springframework.data.mongodb.core.query.Query.query(
+                            org.springframework.data.mongodb.core.query.Criteria.where("_id").is(id)),
+                    update,
+                    ShortUrlEntity.class);
+            logger.debug("Click count incremented for: {}", id);
+        } catch (Exception e) {
+            logger.error("Error incrementing click count in MongoDB: {}", id, e);
+            throw new RepositoryException("Failed to increment click count", e);
+        }
+    }
 }

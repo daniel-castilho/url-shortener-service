@@ -48,7 +48,18 @@ public class ShortUrlEntity {
 
     private boolean isCustomAlias;
 
+    /**
+     * Running click count for this short URL.
+     * Maintained atomically via $inc by the persistence adapter — never read-modify-write.
+     */
+    private long clickCount;
+
     public ShortUrlEntity() {
+    }
+
+    public ShortUrlEntity(String id, String originalUrl, String urlHash, LocalDateTime createdAt, String userId,
+            boolean isCustomAlias) {
+        this(id, originalUrl, urlHash, createdAt, userId, isCustomAlias, 0);
     }
 
     /**
@@ -60,15 +71,17 @@ public class ShortUrlEntity {
      * @param createdAt     creation timestamp
      * @param userId        ID of the user who created the short URL
      * @param isCustomAlias whether this is a user-supplied vanity alias
+     * @param clickCount    running click count (atomic $inc target)
      */
     public ShortUrlEntity(String id, String originalUrl, String urlHash, LocalDateTime createdAt, String userId,
-            boolean isCustomAlias) {
+            boolean isCustomAlias, long clickCount) {
         this.id = id;
         this.originalUrl = originalUrl;
         this.urlHash = urlHash;
         this.createdAt = createdAt;
         this.userId = userId;
         this.isCustomAlias = isCustomAlias;
+        this.clickCount = clickCount;
     }
 
     public String getId() {
@@ -117,5 +130,13 @@ public class ShortUrlEntity {
 
     public void setCustomAlias(boolean customAlias) {
         isCustomAlias = customAlias;
+    }
+
+    public long getClickCount() {
+        return clickCount;
+    }
+
+    public void setClickCount(long clickCount) {
+        this.clickCount = clickCount;
     }
 }
