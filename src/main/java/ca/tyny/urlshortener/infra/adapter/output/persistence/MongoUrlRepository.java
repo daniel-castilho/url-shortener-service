@@ -134,16 +134,16 @@ public class MongoUrlRepository implements UrlRepositoryPort {
      */
     @Override
     @CircuitBreaker(name = "databaseCb")
-    public void incrementClickCount(String id) {
+    public void incrementClickCount(String id, long delta) {
         try {
             org.springframework.data.mongodb.core.query.Update update =
-                    new org.springframework.data.mongodb.core.query.Update().inc("clickCount", 1);
+                    new org.springframework.data.mongodb.core.query.Update().inc("clickCount", delta);
             mongoTemplate.updateFirst(
                     org.springframework.data.mongodb.core.query.Query.query(
                             org.springframework.data.mongodb.core.query.Criteria.where("_id").is(id)),
                     update,
                     ShortUrlEntity.class);
-            logger.debug("Click count incremented for: {}", id);
+            logger.debug("Click count incremented by {} for: {}", delta, id);
         } catch (Exception e) {
             logger.error("Error incrementing click count in MongoDB: {}", id, e);
             throw new RepositoryException("Failed to increment click count", e);

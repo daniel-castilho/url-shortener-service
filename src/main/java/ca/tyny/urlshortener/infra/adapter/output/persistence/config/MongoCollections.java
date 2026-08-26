@@ -14,6 +14,12 @@ public class MongoCollections {
      */
     public static final String SHORT_URLS = "short_urls";
 
+    /**
+     * Collection storing persisted click events.
+     * Written in batches by the analytics worker; queried by shortCode/timestamp.
+     */
+    public static final String CLICK_EVENTS = "click_events";
+
     private MongoCollections() {
         throw new AssertionError("Utility class should not be instantiated");
     }

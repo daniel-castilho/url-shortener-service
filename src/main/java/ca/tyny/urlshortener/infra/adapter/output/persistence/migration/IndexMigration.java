@@ -26,7 +26,9 @@ public class IndexMigration {
     public void migrateIndexes() {
         dropOriginalUrlUniqueIndex();
         ensureUserIdIndex();
-        log.info("Index migration complete: _id (unique), originalUrl unique index dropped, userId index ensured");
+        ensureClickEventsIndexes();
+        log.info("Index migration complete: short_urls (_id unique, userId; originalUrl_1 dropped), "
+                + "click_events (shortCode+timestamp, timestamp)");
     }
 
     private void dropOriginalUrlUniqueIndex() {
@@ -46,6 +48,19 @@ public class IndexMigration {
             log.info("Ensured userId index exists on short_urls collection");
         } catch (Exception e) {
             log.warn("Failed to ensure userId index: {}", e.getMessage());
+        }
+    }
+
+    /** Idempotent indexes for click_events: aggregates and retention purge. */
+    private void ensureClickEventsIndexes() {
+        try {
+            IndexOperations indexOps = mongoTemplate.indexOps(MongoCollections.CLICK_EVENTS);
+            indexOps.ensureIndex(new Index("shortCode", Sort.Direction.ASC)
+                    .on("timestamp", Sort.Direction.ASC));
+            indexOps.ensureIndex(new Index("timestamp", Sort.Direction.ASC));
+            log.info("Ensured click_events indexes: (shortCode, timestamp), (timestamp)");
+        } catch (Exception e) {
+            log.warn("Failed to ensure click_events indexes: {}", e.getMessage());
         }
     }
 }
