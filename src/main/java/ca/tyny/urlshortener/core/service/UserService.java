@@ -1,98 +1,82 @@
 package ca.tyny.urlshortener.core.service;
 
 import ca.tyny.urlshortener.core.model.User;
+import ca.tyny.urlshortener.core.ports.outgoing.AuthenticationPort;
 import ca.tyny.urlshortener.core.ports.outgoing.IdGeneratorPort;
-import ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.AuthResponse;
-import ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.LoginRequest;
-import ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.RegisterRequest;
-import ca.tyny.urlshortener.infra.adapter.output.persistence.MongoUserRepository;
-import ca.tyny.urlshortener.infra.security.JwtTokenProvider;
-import lombok.RequiredArgsConstructor;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
+import ca.tyny.urlshortener.core.ports.outgoing.PasswordEncoderPort;
+import ca.tyny.urlshortener.core.ports.outgoing.TokenPort;
+import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
 
-@Service
-@RequiredArgsConstructor
 public class UserService {
 
-        private final MongoUserRepository userRepository;
-        private final PasswordEncoder passwordEncoder;
-        private final JwtTokenProvider tokenProvider;
-        private final AuthenticationManager authenticationManager;
-        private final IdGeneratorPort idGeneratorPort;
+    private final UserRepositoryPort userRepository;
+    private final PasswordEncoderPort passwordEncoder;
+    private final TokenPort tokenPort;
+    private final AuthenticationPort authenticationPort;
+    private final IdGeneratorPort idGeneratorPort;
 
-        public AuthResponse register(RegisterRequest request) {
-                if (userRepository.findByEmail(request.getEmail()).isPresent()) {
-                        throw new IllegalArgumentException("Email already in use");
-                }
+    public UserService(UserRepositoryPort userRepository,
+                       PasswordEncoderPort passwordEncoder,
+                       TokenPort tokenPort,
+                       AuthenticationPort authenticationPort,
+                       IdGeneratorPort idGeneratorPort) {
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.tokenPort = tokenPort;
+        this.authenticationPort = authenticationPort;
+        this.idGeneratorPort = idGeneratorPort;
+    }
 
-                String userId = idGeneratorPort.generateId(); // Using same generator as URLs for now, or could use UUID
-
-                User user = User.createFreeUser(
-                                userId,
-                                request.getEmail(),
-                                request.getName(),
-                                passwordEncoder.encode(request.getPassword()));
-
-                userRepository.save(user);
-
-                String token = tokenProvider.generateToken(user.email());
-                String refreshToken = tokenProvider.generateRefreshToken(user.email());
-
-                return AuthResponse.builder()
-                                .token(token)
-                                .refreshToken(refreshToken)
-                                .userId(user.id())
-                                .email(user.email())
-                                .name(user.name())
-                                .build();
+    public AuthResult register(String email, String name, String password) {
+        if (userRepository.findByEmail(email).isPresent()) {
+            throw new IllegalArgumentException("Email already in use");
         }
 
-        public AuthResponse login(LoginRequest request) {
-                Authentication authentication = authenticationManager.authenticate(
-                                new UsernamePasswordAuthenticationToken(
-                                                request.getEmail(),
-                                                request.getPassword()));
+        String userId = idGeneratorPort.generateId();
 
-                String token = tokenProvider.generateToken(authentication);
-                User user = userRepository.findByEmail(request.getEmail())
-                                .orElseThrow(() -> new IllegalArgumentException("User not found"));
-                String refreshToken = tokenProvider.generateRefreshToken(user.email());
+        User user = User.createFreeUser(
+                userId,
+                email,
+                name,
+                passwordEncoder.encode(password));
 
-                return AuthResponse.builder()
-                                .token(token)
-                                .refreshToken(refreshToken)
-                                .userId(user.id())
-                                .email(user.email())
-                                .name(user.name())
-                                .build();
+        userRepository.save(user);
+
+        String token = tokenPort.generateToken(user.email());
+        String refreshToken = tokenPort.generateRefreshToken(user.email());
+
+        return new AuthResult(token, refreshToken, user.id(), user.email(), user.name());
+    }
+
+    public AuthResult login(String email, String password) {
+        authenticationPort.authenticate(email, password);
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        String token = tokenPort.generateToken(user.email());
+        String refreshToken = tokenPort.generateRefreshToken(user.email());
+
+        return new AuthResult(token, refreshToken, user.id(), user.email(), user.name());
+    }
+
+    public AuthResult refreshToken(String refreshToken) {
+        if (!tokenPort.validateToken(refreshToken)) {
+            throw new IllegalArgumentException("Invalid refresh token");
         }
 
-        public AuthResponse refreshToken(
-                        ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.RefreshTokenRequest request) {
-                String refreshToken = request.getRefreshToken();
+        String email = tokenPort.getUsernameFromToken(refreshToken);
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
-                if (!tokenProvider.validateToken(refreshToken)) {
-                        throw new IllegalArgumentException("Invalid refresh token");
-                }
+        String newToken = tokenPort.generateToken(email);
 
-                String email = tokenProvider.getUsernameFromToken(refreshToken);
-                User user = userRepository.findByEmail(email)
-                                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        return new AuthResult(newToken, refreshToken, user.id(), user.email(), user.name());
+    }
 
-                String newToken = tokenProvider.generateToken(email);
-                // Optionally rotate refresh token here
-                // String newRefreshToken = tokenProvider.generateRefreshToken(email);
-
-                return AuthResponse.builder()
-                                .token(newToken)
-                                .refreshToken(refreshToken) // Return same refresh token or new one
-                                .userId(user.id())
-                                .email(user.email())
-                                .name(user.name())
-                                .build();
-        }
+    /**
+     * Domain result object for authentication operations.
+     */
+    public record AuthResult(String token, String refreshToken, String userId, String email, String name) {
+    }
 }

@@ -1,6 +1,7 @@
 package ca.tyny.urlshortener.core.service;
 
 import ca.tyny.urlshortener.core.exception.CodeGenerationException;
+import ca.tyny.urlshortener.core.exception.ShortCodeCollisionException;
 import ca.tyny.urlshortener.core.idgeneration.Base62CodeGenerator;
 import ca.tyny.urlshortener.core.idgeneration.UrlIdGenerator;
 import ca.tyny.urlshortener.core.model.ShortUrl;
@@ -97,7 +98,7 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
             try {
                 urlRepository.save(candidate);
                 return candidate;
-            } catch (RuntimeException e) {
+            } catch (ShortCodeCollisionException e) {
                 if (attempt < MAX_COLLISION_RETRIES) {
                     log.warn("Code collision for id={}, retrying (attempt {}/{})", id, attempt + 1, MAX_COLLISION_RETRIES);
                 } else {

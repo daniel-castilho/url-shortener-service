@@ -1,9 +1,10 @@
 package ca.tyny.urlshortener.infra.adapter.input.rest;
 
 import ca.tyny.urlshortener.config.WithMockSecurity;
-import ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.AuthResponse;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.LoginRequest;
+import ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.RefreshTokenRequest;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.RegisterRequest;
+import ca.tyny.urlshortener.core.service.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,6 +15,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -34,16 +36,18 @@ class AuthControllerTest {
     private ca.tyny.urlshortener.infra.security.JwtTokenProvider jwtTokenProvider;
 
     @MockitoBean
-    private ca.tyny.urlshortener.core.service.UserService userService;
+    private UserService userService;
 
     @Test
     @DisplayName("Should register user successfully")
     void shouldRegisterUser() throws Exception {
         // Given
         RegisterRequest request = new RegisterRequest("Test User", "test@example.com", "password123");
-        AuthResponse response = new AuthResponse("token", "refresh-token", "id", "test@example.com", "Test User");
+        UserService.AuthResult result = new UserService.AuthResult(
+                "token", "refresh-token", "id", "test@example.com", "Test User");
 
-        when(userService.register(any(RegisterRequest.class))).thenReturn(response);
+        when(userService.register(eq("test@example.com"), eq("Test User"), eq("password123")))
+                .thenReturn(result);
 
         // When/Then
         mockMvc.perform(post("/api/v1/auth/register")
@@ -59,9 +63,11 @@ class AuthControllerTest {
     void shouldLoginUser() throws Exception {
         // Given
         LoginRequest request = new LoginRequest("test@example.com", "password123");
-        AuthResponse response = new AuthResponse("token", "refresh-token", "id", "test@example.com", "Test User");
+        UserService.AuthResult result = new UserService.AuthResult(
+                "token", "refresh-token", "id", "test@example.com", "Test User");
 
-        when(userService.login(any(LoginRequest.class))).thenReturn(response);
+        when(userService.login(eq("test@example.com"), eq("password123")))
+                .thenReturn(result);
 
         // When/Then
         mockMvc.perform(post("/api/v1/auth/login")
@@ -88,14 +94,12 @@ class AuthControllerTest {
     @DisplayName("Should refresh token successfully")
     void shouldRefreshToken() throws Exception {
         // Given
-        ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.RefreshTokenRequest request = new ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.RefreshTokenRequest(
-                "valid-refresh-token");
-        AuthResponse response = new AuthResponse("new-token", "valid-refresh-token", "id", "test@example.com",
-                "Test User");
+        RefreshTokenRequest request = new RefreshTokenRequest("valid-refresh-token");
+        UserService.AuthResult result = new UserService.AuthResult(
+                "new-token", "valid-refresh-token", "id", "test@example.com", "Test User");
 
-        when(userService.refreshToken(
-                any(ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.RefreshTokenRequest.class)))
-                .thenReturn(response);
+        when(userService.refreshToken(eq("valid-refresh-token")))
+                .thenReturn(result);
 
         // When/Then
         mockMvc.perform(post("/api/v1/auth/refresh")

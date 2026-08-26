@@ -237,8 +237,8 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
 
 1. **UserService leaks `infra` into `core`** — `core/service/UserService` imports
    `MongoUserRepository`, `JwtTokenProvider`, REST DTOs (`AuthResponse`, `RegisterRequest`, ...).
-   Refactor to depend on `UserRepositoryPort` + a token-service port, and to work with domain objects
-   / commands. (Rule 1 verification currently fails for this file.) — `open`
+   Refactored to depend on `UserRepositoryPort`, `TokenPort`, `PasswordEncoderPort`,
+   `AuthenticationPort`; REST DTO mapping moved to `AuthController`. — `resolved`
 2. **Spring annotations in `core/`** — `@Component`/`@Service`/`@RequiredArgsConstructor` in
    `core/idgeneration`, `core/service/QuotaService`, `core/validation/ReservedWordsValidator`. Move to
    `infra/config` beans so `core/` is annotation-free. — `open`
@@ -264,7 +264,8 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
    `health.show-details: always`. Restrict in production and gate detail exposure. — `open`
 10. **No versioned schema/index migrations** — `spring.data.mongodb.auto-index-creation: true`; adopt a
     migration framework and manage indexes in a deploy step. Required to drop the `originalUrl`
-    unique index (item 4). — `open`
+    unique index (item 4). `IndexMigration` now drops `originalUrl_1` index and ensures `userId`
+    index. — `resolved`
 11. **GraalVM native build broken** — `native` profile `mainClass` points to the non-existent
     `ca.tyny.urlshortener.infra.Application`. Fix to `ca.tyny.urlshortener.Application`. — `resolved`
 12. **Observability gaps** — metrics exist but `id.generation.duration` / `url.retrieval.duration`

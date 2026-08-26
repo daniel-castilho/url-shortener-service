@@ -21,13 +21,13 @@ jobs:
         run: mvn test
       - name: Architecture boundary check
         run: |
-          VIOLATIONS=$(grep -rEn "import com\.example\.urlshortener\.infra" src/main/java/com/example/urlshortener/core || true)
+          VIOLATIONS=$(grep -rEn "import ca\.tyny\.urlshortener\.infra" src/main/java/ca/tyny/urlshortener/core || true)
           if [ -n "$VIOLATIONS" ]; then
             echo "ERROR: core/ imports infra:"
             echo "$VIOLATIONS"
             exit 1
           fi
-          FRAMEWORK=$(grep -rlE "org\.springframework|org\.mongodb|org\.redisson|io\.jsonwebtoken|io\.micrometer" src/main/java/com/example/urlshortener/core || true)
+          FRAMEWORK=$(grep -rlE "org\.springframework|org\.mongodb|org\.redisson|io\.jsonwebtoken|io\.micrometer" src/main/java/ca/tyny/urlshortener/core || true)
           if [ -n "$FRAMEWORK" ]; then
             echo "ERROR: core/ imports framework types:"
             echo "$FRAMEWORK"
@@ -56,7 +56,7 @@ jobs:
           distribution: 'temurin'
           cache: maven
       - name: Run integration tests
-        run: mvn test -Dtest='*IT' -DfailIfNoTests=false
+        run: mvn verify -DfailIfNoTests=false
 
   build:
     name: Build

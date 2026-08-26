@@ -2,12 +2,12 @@ package ca.tyny.urlshortener.core.idgeneration;
 
 public interface UrlIdGenerationStrategy {
     /**
-     * Verifica se esta estratégia suporta o cenário atual.
+     * Checks if this strategy supports the current scenario.
      */
     boolean supports(String customAlias);
 
     /**
-     * Gera (ou valida e retorna) o ID da URL.
+     * Generates (or validates and returns) the URL ID.
      */
     String generateId(String customAlias, String userId);
 }

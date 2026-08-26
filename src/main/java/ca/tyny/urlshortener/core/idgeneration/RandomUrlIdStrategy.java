@@ -12,7 +12,6 @@ public class RandomUrlIdStrategy implements UrlIdGenerationStrategy {
 
     @Override
     public boolean supports(String customAlias) {
-        // Suporta quando NÃO há alias customizado
         return customAlias == null || customAlias.isBlank();
     }
 

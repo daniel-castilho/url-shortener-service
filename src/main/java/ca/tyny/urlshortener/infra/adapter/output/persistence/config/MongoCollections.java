@@ -1,20 +1,19 @@
 package ca.tyny.urlshortener.infra.adapter.output.persistence.config;
 
 /**
- * Centraliza constantes de nomes de collections MongoDB.
- * Evita magic strings espalhadas pelo código (violação de DRY principle).
+ * Centralizes MongoDB collection name constants.
+ * Avoids magic strings scattered across the codebase (DRY principle).
  *
- * Facilita refatoração futura se nomes de collections precisarem mudar.
+ * Facilitates future refactoring if collection names need to change.
  */
 public class MongoCollections {
 
     /**
-     * Nome da collection que armazena as URLs encurtadas.
-     * Utilizada para mapeamento de entidades via @Document(collection = MongoCollections.SHORT_URLS)
+     * Collection storing shortened URLs.
+     * Used for entity mapping via @Document(collection = MongoCollections.SHORT_URLS)
      */
     public static final String SHORT_URLS = "short_urls";
 
-    // Prevent instantiation
     private MongoCollections() {
         throw new AssertionError("Utility class should not be instantiated");
     }

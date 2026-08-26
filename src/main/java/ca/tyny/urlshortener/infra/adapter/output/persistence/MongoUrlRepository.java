@@ -1,6 +1,7 @@
 package ca.tyny.urlshortener.infra.adapter.output.persistence;
 
 import ca.tyny.urlshortener.core.exception.AliasAlreadyExistsException;
+import ca.tyny.urlshortener.core.exception.ShortCodeCollisionException;
 import ca.tyny.urlshortener.core.model.ShortUrl;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlRepositoryPort;
 import ca.tyny.urlshortener.infra.adapter.output.persistence.entity.ShortUrlEntity;
@@ -16,19 +17,19 @@ import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
 /**
- * Implementação da porta de persistência para MongoDB.
+ * MongoDB persistence adapter implementing UrlRepositoryPort.
  *
- * Responsabilidades:
- * - Persistir e recuperar URLs encurtadas do MongoDB
- * - Converter entre domain model (ShortUrl) e persistence entity
- * (ShortUrlEntity)
- * - Encapsular exceções específicas do MongoDB
+ * Responsibilities:
+ * - Persist and retrieve shortened URLs from MongoDB
+ * - Convert between domain model (ShortUrl) and persistence entity
+ *   (ShortUrlEntity)
+ * - Encapsulate MongoDB-specific exceptions
  *
- * Aplicação de padrões:
- * - Repository Pattern: implementa UrlRepositoryPort
- * - Adapter Pattern: adapta MongoTemplate para a porta
- * - Circuit Breaker: resiliência a falhas do banco de dados
- * - Mapper Pattern: converte domain ↔ entity
+ * Patterns applied:
+ * - Repository Pattern: implements UrlRepositoryPort
+ * - Adapter Pattern: adapts MongoTemplate to the port
+ * - Circuit Breaker: resilience to database failures
+ * - Mapper Pattern: converts domain ↔ entity
  */
 @Repository
 public class MongoUrlRepository implements UrlRepositoryPort {
@@ -38,22 +39,18 @@ public class MongoUrlRepository implements UrlRepositoryPort {
     private final MongoTemplate mongoTemplate;
     private final ShortUrlMapper mapper;
 
-    /**
-     * Construtor com injeção de dependências.
-     *
-     * @param mongoTemplate template do Spring Data MongoDB para operações
-     * @param mapper        mapper para conversão domain ↔ entity
-     */
     public MongoUrlRepository(MongoTemplate mongoTemplate, ShortUrlMapper mapper) {
         this.mongoTemplate = mongoTemplate;
         this.mapper = mapper;
     }
 
     /**
-     * Persiste uma URL encurtada no MongoDB.
+     * Persists a shortened URL to MongoDB.
      *
-     * @param shortUrl a URL encurtada do domínio a ser salva
-     * @throws RepositoryException se ocorrer erro ao persistir no MongoDB
+     * @param shortUrl the domain short URL to save
+     * @throws AliasAlreadyExistsException if a custom alias conflicts with existing _id
+     * @throws ShortCodeCollisionException if a generated code collides with existing _id
+     * @throws RepositoryException if a database error occurs
      */
     @Override
     @CircuitBreaker(name = "databaseCb")
@@ -61,25 +58,29 @@ public class MongoUrlRepository implements UrlRepositoryPort {
         try {
             ShortUrlEntity entity = mapper.toPersistence(shortUrl);
             mongoTemplate.save(entity);
-            logger.debug("URL encurtada salva com sucesso: {}", shortUrl.id());
+            logger.debug("Short URL saved successfully: {}", shortUrl.id());
         } catch (DuplicateKeyException e) {
             logger.warn("Duplicate _id conflict for code: {}", shortUrl.id());
-            throw new AliasAlreadyExistsException(shortUrl.id());
+            if (shortUrl.isCustomAlias()) {
+                throw new AliasAlreadyExistsException(shortUrl.id());
+            }
+            // Collision on auto-generated code — retryable by the caller
+            throw new ShortCodeCollisionException(shortUrl.id());
         } catch (IllegalArgumentException e) {
-            logger.error("Dados inválidos ao salvar URL encurtada", e);
-            throw new RepositoryException("Dados inválidos para persistência", e);
+            logger.error("Invalid data when saving short URL", e);
+            throw new RepositoryException("Invalid data for persistence", e);
         } catch (Exception e) {
-            logger.error("Erro ao salvar URL encurtada no MongoDB", e);
-            throw new RepositoryException("Falha ao persistir URL encurtada", e);
+            logger.error("Error saving short URL to MongoDB", e);
+            throw new RepositoryException("Failed to persist short URL", e);
         }
     }
 
     /**
-     * Busca uma URL encurtada pelo seu ID.
+     * Finds a shortened URL by its ID.
      *
-     * @param id o identificador único da URL encurtada
-     * @return Optional contendo a URL se encontrada, ou vazio se não existir
-     * @throws RepositoryException se ocorrer erro ao consultar o MongoDB
+     * @param id the unique identifier of the short URL
+     * @return Optional containing the URL if found, or empty if not
+     * @throws RepositoryException if a database error occurs
      */
     @Override
     @CircuitBreaker(name = "databaseCb")
@@ -87,27 +88,26 @@ public class MongoUrlRepository implements UrlRepositoryPort {
         try {
             ShortUrlEntity entity = mongoTemplate.findById(id, ShortUrlEntity.class);
             if (entity == null) {
-                logger.debug("URL encurtada não encontrada: {}", id);
+                logger.debug("Short URL not found: {}", id);
                 return Optional.empty();
             }
-            logger.debug("URL encurtada recuperada com sucesso: {}", id);
+            logger.debug("Short URL retrieved successfully: {}", id);
             return Optional.of(mapper.toDomain(entity));
         } catch (IllegalArgumentException e) {
-            logger.error("ID inválido ao buscar URL encurtada", e);
-            throw new RepositoryException("ID inválido para busca", e);
+            logger.error("Invalid ID when searching for short URL", e);
+            throw new RepositoryException("Invalid ID for search", e);
         } catch (Exception e) {
-            logger.error("Erro ao buscar URL encurtada no MongoDB: {}", id, e);
-            throw new RepositoryException("Falha ao recuperar URL encurtada", e);
+            logger.error("Error searching for short URL in MongoDB: {}", id, e);
+            throw new RepositoryException("Failed to retrieve short URL", e);
         }
-
     }
 
     /**
-     * Verifica se uma URL encurtada existe por seu identificador.
+     * Checks if a shortened URL exists by its identifier.
      *
-     * @param id o identificador único
-     * @return true se existir, false caso contrário
-     * @throws RepositoryException se ocorrer erro ao consultar o MongoDB
+     * @param id the unique identifier
+     * @return true if exists, false otherwise
+     * @throws RepositoryException if a database error occurs
      */
     @Override
     @CircuitBreaker(name = "databaseCb")
@@ -118,8 +118,8 @@ public class MongoUrlRepository implements UrlRepositoryPort {
                             org.springframework.data.mongodb.core.query.Criteria.where("_id").is(id)),
                     ShortUrlEntity.class);
         } catch (Exception e) {
-            logger.error("Erro ao verificar existência de URL encurtada no MongoDB: {}", id, e);
-            throw new RepositoryException("Falha ao verificar existência de URL encurtada", e);
+            logger.error("Error checking existence of short URL in MongoDB: {}", id, e);
+            throw new RepositoryException("Failed to check short URL existence", e);
         }
     }
 }

@@ -1,6 +1,7 @@
 package ca.tyny.urlshortener.core.service;
 
 import ca.tyny.urlshortener.core.exception.CodeGenerationException;
+import ca.tyny.urlshortener.core.exception.ShortCodeCollisionException;
 import ca.tyny.urlshortener.core.idgeneration.Base62CodeGenerator;
 import ca.tyny.urlshortener.core.idgeneration.UrlIdGenerator;
 import ca.tyny.urlshortener.core.model.ShortUrl;
@@ -99,7 +100,7 @@ class UrlShortenerServiceTest {
     @DisplayName("Should retry on collision and succeed")
     void shouldRetryOnCollision() {
         // Given: first save throws (collision), second succeeds
-        doThrow(new RuntimeException("Duplicate key"))
+        doThrow(new ShortCodeCollisionException("abc123"))
                 .doNothing()
                 .when(urlRepository).save(any(ShortUrl.class));
 
@@ -115,8 +116,8 @@ class UrlShortenerServiceTest {
     @Test
     @DisplayName("Should throw CodeGenerationException when retries exhausted")
     void shouldThrowOnRetryExhaustion() {
-        // Given: every save throws
-        doThrow(new RuntimeException("Duplicate key"))
+        // Given: every save throws collision
+        doThrow(new ShortCodeCollisionException("abc123"))
                 .when(urlRepository).save(any(ShortUrl.class));
 
         // When/Then

@@ -3,6 +3,7 @@ package ca.tyny.urlshortener.infra.adapter.input.rest;
 import ca.tyny.urlshortener.config.WithMockSecurity;
 import ca.tyny.urlshortener.core.ports.outgoing.AnalyticsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.RateLimiterPort;
+import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,10 +43,7 @@ class UrlControllerRateLimitingTest {
     private ca.tyny.urlshortener.infra.observability.MetricsService metricsService;
 
     @MockitoBean
-    private ca.tyny.urlshortener.core.service.UserService userService;
-
-    @MockitoBean
-    private ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort userRepository;
+    private UserRepositoryPort userRepository;
 
     @BeforeEach
     void setUp() {

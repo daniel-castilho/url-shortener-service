@@ -47,9 +47,6 @@ class UrlControllerTest {
     private ca.tyny.urlshortener.infra.security.JwtTokenProvider jwtTokenProvider;
 
     @MockitoBean
-    private ca.tyny.urlshortener.core.service.UserService userService;
-
-    @MockitoBean
     private ca.tyny.urlshortener.core.ports.incoming.ShortenUrlUseCase shortenUrlUseCase;
 
     @MockitoBean

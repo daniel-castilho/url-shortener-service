@@ -1,5 +1,6 @@
 package ca.tyny.urlshortener.infra.adapter.input.rest.advice;
 
+import ca.tyny.urlshortener.core.exception.CodeGenerationException;
 import ca.tyny.urlshortener.core.exception.UrlNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,6 +45,19 @@ public class GlobalExceptionHandler {
                                 LocalDateTime.now());
 
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+        }
+
+        @ExceptionHandler(CodeGenerationException.class)
+        public ResponseEntity<ErrorResponse> handleCodeGeneration(CodeGenerationException ex) {
+                log.error("Code generation failed after {} attempts", ex.getAttempts());
+
+                ErrorResponse error = new ErrorResponse(
+                                HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                                "Code Generation Failed",
+                                "Unable to generate a unique short code. Please try again later.",
+                                LocalDateTime.now());
+
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
 
         @ExceptionHandler(ca.tyny.urlshortener.core.exception.QuotaExceededException.class)

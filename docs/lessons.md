@@ -113,3 +113,16 @@ non-obvious failure or design decision cost real debugging time.
 - **Graceful shutdown teardown:** during drain, expect a mix of 200 (in-flight OK), 503/000
   (post-drain rejections) *and* 400 (keep-alive teardown mid-parse). Treat 400 during drain as expected
   teardown, not necessarily a defect.
+
+## Architecture discipline
+
+- **Exception hierarchy matters for retry semantics.** When `MongoUrlRepository` caught
+  `DuplicateKeyException` and always threw `AliasAlreadyExistsException`, the retry logic in
+  `UrlShortenerService` could not distinguish a collision (retryable) from a user-supplied alias
+  conflict (not retryable). Creating `ShortCodeCollisionException` and narrowing the catch to that
+  type made the retry bounded and correct. The same principle applies to any retry loop: the
+  caught exception must encode exactly the retryable condition.
+- **Language discipline in codebases.** Portuguese comments, log messages, and Javadoc accumulate
+  silently when the team is bilingual. Enforcing English-only in code reviews prevents a class of
+  "documentation debt" that is invisible to linters but slows onboarding. Translating comments
+  in-place (not just deleting them) preserves the original design intent.

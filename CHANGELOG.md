@@ -7,6 +7,30 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ## [Unreleased]
 
+### Fixed
+
+- **CI boundary check** — updated grep paths from `com.example.urlshortener` to `ca.tyny.urlshortener`.
+- **CI integration gate** — replaced `mvn test -Dtest='*IT'` with `mvn verify` so failsafe actually
+  runs integration tests.
+- **Collision vs alias distinction** — `MongoUrlRepository.save()` now throws `ShortCodeCollisionException`
+  for auto-generated code collisions and `AliasAlreadyExistsException` for vanity alias conflicts.
+  `UrlShortenerService.saveWithCollisionRetry()` catches only `ShortCodeCollisionException`, not
+  `RuntimeException`.
+- **`IndexMigration` completeness** — now ensures `userId` index exists on startup (alongside dropping
+  `originalUrl_1`).
+- **`CodeGenerationException` handler** — added dedicated `@ExceptionHandler` in `GlobalExceptionHandler`
+  (returns 500 instead of falling through to generic handler).
+- **English-only cleanup** — translated Portuguese comments/logs in `MongoUrlRepository`,
+  `ShortUrlEntity`, `MongoCollections`, `UrlIdGenerationStrategy`, `RandomUrlIdStrategy`.
+
+### Changed
+
+- **UserService DIP leak resolved** — `UserService` now depends on `TokenPort`, `PasswordEncoderPort`,
+  `AuthenticationPort` (all in `core/ports/outgoing`); REST DTO mapping moved to `AuthController`.
+  Infrastructure adapters (`JwtTokenAdapter`, `PasswordEncoderAdapter`, `AuthenticationAdapter`) implement
+  the new ports. Zero `infra` imports remain in `core/`.
+- **Boundary check passes** — `core/` no longer imports `ca.tyny.urlshortener.infra.*`.
+
 ## [0.1.0] - 2026-08-25
 
 ### Added
