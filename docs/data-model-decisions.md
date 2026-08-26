@@ -65,20 +65,27 @@ sync whenever the data model changes.
   vanity URLs created.
 - **Enforcement:** `QuotaService.checkVanityUrlQuota` and `User.canCreateVanityUrls()` gate creation;
   quota is checked before write and incremented after.
-- **Atomicity — decision: `$inc`.** The "created this month" / "created total" counters must be
-  incremented with an atomic `$inc` on a counter document, not read-modify-write. The current
-  `incrementVanityUrlUsage` reads then writes (`set(get()+1)`), which loses increments under
-  concurrency — fix with `$inc` (roadmap, `AGENTS.md` debt item 14).
+- **Atomicity — decision: `$inc` — LOCKED for v0.3.0.** The "created this month" / "created total"
+  counters are incremented with an **atomic `$inc`** on the user document (targeted update), never
+  read-modify-write. `incrementVanityUrlUsage` moves from `set(get()+1)` to `$inc`
+  (`AGENTS.md` debt item 14, cleared alongside the click-pipeline epic).
 - **Lazy monthly reset:** `QuotaUsage.needsReset()` resets the monthly counter on first access.
 
 ## Click analytics
 
-- **Decision: persisted, out-of-band, atomic.** Click events are written to a dedicated `click_events`
-  collection **asynchronously** (never in the redirect path). The `short_urls` row carries a
-  `clickCount` incremented **atomically** via `$inc`.
-- The redirect handler performs **one** DB read (cache-aside) and a `302`; analytics is fire-and-forget
-  onto a **durable** queue (Redis Stream) drained by a batch worker — not the current in-memory
-  `LinkedBlockingQueue`, which drops events and never persists (roadmap, `AGENTS.md` debt item 5/15).
+- **Decision: persisted, out-of-band, atomic — LOCKED for v0.3.0.** Click events are written to a
+  dedicated `click_events` collection **asynchronously** (never in the redirect path). The
+  `short_urls` row carries a `clickCount` incremented **atomically** via `$inc`.
+- **Durable queue = Redis Streams** (`XADD`, bounded via `MAXLEN ~`) through Spring Data Redis /
+  Lettuce — **no new Maven coordinate**; any alternative broker requires explicit approval and must
+  stay behind `AnalyticsPort`.
+- **Delivery semantics = at-least-once, without an idempotency key** (locked). A retried batch may
+  duplicate a rare event row; `clickCount` stays exact because the worker increments once per unique
+  code per batch. Strict uniqueness is explicitly rejected for now.
+- **Timestamp type:** `click_events.timestamp` is stored as **`Instant` (UTC)**, converted at the
+  adapter boundary; the domain `ClickEvent` keeps `LocalDateTime` unchanged.
+- **Policy:** analytics is **fire-and-forget + fail-open** — a Redis outage logs and counts a
+  `dropped` metric; it never blocks or fails the redirect.
 - Store the minimum needed for aggregates: `shortCode`, `timestamp`, `ip`, `userAgent`
   (`ClickEvent`). Optional enrichments (geo, referrer, device) are additive columns on
   `click_events`.
