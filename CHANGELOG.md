@@ -5,6 +5,35 @@ All notable changes to URL Shortener Service will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project
 intends to follow [Semantic Versioning](https://semver.org/) starting from its first tag.
 
+## [Unreleased]
+
+### Added
+
+- **SSRF protection** — `UrlValidator` with HTTPS enforcement (configurable), host syntax
+  validation, DNS resolution with caching, private/internal/metadata IP blocking (RFC1918,
+  loopback, link-local, cloud metadata IPs), userinfo rejection, and extensibility hook via
+  `DestinationValidatorPort` for reputation checks.
+- **InvalidDestinationException** — domain exception for SSRF/format violations (HTTP 400).
+- **`UrlValidator` port** — `UrlValidator.ValidationResult` verdict with allowed/blocked,
+  remaining tokens, reset seconds.
+
+### Changed
+
+- **URL validation** — moved from `Url` record to `DefaultUrlValidator` (infra adapter) with
+  configurable policies (`app.url.allow-http`, `app.url.block-private-ips`, `dns-timeout-ms`,
+  `dns-cache-ttl-seconds`, trusted-proxy CIDRs).
+
+### Tests
+
+- Added `DefaultUrlValidatorTest` (11 unit tests) covering HTTPS enforcement, scheme validation,
+  userinfo rejection, host format validation, private IP blocking.
+- Added `SsrfProtectionIT` (7 integration tests) proving: HTTP rejection, userinfo rejection,
+  invalid scheme/host/scheme rejection, valid HTTPS acceptance.
+
+### Fixed
+
+- **AGENTS.md debt item 8 resolved** — SSRF protection implemented.
+
 ## [0.4.0] - 2026-08-26
 
 ### Added

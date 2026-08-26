@@ -3,8 +3,9 @@ package ca.tyny.urlshortener.core.model;
 import java.util.Objects;
 
 /**
- * Value Object representing a URL with validation.
- * Immutable and validates URL format on construction.
+ * Value Object representing a URL.
+ * Immutable with basic format validation.
+ * Comprehensive SSRF and format validation is done by {@link ca.tyny.urlshortener.core.validation.UrlValidator}.
  */
 public record Url(String value) {
 

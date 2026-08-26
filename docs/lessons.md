@@ -92,6 +92,13 @@ non-obvious failure or design decision cost real debugging time.
 - **Fail-open vs. fail-fast must be deliberate.** The rate limiter and the DB circuit breaker use
   different policies (`rateLimiterCb` fail-open, `databaseCb` fail-fast). Document the intent; don't
   copy one onto the other.
+- **URL validation belongs in a dedicated validator, not the value object.** The `Url` record should
+  only do basic format checks; comprehensive SSRF protection (DNS resolution, IP blocklists, HTTPS
+  enforcement) belongs in a `UrlValidator` adapter that can be configured and tested independently.
+  The `Url` record stays a simple value holder; the validator handles the complexity.
+- **DNS resolution is a blocking operation — cache it.** DNS lookups add latency and can be exploited
+  for DoS. Cache successful resolutions with TTL; fail closed on DNS failure (secure default).
+  Never block the hot path on DNS — validate at write time (shorten), not read time (redirect).
 
 ## Spring / configuration
 

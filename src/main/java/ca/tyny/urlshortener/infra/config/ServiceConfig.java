@@ -18,6 +18,10 @@ import ca.tyny.urlshortener.core.service.QuotaService;
 import ca.tyny.urlshortener.core.service.UrlShortenerService;
 import ca.tyny.urlshortener.core.service.UserService;
 import ca.tyny.urlshortener.core.validation.ReservedWordsValidator;
+import ca.tyny.urlshortener.core.validation.UrlValidator;
+import ca.tyny.urlshortener.infra.adapter.output.validation.DefaultUrlValidator;
+import ca.tyny.urlshortener.infra.config.properties.RateLimiterProperties;
+import ca.tyny.urlshortener.infra.config.properties.UrlValidationProperties;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -27,7 +31,10 @@ import org.springframework.core.annotation.Order;
 import java.util.List;
 
 @Configuration
-@EnableConfigurationProperties(ca.tyny.urlshortener.infra.config.properties.RateLimiterProperties.class)
+@EnableConfigurationProperties({
+        ca.tyny.urlshortener.infra.config.properties.RateLimiterProperties.class,
+        ca.tyny.urlshortener.infra.config.properties.UrlValidationProperties.class
+})
 public class ServiceConfig {
 
     @Bean
@@ -44,9 +51,10 @@ public class ServiceConfig {
             Base62CodeGenerator base62CodeGenerator,
             QuotaService quotaService,
             UserRepositoryPort userRepository,
-            ReservedWordsValidator reservedWordsValidator) {
+            ReservedWordsValidator reservedWordsValidator,
+            UrlValidator urlValidator) {
         return new UrlShortenerService(urlRepository, urlCache, metrics, urlIdGenerator,
-                base62CodeGenerator, quotaService, userRepository, reservedWordsValidator);
+                base62CodeGenerator, quotaService, userRepository, reservedWordsValidator, urlValidator);
     }
 
     @Bean
@@ -83,5 +91,10 @@ public class ServiceConfig {
     @Bean
     public CompositeUrlIdGenerator compositeUrlIdGenerator(List<UrlIdGenerationStrategy> strategies) {
         return new CompositeUrlIdGenerator(strategies);
+    }
+
+    @Bean
+    public UrlValidator urlValidator(UrlValidationProperties properties) {
+        return new DefaultUrlValidator(properties);
     }
 }

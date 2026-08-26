@@ -195,6 +195,12 @@ variants**. Prefer the pattern that matches existing code; if none fits, ask the
   fail-open policy (throttling never blocks the endpoint it protects). 429 responses emit
   `Retry-After` + `RateLimit-Limit/Remaining/Reset` headers. Scope isolation: exhausting one
   scope never affects the other.
+- **URL validation & SSRF protection (applied).** Destination URLs validated by `UrlValidator`:
+  HTTPS enforced by default (`app.url.allow-http=false`), host syntax validated, DNS resolution
+  with caching (`app.url.dns-cache-ttl-seconds`), private/internal/metadata IP blocking
+  (RFC1918, loopback, link-local, cloud metadata), userinfo rejection. Configurable via
+  `app.url.*` properties. Extensible via `DestinationValidatorPort` for reputation checks
+  (Safe Browsing, VirusTotal, etc.). Fail-closed on DNS failure (secure default).
 - **Bean scoping.** Default singleton; services are stateless — no per-request mutable fields.
   The analytics event queue is durable (Redis Stream), not in-memory.
 - **DTOs for every external input/output.** Never expose domain entities through the API.

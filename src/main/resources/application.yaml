@@ -30,6 +30,11 @@ app:
   shortener:
     code-length: ${SHORTENER_CODE_LENGTH:7}
     # salt: removed (SHORTENER_SALT no longer used once Hashids is dropped)
+  url:
+    allow-http: false              # Reject http:// URLs (HTTPS-only by default)
+    dns-timeout-ms: 2000           # DNS resolution timeout
+    block-private-ips: true        # Block RFC1918, loopback, link-local, metadata IPs
+    dns-cache-ttl-seconds: 300     # Cache successful DNS resolutions
   
   jwt:
     # CRITICAL: MUST be set via environment variable in production

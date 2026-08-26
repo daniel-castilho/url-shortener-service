@@ -1,6 +1,7 @@
 package ca.tyny.urlshortener.infra.adapter.input.rest.advice;
 
 import ca.tyny.urlshortener.core.exception.CodeGenerationException;
+import ca.tyny.urlshortener.core.exception.InvalidDestinationException;
 import ca.tyny.urlshortener.core.exception.UrlNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +42,19 @@ public class GlobalExceptionHandler {
                 ErrorResponse error = new ErrorResponse(
                                 HttpStatus.BAD_REQUEST.value(),
                                 "Invalid Request",
+                                ex.getMessage(),
+                                LocalDateTime.now());
+
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+        }
+
+        @ExceptionHandler(InvalidDestinationException.class)
+        public ResponseEntity<ErrorResponse> handleInvalidDestination(InvalidDestinationException ex) {
+                log.warn("Invalid destination URL: {}", ex.getMessage());
+
+                ErrorResponse error = new ErrorResponse(
+                                HttpStatus.BAD_REQUEST.value(),
+                                "Invalid Destination",
                                 ex.getMessage(),
                                 LocalDateTime.now());
 

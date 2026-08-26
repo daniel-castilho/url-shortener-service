@@ -238,8 +238,7 @@ Deliberately not implemented yet — candidate backlog, in priority order:
 - **Framework-free `core` — landed.** Spring/Lombok annotations removed from the domain layer;
   beans registered in `infra/config` (`ServiceConfig`); boundary gate enforces it in CI with a
   self-test. Quality gates (JaCoCo + SpotBugs) run at `mvn verify`.
-- **Validate the destination** — strengthen URL validation (enforce HTTPS, block internal/private IPs
-  to mitigate SSRF) and add an extensibility hook for destination reputation checks.
+- **Validate the destination — landed.** SSRF protection implemented: HTTPS enforced by default, host validation, private/internal IP blocking (RFC1918, loopback, link-local, metadata IPs), userinfo rejection, DNS resolution with caching. Extensibility hook via `DestinationValidatorPort` for reputation checks. ITs: `SsrfProtectionIT` proves rejection of HTTP, userinfo, invalid schemes, private IPs; valid HTTPS allowed.
 - **Tighten operational exposure** — restrict `/actuator/**` and Swagger in production; manage schema
   and index creation via versioned migrations instead of `auto-index-creation`.
 - **Fix the GraalVM native build** — correct the `mainClass` in the `native` profile, and verify the

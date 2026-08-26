@@ -1,6 +1,7 @@
 package ca.tyny.urlshortener.core.service;
 
 import ca.tyny.urlshortener.core.exception.CodeGenerationException;
+import ca.tyny.urlshortener.core.exception.InvalidDestinationException;
 import ca.tyny.urlshortener.core.exception.ShortCodeCollisionException;
 import ca.tyny.urlshortener.core.idgeneration.Base62CodeGenerator;
 import ca.tyny.urlshortener.core.idgeneration.UrlIdGenerator;
@@ -9,6 +10,8 @@ import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
+import ca.tyny.urlshortener.core.validation.ReservedWordsValidator;
+import ca.tyny.urlshortener.core.validation.UrlValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,7 +24,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -49,6 +52,9 @@ class UrlShortenerServiceTest {
     @Mock
     private ca.tyny.urlshortener.core.validation.ReservedWordsValidator reservedWordsValidator;
 
+    @Mock
+    private UrlValidator urlValidator;
+
     private Base62CodeGenerator base62CodeGenerator;
 
     private UrlShortenerService service;
@@ -59,8 +65,9 @@ class UrlShortenerServiceTest {
     @BeforeEach
     void setUp() {
         base62CodeGenerator = new Base62CodeGenerator(7);
+        lenient().doNothing().when(urlValidator).validate(anyString());
         service = new UrlShortenerService(urlRepository, urlCache, metrics, urlIdGenerator,
-                base62CodeGenerator, quotaService, userRepository, reservedWordsValidator);
+                base62CodeGenerator, quotaService, userRepository, reservedWordsValidator, urlValidator);
     }
 
     @Test

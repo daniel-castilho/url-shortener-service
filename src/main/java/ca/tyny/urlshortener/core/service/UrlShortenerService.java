@@ -1,6 +1,7 @@
 package ca.tyny.urlshortener.core.service;
 
 import ca.tyny.urlshortener.core.exception.CodeGenerationException;
+import ca.tyny.urlshortener.core.exception.InvalidDestinationException;
 import ca.tyny.urlshortener.core.exception.ShortCodeCollisionException;
 import ca.tyny.urlshortener.core.idgeneration.Base62CodeGenerator;
 import ca.tyny.urlshortener.core.idgeneration.UrlIdGenerator;
@@ -12,6 +13,8 @@ import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
+import ca.tyny.urlshortener.core.validation.ReservedWordsValidator;
+import ca.tyny.urlshortener.core.validation.UrlValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,14 +29,15 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
     private static final String LOG_CACHE_MISS = "Cache Miss for ID: {}. Fetching from DB...";
     static final int MAX_COLLISION_RETRIES = 8;
 
-    private final UrlRepositoryPort urlRepository;
+private final UrlRepositoryPort urlRepository;
     private final UrlCachePort urlCache;
     private final MetricsPort metrics;
     private final UrlIdGenerator urlIdGenerator;
     private final Base62CodeGenerator base62CodeGenerator;
     private final QuotaService quotaService;
     private final UserRepositoryPort userRepository;
-    private final ca.tyny.urlshortener.core.validation.ReservedWordsValidator reservedWordsValidator;
+    private final ReservedWordsValidator reservedWordsValidator;
+    private final UrlValidator urlValidator;
 
     public UrlShortenerService(UrlRepositoryPort urlRepository,
             UrlCachePort urlCache,
@@ -42,7 +46,8 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
             Base62CodeGenerator base62CodeGenerator,
             QuotaService quotaService,
             UserRepositoryPort userRepository,
-            ca.tyny.urlshortener.core.validation.ReservedWordsValidator reservedWordsValidator) {
+            ReservedWordsValidator reservedWordsValidator,
+            UrlValidator urlValidator) {
         this.urlRepository = urlRepository;
         this.urlCache = urlCache;
         this.metrics = metrics;
@@ -51,11 +56,15 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
         this.quotaService = quotaService;
         this.userRepository = userRepository;
         this.reservedWordsValidator = reservedWordsValidator;
+        this.urlValidator = urlValidator;
     }
 
     @Override
     public ShortUrl shorten(String originalUrl, String customAlias, String userId) {
         Objects.requireNonNull(originalUrl, "URL cannot be null");
+
+        // SSRF and format validation
+        urlValidator.validate(originalUrl);
 
         Url validatedUrl = new Url(originalUrl);
 

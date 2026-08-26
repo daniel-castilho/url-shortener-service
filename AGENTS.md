@@ -258,7 +258,7 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
    (plan min length and/or `-`/`_`) plus reserved-word rejection. Remaining work is to enforce that
    structurally in code (story I3). — `resolved`
 8. **Weak URL validation / SSRF** — only `^https?://.*`; strengthen to enforce HTTPS, validate the
-   host, and block internal/private/link-local IPs (Rule 6). — `open`
+   host, and block internal/private/link-local IPs (Rule 6). — `resolved`
 9. **Actuator & Swagger publicly exposed** — `/actuator/**` and `/swagger-ui/**` are `permitAll` and
    `health.show-details: always`. Restrict in production and gate detail exposure. — `open`
 10. **No versioned schema/index migrations** — `spring.data.mongodb.auto-index-creation: true`; adopt a
