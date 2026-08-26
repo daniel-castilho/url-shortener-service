@@ -249,9 +249,9 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
 4. **Drop unique index on `originalUrl` (Rule 3)** — the locked model has **no URL dedup**. Remaining
    work is to drop `UNIQUE` on `originalUrl` and add a SHA-256 `urlHash` (non-unique) for future
    analytics (stories I4–I5). Do not document unique-on-URL as the product design. — `resolved`
-5. **Analytics not persisted** — `ClickBatchWorker` only logs; click events are dropped when the
-   in-memory queue is full and there is no `clickCount`. Add a durable queue (Redis Stream) and a
-   `click_events` collection + atomic `clickCount` (`$inc`). — `open`
+5. **Analytics not persisted** — click events are now persisted to a `click_events` collection by the
+   Redis-Stream consumer (`ClickBatchWorker` bulk-inserts + `$inc` per unique code); durable queue via
+   `RedisClickEventQueue` (`XADD MAXLEN ~`), self-healing consumer group, fail-open policy. — `resolved`
 6. **No rate limit on the redirect path** — `GET /{id}` is unthrottled; add per-IP token-bucket and
    treat it as a first-class anti-enumeration control (Rule 5). — `open`
 7. **Namespace isolation between generated code and vanity alias (Rule 4)** — locked contract:
@@ -276,10 +276,12 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     committed `build.log`/`build_out.txt`. Product docs now describe the locked identity model
     (`README.md`, `docs/data-model-decisions.md`, coding standards, testing playbook, lessons).
     Residual Portuguese/Cassandra prose in `MONGODB_ARCHITECTURE.md` is still being migrated. — `resolved`
-14. **Quota increment is non-atomic** — `QuotaService.incrementVanityUrlUsage` does read-modify-write
-    (`set(get()+1)`), which loses increments under concurrency. Use `$inc` (Rule 7). — `open`
-15. **In-memory analytics queue drops events** — `LinkedBlockingQueue` (100k) discards events when full
-    with only a warning; replace with a durable, backpressure-aware queue (item 5). — `open`
+14. **Quota increment is non-atomic** — `QuotaService.incrementVanityUrlUsage` did read-modify-write
+    (`set(get()+1)`), losing increments under concurrency. Now delegates to
+    `UserRepositoryPort.incrementVanityUsage` (atomic `$inc` on both counters). — `resolved`
+15. **In-memory analytics queue drops events** — `LinkedBlockingQueue` (100k) replaced by a durable,
+    bounded Redis Stream (`RedisClickEventQueue`, `XADD MAXLEN ~`) behind `AnalyticsPort`; consumer
+    is self-healing and at-least-once (item 5). — `resolved`
 16. **Quality gates wired** — JaCoCo 0.8.15 (LINE ≥ 60%, BRANCH ≥ 60%) and SpotBugs 4.9.8.5
     (effort Max, threshold High) run at `mvn verify`; both gates green. Testcontainers upgraded
     1.19.3 → 1.21.3. **Environment note:** Docker Engine ≥ 29 only serves API `1.44+` while docker-java

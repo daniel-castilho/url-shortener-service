@@ -200,9 +200,10 @@ Implemented on `main`:
   `GOLD`/`DIAMOND`).
 - **Multi-level caching** — Caffeine L1 → Redis L2 with **TTL jitter** (anti-stampede) and a Redisson
   **Bloom filter** to short-circuit lookups of non-existent codes.
-- **Async click tracking** — redirects enqueue click events fire-and-forget into an in-memory queue;
-  a scheduled worker drains them in batches (currently logged; **persistence is planned** — see
-  Roadmap).
+- **Async click tracking** — redirects enqueue click events fire-and-forget onto a **durable Redis
+  Stream** (bounded, survives restarts); a self-healing worker persists them to a `click_events`
+  collection and increments the per-link `clickCount` atomically (`$inc`). Analytics failure never
+  blocks or fails a redirect (fail-open).
 - **Rate limiting** — per-IP token-bucket over Redis on the shorten endpoint, configurable via
   `rate-limiter.limit` / `rate-limiter.window`. Fails open (does not block) if Redis is unavailable.
 - **Fault tolerance** — Resilience4j circuit breakers (`databaseCb` fail-fast for Mongo,
@@ -226,8 +227,8 @@ Implemented on `main`:
 
 Deliberately not implemented yet — candidate backlog, in priority order:
 
-- **Real analytics persistence** — persist `click_events` and a click counter (`$inc`), instead of the
-  current fire-and-forget in-memory queue that is dropped when full.
+- **Real analytics persistence — landed.** Click events persist to `click_events` via a durable
+  Redis Stream + batched worker; `clickCount` is updated atomically (`$inc`), quota counters too.
 - **Rate limiting on the redirect path** (`GET /{id}`) — currently only the shorten endpoint is
   throttled.
 - **TTL / link expiration** — add `expiresAt` (with a MongoDB TTL index) and enforce it at redirect

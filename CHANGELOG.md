@@ -5,6 +5,36 @@ All notable changes to URL Shortener Service will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project
 intends to follow [Semantic Versioning](https://semver.org/) starting from its first tag.
 
+## [0.3.0] - 2026-08-26
+
+### Added
+
+- **Real click analytics** — redirects enqueue events onto a durable, bounded **Redis Stream**
+  (`RedisClickEventQueue`, `XADD MAXLEN ~`, fire-and-forget + fail-open); `ClickBatchWorker`
+  consumes via a self-healing consumer group, bulk-inserts to the new **`click_events`** collection
+  (UTC instants, provenance `consumedAt`) and increments `clickCount` with one atomic `$inc` per
+  unique code per batch. Delivery is at-least-once without an idempotency key (locked decision).
+- **Pipeline metrics** — `analytics.events.{enqueued,persisted,failed,dropped}.total` (fixed
+  low-cardinality tags).
+- **`click_events` indexes** — `(shortCode, timestamp)` and `(timestamp)`, idempotent via
+  `IndexMigration`.
+
+### Changed
+
+- **Atomic counters everywhere** — quota increments (`QuotaService`) now use `$inc` on both monthly
+  and total counters instead of read-modify-write (`AGENTS.md` debt item 14).
+
+### Fixed
+
+- **Analytics no longer drops data** — in-memory `LinkedBlockingQueue` (drop-on-full, log-only
+  worker) fully replaced; queue durability survives restarts and bursts (`AGENTS.md` debt items
+  5/15).
+
+### Tests
+
+- Unit suite grew to 134 tests; new ITs: `ClickPipelineIT` (persist+count, exact counts under
+  burst, blank-code skip) and fail-open proof under Redis outage.
+
 ## [0.2.0] - 2026-08-25
 
 ### Added

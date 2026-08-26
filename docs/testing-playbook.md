@@ -195,8 +195,9 @@ Keep this section honest. Move an item out only when an automated test/gate exis
    flows, not every `SecurityConfig` matcher (and `/actuator/**` exposure is still `permitAll`).
 3. **No rate-limit integration on the redirect path** — only the shorten endpoint is throttled today;
    add a test once it is.
-4. **No analytics/click persistence test** — the worker does not persist events yet; add once the
-   durable queue + `click_events` collection exist.
+4. **Analytics/click persistence — CLOSED.** `ClickPipelineIT` proves redirect→persist+`$inc`,
+   exact counts under burst, blank-code skip; `RedisClickEventQueueFailOpenTest` proves the
+   fail-open policy (no throw + dropped metric when Redis is unreachable).
 5. **No expiry (TTL) test** — add once `expiresAt`/TTL is implemented.
 6. **Coverage/static-analysis gate — CLOSED.** JaCoCo 0.8.15 (LINE ≥ 60%, BRANCH ≥ 60%) and SpotBugs
    4.9.8.5 (effort Max, threshold High) are enforced at `mvn verify`, locally and in CI.

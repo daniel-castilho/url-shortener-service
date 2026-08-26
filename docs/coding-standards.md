@@ -183,9 +183,14 @@ variants**. Prefer the pattern that matches existing code; if none fits, ask the
   on adapters — and never over Mongo+Redis, which are separate systems (see `data-model-decisions`).
 - **Caching.** Prefer `@Cacheable` on application services, or the `UrlCachePort` for the explicit
   L1/L2 + bloom flow. TTL logic stays in the adapter/config, never in the domain.
+- **Analytics pipeline (applied).** The redirect calls `AnalyticsPort.track()` fire-and-forget and
+  must never block or throw on analytics failure (fail-open; drops are counted). Events go onto a
+  durable, bounded Redis Stream (`XADD MAXLEN ~`) and are drained by `ClickBatchWorker`, which
+  bulk-inserts to `click_events` and increments `clickCount` with **one `$inc` per unique code per
+  batch** — never read-modify-write anywhere (quota counters included). Delivery is at-least-once
+  without an idempotency key; the worker is self-healing if the stream/group disappears.
 - **Bean scoping.** Default singleton; services are stateless — no per-request mutable fields.
-  The analytics event queue is the exception (in-memory, single-node) and is being replaced by a
-  durable queue (debt item 5/15).
+  The analytics event queue is durable (Redis Stream), not in-memory.
 - **DTOs for every external input/output.** Never expose domain entities through the API.
 - **Validation.** `spring-boot-starter-validation` + `jakarta.validation.constraints.*` on request
   DTOs, `@Valid` in controllers. Centralized errors (see § 8).

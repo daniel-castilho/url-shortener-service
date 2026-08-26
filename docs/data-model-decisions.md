@@ -105,10 +105,11 @@ sync whenever the data model changes.
 | Collection     | Index                      | Type      | Purpose                                            |
 | -------------- | -------------------------- | --------- | -------------------------------------------------- |
 | `short_urls`   | `_id`                       | unique    | Code identity + retry-on-collision                 |
-| `short_urls`   | `userId`                    | non-unique | User link listing (planned)                        |
+| `short_urls`   | `userId`                    | non-unique | User link listing                                  |
 | `short_urls`   | `expiresAt`                 | TTL       | Auto-purge expired links (target)                  |
 | `short_urls`   | `urlHash`                   | non-unique | Optional URL aggregate queries (future)            |
-| `click_events` | `shortCode` + `timestamp`   | non-unique | Aggregate/retention queries (target)               |
+| `click_events` | `shortCode` + `timestamp`   | non-unique | Aggregate/retention queries (applied)              |
+| `click_events` | `timestamp`                 | non-unique | Retention purge (applied)                          |
 | `users`        | `_id`                       | unique    | User identity                                     |
 | `users`        | `email`                     | unique    | Email uniqueness (registration guard)              |
 
