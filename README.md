@@ -204,8 +204,7 @@ Implemented on `main`:
   Stream** (bounded, survives restarts); a self-healing worker persists them to a `click_events`
   collection and increments the per-link `clickCount` atomically (`$inc`). Analytics failure never
   blocks or fails a redirect (fail-open).
-- **Rate limiting** — per-IP token-bucket over Redis on the shorten endpoint, configurable via
-  `rate-limiter.limit` / `rate-limiter.window`. Fails open (does not block) if Redis is unavailable.
+- **Rate limiting** — per-IP token-bucket over Redis on **both shorten and redirect endpoints**, independent scopes (SHORTEN/REDIRECT), configurable via `rate-limiter.limit` / `rate-limiter.window` and `rate-limiter.redirect-limit` / `rate-limiter.redirect-window`. Trusted-proxy CIDR IP resolution; fails open (does not block) if Redis is unavailable. 429 responses include `Retry-After`, `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` headers.
 - **Fault tolerance** — Resilience4j circuit breakers (`databaseCb` fail-fast for Mongo,
   `rateLimiterCb` fail-open for the rate limiter / ID generator), exposed via Actuator.
 - **Auth & users** — stateless JWT (HS256, access + refresh), BCrypt password hashing, `FREE` plan by
@@ -229,8 +228,7 @@ Deliberately not implemented yet — candidate backlog, in priority order:
 
 - **Real analytics persistence — landed.** Click events persist to `click_events` via a durable
   Redis Stream + batched worker; `clickCount` is updated atomically (`$inc`), quota counters too.
-- **Rate limiting on the redirect path** (`GET /{id}`) — currently only the shorten endpoint is
-  throttled.
+- **Rate limiting on the redirect path — landed.** `GET /{id}` now has per-IP token-bucket over Redis (Rule 5): independent REDIRECT scope with capacity 120/min (configurable), Redis TIME-driven atomic Lua script, trusted-proxy CIDR IP resolution, fail-open policy, 429 with `Retry-After` + `RateLimit-*` headers. Scope isolation: exhausting redirect budget never affects shorten. ITs prove anti-enumeration (unknown-code probes throttled), exact capacity under burst, and scope isolation.
 - **TTL / link expiration** — add `expiresAt` (with a MongoDB TTL index) and enforce it at redirect
   time.
 - **Land the locked identity model in code** — stories I1–I6: random Base62 + collision retry, drop

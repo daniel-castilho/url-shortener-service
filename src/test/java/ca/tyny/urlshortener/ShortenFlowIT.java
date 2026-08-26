@@ -29,7 +29,7 @@ class ShortenFlowIT extends BaseIntegrationTest {
 
         @BeforeEach
         void setUp() {
-                when(rateLimiter.isAllowed(anyString())).thenReturn(true);
+                when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
                 RestAssured.port = port;
                 RestAssured.basePath = "/";
         }

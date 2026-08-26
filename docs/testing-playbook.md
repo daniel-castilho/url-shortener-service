@@ -193,8 +193,7 @@ Keep this section honest. Move an item out only when an automated test/gate exis
    `mvn verify` and are excluded from the fast `mvn test` loop.
 2. **No complete endpoint × method × role matrix.** Existing tests cover the main shorten/redirect/auth
    flows, not every `SecurityConfig` matcher (and `/actuator/**` exposure is still `permitAll`).
-3. **No rate-limit integration on the redirect path** — only the shorten endpoint is throttled today;
-   add a test once it is.
+3. **Rate-limit integration on the redirect path — CLOSED.** `RedirectRateLimitIT` proves the token bucket (capacity 3, PT1M window) throttles both valid and unknown codes with 429 + `Retry-After` + `RateLimit-*` headers; scope isolation (shorten budget untouched); concurrent burst admits exactly the configured capacity.
 4. **Analytics/click persistence — CLOSED.** `ClickPipelineIT` proves redirect→persist+`$inc`,
    exact counts under burst, blank-code skip; `RedisClickEventQueueFailOpenTest` proves the
    fail-open policy (no throw + dropped metric when Redis is unreachable).

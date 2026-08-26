@@ -5,6 +5,31 @@ All notable changes to URL Shortener Service will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project
 intends to follow [Semantic Versioning](https://semver.org/) starting from its first tag.
 
+## [Unreleased]
+
+### Added
+
+- **Redirect rate limiting** — `GET /{id}` now has per-IP token-bucket over Redis (Rule 5):
+  independent REDIRECT scope with configurable capacity/window, Redis TIME-driven atomic Lua script,
+  trusted-proxy CIDR IP resolution, fail-open policy. 429 responses include `Retry-After`,
+  `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` headers. Scope isolation: exhausting
+  redirect budget never affects shorten.
+- **Trusted-proxy CIDR IP resolution** — `X-Forwarded-For` (left-most) is trusted only when the
+  direct peer matches configured CIDRs (default `127.0.0.0/8`, `::1/128`); untrusted peers fall back
+  to `getRemoteAddr()`.
+
+### Changed
+
+- **Rate limiter core** — upgraded from fixed-window counter to Redis TIME-driven token bucket
+  (Lua script) with continuous refill and TTL-based key reclamation. Now scoped (SHORTEN/REDIRECT)
+  with independent budgets.
+
+### Tests
+
+- Added `RedirectRateLimitIT`: capacity enforcement with `Retry-After` + `RateLimit-*` headers,
+  anti-enumeration (unknown-code probes throttled), scope isolation (shorten untouched),
+  concurrent burst admits exactly configured capacity.
+
 ## [0.3.0] - 2026-08-26
 
 ### Added

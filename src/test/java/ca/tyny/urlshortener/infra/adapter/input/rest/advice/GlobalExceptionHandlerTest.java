@@ -58,11 +58,20 @@ class GlobalExceptionHandlerTest {
         @MockitoBean
         private ca.tyny.urlshortener.infra.security.JwtTokenProvider jwtTokenProvider;
 
+        @MockitoBean
+        private ca.tyny.urlshortener.infra.adapter.input.rest.ClientAddressResolver clientAddressResolver;
+
+        @org.junit.jupiter.api.BeforeEach
+        void setUpResolver() {
+                when(clientAddressResolver.resolve(org.mockito.ArgumentMatchers.any()))
+                                .thenReturn("127.0.0.1");
+        }
+
         @Test
         @DisplayName("Should return 404 with error response when URL not found")
         void shouldReturn404WhenUrlNotFound() throws Exception {
                 // Given
-                when(rateLimiter.isAllowed(any())).thenReturn(true);
+                when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
                 String nonExistentId = "notfound";
                 when(getUrlUseCase.getOriginalUrl(nonExistentId))
                                 .thenThrow(new UrlNotFoundException(nonExistentId));
@@ -80,7 +89,7 @@ class GlobalExceptionHandlerTest {
         @DisplayName("Should return 400 with validation errors for empty URL")
         void shouldReturn400ForEmptyUrl() throws Exception {
                 // Given
-                when(rateLimiter.isAllowed(any())).thenReturn(true);
+                when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
                 ShortenRequest request = new ShortenRequest("", null);
 
                 // When/Then
@@ -97,7 +106,7 @@ class GlobalExceptionHandlerTest {
         @DisplayName("Should return 400 with validation errors for invalid URL format")
         void shouldReturn400ForInvalidUrlFormat() throws Exception {
                 // Given
-                when(rateLimiter.isAllowed(any())).thenReturn(true);
+                when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
                 ShortenRequest request = new ShortenRequest("not-a-valid-url", null);
 
                 // When/Then
@@ -115,7 +124,7 @@ class GlobalExceptionHandlerTest {
         @DisplayName("Should return 400 with validation errors for null URL")
         void shouldReturn400ForNullUrl() throws Exception {
                 // Given
-                when(rateLimiter.isAllowed(any())).thenReturn(true);
+                when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
                 String requestJson = "{}";
 
                 // When/Then
@@ -132,7 +141,7 @@ class GlobalExceptionHandlerTest {
         @DisplayName("Should return 400 for IllegalArgumentException")
         void shouldReturn400ForIllegalArgument() throws Exception {
                 // Given
-                when(rateLimiter.isAllowed(any())).thenReturn(true);
+                when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
                 ShortenRequest request = new ShortenRequest("https://example.com", null);
                 when(shortenUrlUseCase.shorten(any(), isNull(), isNull()))
                                 .thenThrow(new IllegalArgumentException("Invalid input"));
@@ -151,7 +160,7 @@ class GlobalExceptionHandlerTest {
         @DisplayName("Should return 500 for unexpected exceptions")
         void shouldReturn500ForUnexpectedException() throws Exception {
                 // Given
-                when(rateLimiter.isAllowed(any())).thenReturn(true);
+                when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
                 ShortenRequest request = new ShortenRequest("https://example.com", null);
                 when(shortenUrlUseCase.shorten(any(), isNull(), isNull()))
                                 .thenThrow(new RuntimeException("Unexpected error"));

@@ -19,6 +19,7 @@ import ca.tyny.urlshortener.core.service.UrlShortenerService;
 import ca.tyny.urlshortener.core.service.UserService;
 import ca.tyny.urlshortener.core.validation.ReservedWordsValidator;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -26,6 +27,7 @@ import org.springframework.core.annotation.Order;
 import java.util.List;
 
 @Configuration
+@EnableConfigurationProperties(ca.tyny.urlshortener.infra.config.properties.RateLimiterProperties.class)
 public class ServiceConfig {
 
     @Bean

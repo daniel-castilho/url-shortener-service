@@ -189,6 +189,12 @@ variants**. Prefer the pattern that matches existing code; if none fits, ask the
   bulk-inserts to `click_events` and increments `clickCount` with **one `$inc` per unique code per
   batch** — never read-modify-write anywhere (quota counters included). Delivery is at-least-once
   without an idempotency key; the worker is self-healing if the stream/group disappears.
+- **Rate limiting (applied).** The hot path (`GET /{id}`) is rate-limited per IP via a Redis
+  token-bucket (Rule 5): independent scopes (SHORTEN/REDIRECT), Redis TIME-driven atomic Lua
+  script, continuous refill, TTL-based key reclamation. Trusted-proxy CIDR IP resolution;
+  fail-open policy (throttling never blocks the endpoint it protects). 429 responses emit
+  `Retry-After` + `RateLimit-Limit/Remaining/Reset` headers. Scope isolation: exhausting one
+  scope never affects the other.
 - **Bean scoping.** Default singleton; services are stateless — no per-request mutable fields.
   The analytics event queue is durable (Redis Stream), not in-memory.
 - **DTOs for every external input/output.** Never expose domain entities through the API.

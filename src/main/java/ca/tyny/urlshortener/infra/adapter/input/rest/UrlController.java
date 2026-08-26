@@ -40,6 +40,7 @@ public class UrlController {
         private final HttpServletRequest request;
         private final MetricsService metricsService;
         private final UserRepositoryPort userRepository;
+        private final ClientAddressResolver clientAddressResolver;
 
         public UrlController(ShortenUrlUseCase shortenUrlUseCase,
                         GetUrlUseCase getUrlUseCase,
@@ -47,7 +48,8 @@ public class UrlController {
                         RateLimiterPort rateLimiter,
                         HttpServletRequest request,
                         MetricsService metricsService,
-                        UserRepositoryPort userRepository) {
+                        UserRepositoryPort userRepository,
+                        ClientAddressResolver clientAddressResolver) {
                 this.shortenUrlUseCase = shortenUrlUseCase;
                 this.getUrlUseCase = getUrlUseCase;
                 this.analyticsPort = analyticsPort;
@@ -55,6 +57,7 @@ public class UrlController {
                 this.request = request;
                 this.metricsService = metricsService;
                 this.userRepository = userRepository;
+                this.clientAddressResolver = clientAddressResolver;
         }
 
         @PostMapping("/api/v1/urls")
@@ -69,9 +72,12 @@ public class UrlController {
                         @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "URL to be shortened", required = true, content = @Content(schema = @Schema(implementation = ShortenRequest.class))) @jakarta.validation.Valid @RequestBody ShortenRequest request) {
                 long startTime = System.currentTimeMillis();
                 try {
-                        String clientIp = this.request.getRemoteAddr();
-                        if (!rateLimiter.isAllowed(clientIp)) {
-                                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).build();
+                        String clientIp = clientAddressResolver.resolve(this.request);
+                        ca.tyny.urlshortener.core.model.RateLimitVerdict verdict = rateLimiter
+                                        .tryAcquire(ca.tyny.urlshortener.core.ports.outgoing.RateLimitScope.SHORTEN,
+                                                        clientIp);
+                        if (!verdict.allowed()) {
+                                return tooManyRequests(verdict);
                         }
 
                         String userId = null;
@@ -97,22 +103,32 @@ public class UrlController {
         }
 
         @GetMapping("/{id}")
-        @Operation(summary = "Redirect to original URL", description = "Retrieves the original URL and redirects (HTTP 302).")
+        @Operation(summary = "Redirect to original URL", description = "Retrieves the original URL and redirects (HTTP 302). Rate limited per IP as an anti-enumeration control.")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "302", description = "Redirect to original URL"),
-                        @ApiResponse(responseCode = "404", description = "Short URL not found", content = @Content)
+                        @ApiResponse(responseCode = "404", description = "Short URL not found", content = @Content),
+                        @ApiResponse(responseCode = "429", description = "Rate limit exceeded", content = @Content)
         })
         public ResponseEntity<Void> redirect(
                         @Parameter(description = "Short URL code (e.g., vE1GpYK)", required = true, example = "vE1GpYK") @PathVariable String id,
                         HttpServletRequest request) {
                 long startTime = System.currentTimeMillis();
                 try {
+                        String clientIp = clientAddressResolver.resolve(request);
+                        ca.tyny.urlshortener.core.model.RateLimitVerdict verdict = rateLimiter
+                                        .tryAcquire(ca.tyny.urlshortener.core.ports.outgoing.RateLimitScope.REDIRECT,
+                                                        clientIp);
+                        if (!verdict.allowed()) {
+                                // Anti-enumeration: throttled before any lookup or click tracking
+                                return tooManyRequests(verdict);
+                        }
+
                         String originalUrl = getUrlUseCase.getOriginalUrl(id);
                         analyticsPort.track(new ca.tyny.urlshortener.core.model.ClickEvent(
                                         id,
                                         java.time.LocalDateTime.now(),
                                         request.getHeader("User-Agent"),
-                                        request.getRemoteAddr()));
+                                        clientIp));
 
                         metricsService.recordRedirect();
                         return ResponseEntity.status(HttpStatus.FOUND).location(java.net.URI.create(originalUrl))
@@ -120,5 +136,16 @@ public class UrlController {
                 } finally {
                         metricsService.recordRedirectLatency(System.currentTimeMillis() - startTime);
                 }
+        }
+
+        /** 429 with standard throttling headers (Retry-After + RateLimit-*). */
+        private static <T> ResponseEntity<T> tooManyRequests(
+                        ca.tyny.urlshortener.core.model.RateLimitVerdict verdict) {
+                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                                .header("Retry-After", Long.toString(verdict.resetSeconds()))
+                                .header("RateLimit-Limit", "*")
+                                .header("RateLimit-Remaining", "0")
+                                .header("RateLimit-Reset", Long.toString(verdict.resetSeconds()))
+                                .build();
         }
 }

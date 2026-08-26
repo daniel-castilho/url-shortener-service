@@ -252,8 +252,7 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
 5. **Analytics not persisted** — click events are now persisted to a `click_events` collection by the
    Redis-Stream consumer (`ClickBatchWorker` bulk-inserts + `$inc` per unique code); durable queue via
    `RedisClickEventQueue` (`XADD MAXLEN ~`), self-healing consumer group, fail-open policy. — `resolved`
-6. **No rate limit on the redirect path** — `GET /{id}` is unthrottled; add per-IP token-bucket and
-   treat it as a first-class anti-enumeration control (Rule 5). — `open`
+6. **No rate limit on the redirect path** — `GET /{id}` now has a per-IP token bucket over Redis (Rule 5). Implementation uses a Redis TIME-driven atomic Lua script, independent scopes (SHORTEN/REDIRECT), trusted-proxy CIDR IP resolution, and fail-open policy. Rate limit headers (`Retry-After`, `RateLimit-*`) are emitted on 429. — `resolved`
 7. **Namespace isolation between generated code and vanity alias (Rule 4)** — locked contract:
    generated codes are exactly `code-length` Base62 chars; vanity aliases use a disjoint shape
    (plan min length and/or `-`/`_`) plus reserved-word rejection. Remaining work is to enforce that

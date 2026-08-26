@@ -64,8 +64,19 @@ class UrlControllerTest {
     @MockitoBean
     private UserRepositoryPort userRepository;
 
+    @MockitoBean
+    private ClientAddressResolver clientAddressResolver;
+
     private static final String TEST_URL = "https://www.example.com/very/long/url";
     private static final String TEST_ID = "abc123";
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUpRateLimitAllow() {
+        org.mockito.Mockito.when(clientAddressResolver.resolve(org.mockito.ArgumentMatchers.any()))
+                .thenReturn("127.0.0.1");
+        org.mockito.Mockito.when(rateLimiter.tryAcquire(any(), anyString()))
+                .thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
+    }
 
     @Test
     @DisplayName("POST /api/v1/urls should shorten URL successfully (Anonymous)")
@@ -76,7 +87,6 @@ class UrlControllerTest {
 
         // Expect shorten called with null customAlias and null userId (anonymous)
         when(shortenUrlUseCase.shorten(eq(TEST_URL), isNull(), isNull())).thenReturn(shortUrl);
-        when(rateLimiter.isAllowed(anyString())).thenReturn(true);
 
         // When/Then
         mockMvc.perform(post("/api/v1/urls")
@@ -100,7 +110,6 @@ class UrlControllerTest {
         // Note: In this test with TestSecurityConfig, user is anonymous, so userId is
         // null.
         when(shortenUrlUseCase.shorten(eq(TEST_URL), eq(customAlias), isNull())).thenReturn(shortUrl);
-        when(rateLimiter.isAllowed(anyString())).thenReturn(true);
 
         // When/Then
         mockMvc.perform(post("/api/v1/urls")
@@ -143,11 +152,28 @@ class UrlControllerTest {
     }
 
     @Test
+    @DisplayName("GET /{id} should return 429 with Retry-After when redirect limit exceeded")
+    void shouldReturn429WithRetryAfterWhenRedirectLimited() throws Exception {
+        when(rateLimiter.tryAcquire(eq(ca.tyny.urlshortener.core.ports.outgoing.RateLimitScope.REDIRECT),
+                anyString()))
+                .thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.block(30));
+
+        mockMvc.perform(get("/" + TEST_ID))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "30"))
+                .andExpect(header().string("RateLimit-Remaining", "0"));
+
+        verify(getUrlUseCase, never()).getOriginalUrl(anyString());
+        verify(analyticsPort, never()).track(any());
+    }
+
+    @Test
     @DisplayName("POST /api/v1/urls should return 429 when rate limit exceeded")
     void shouldReturn429WhenRateLimitExceeded() throws Exception {
         // Given
         ShortenRequest request = new ShortenRequest(TEST_URL, null);
-        when(rateLimiter.isAllowed(anyString())).thenReturn(false);
+        when(rateLimiter.tryAcquire(any(), anyString()))
+                .thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.block(30));
 
         // When/Then
         mockMvc.perform(post("/api/v1/urls")
@@ -164,7 +190,6 @@ class UrlControllerTest {
         // Given
         String customAlias = "existing-alias";
         ShortenRequest request = new ShortenRequest(TEST_URL, customAlias);
-        when(rateLimiter.isAllowed(anyString())).thenReturn(true);
         when(shortenUrlUseCase.shorten(eq(TEST_URL), eq(customAlias), isNull()))
                 .thenThrow(new ca.tyny.urlshortener.core.exception.AliasAlreadyExistsException(customAlias));
 

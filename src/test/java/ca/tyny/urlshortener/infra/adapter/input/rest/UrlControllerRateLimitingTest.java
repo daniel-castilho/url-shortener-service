@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -45,8 +46,13 @@ class UrlControllerRateLimitingTest {
     @MockitoBean
     private UserRepositoryPort userRepository;
 
+    @MockitoBean
+    private ClientAddressResolver clientAddressResolver;
+
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.when(clientAddressResolver.resolve(org.mockito.ArgumentMatchers.any()))
+                .thenReturn("127.0.0.1");
         when(shortenUrlUseCase.shorten(anyString(), org.mockito.ArgumentMatchers.isNull(),
                 org.mockito.ArgumentMatchers.isNull()))
                 .thenReturn(new ca.tyny.urlshortener.core.model.ShortUrl("abc123", "https://example.com",
@@ -56,7 +62,8 @@ class UrlControllerRateLimitingTest {
     @Test
     void whenLimitExceeded_thenReturns429() throws Exception {
         // First request allowed
-        when(rateLimiter.isAllowed("127.0.0.1")).thenReturn(true);
+        when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), anyString()))
+                .thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(10));
         mockMvc.perform(post("/api/v1/urls")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"originalUrl\":\"https://example.com\"}")
@@ -67,7 +74,8 @@ class UrlControllerRateLimitingTest {
                 .andExpect(status().isOk());
 
         // Second request exceeds limit
-        when(rateLimiter.isAllowed("127.0.0.1")).thenReturn(false);
+        when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), anyString()))
+                .thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.block(42));
         mockMvc.perform(post("/api/v1/urls")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"originalUrl\":\"https://example.com\"}")
@@ -75,6 +83,26 @@ class UrlControllerRateLimitingTest {
                             request.setRemoteAddr("127.0.0.1");
                             return request;
                         }))
-                .andExpect(status().isTooManyRequests());
+                .andExpect(status().isTooManyRequests())
+                .andExpect(
+                        result -> org.junit.jupiter.api.Assertions.assertEquals("42",
+                                result.getResponse().getHeader("Retry-After")));
+    }
+
+    @Test
+    void whenRedirectLimitExceeded_thenReturns429BeforeLookup() throws Exception {
+        when(rateLimiter.tryAcquire(ca.tyny.urlshortener.core.ports.outgoing.RateLimitScope.REDIRECT,
+                "127.0.0.1"))
+                .thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.block(15));
+
+        mockMvc.perform(get("/whatever").with(request -> {
+                    request.setRemoteAddr("127.0.0.1");
+                    return request;
+                }))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(result -> org.junit.jupiter.api.Assertions.assertEquals("15",
+                        result.getResponse().getHeader("Retry-After")));
+
+        org.mockito.Mockito.verifyNoInteractions(getUrlUseCase);
     }
 }

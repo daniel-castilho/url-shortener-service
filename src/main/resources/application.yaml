@@ -63,8 +63,15 @@ management:
 # Rate Limiting
 # ========================================
 rate-limiter:
-  limit: 60      # Maximum requests per window
-  window: PT1M   # Time window (ISO-8601 Duration format: 1 Minute)
+  enabled: true       # Master switch; when false nothing touches Redis
+  limit: 60           # SHORTEN scope: max requests per window (bucket capacity)
+  window: PT1M        # SHORTEN scope: full refill time (ISO-8601 Duration)
+  redirect-limit: 120 # REDIRECT scope: bucket capacity for GET /{id} (anti-enumeration)
+  redirect-window: PT1M
+  client-ip-header: X-Forwarded-For  # Trusted only from trusted-proxy-cidrs peers
+  trusted-proxy-cidrs:              # Peers allowed to set the client-ip-header
+    - 127.0.0.0/8
+    - ::1/128
 
 # ========================================
 # Resilience4j Circuit Breakers
