@@ -3,15 +3,16 @@ package ca.tyny.urlshortener.core.idgeneration;
 import ca.tyny.urlshortener.core.model.User;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
-@Component
-@RequiredArgsConstructor
 public class VanityUrlIdStrategy implements UrlIdGenerationStrategy {
 
     private final UserRepositoryPort userRepository;
     private final UrlRepositoryPort urlRepository;
+
+    public VanityUrlIdStrategy(UserRepositoryPort userRepository, UrlRepositoryPort urlRepository) {
+        this.userRepository = userRepository;
+        this.urlRepository = urlRepository;
+    }
 
     @Override
     public boolean supports(String customAlias) {

@@ -1,7 +1,11 @@
 package ca.tyny.urlshortener.infra.config;
 
 import ca.tyny.urlshortener.core.idgeneration.Base62CodeGenerator;
+import ca.tyny.urlshortener.core.idgeneration.CompositeUrlIdGenerator;
+import ca.tyny.urlshortener.core.idgeneration.RandomUrlIdStrategy;
 import ca.tyny.urlshortener.core.idgeneration.UrlIdGenerator;
+import ca.tyny.urlshortener.core.idgeneration.UrlIdGenerationStrategy;
+import ca.tyny.urlshortener.core.idgeneration.VanityUrlIdStrategy;
 import ca.tyny.urlshortener.core.ports.outgoing.AuthenticationPort;
 import ca.tyny.urlshortener.core.ports.outgoing.IdGeneratorPort;
 import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
@@ -11,12 +15,15 @@ import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
 import ca.tyny.urlshortener.core.service.QuotaService;
+import ca.tyny.urlshortener.core.service.UrlShortenerService;
 import ca.tyny.urlshortener.core.service.UserService;
 import ca.tyny.urlshortener.core.validation.ReservedWordsValidator;
-import ca.tyny.urlshortener.core.service.UrlShortenerService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
+
+import java.util.List;
 
 @Configuration
 public class ServiceConfig {
@@ -47,5 +54,32 @@ public class ServiceConfig {
             AuthenticationPort authenticationPort,
             IdGeneratorPort idGeneratorPort) {
         return new UserService(userRepository, passwordEncoder, tokenPort, authenticationPort, idGeneratorPort);
+    }
+
+    @Bean
+    public ReservedWordsValidator reservedWordsValidator() {
+        return new ReservedWordsValidator();
+    }
+
+    @Bean
+    public RandomUrlIdStrategy randomUrlIdStrategy(IdGeneratorPort idGenerator) {
+        return new RandomUrlIdStrategy(idGenerator);
+    }
+
+    @Bean
+    @Order(1)
+    public VanityUrlIdStrategy vanityUrlIdStrategy(UserRepositoryPort userRepository,
+            UrlRepositoryPort urlRepository) {
+        return new VanityUrlIdStrategy(userRepository, urlRepository);
+    }
+
+    @Bean
+    public QuotaService quotaService(UserRepositoryPort userRepository) {
+        return new QuotaService(userRepository);
+    }
+
+    @Bean
+    public CompositeUrlIdGenerator compositeUrlIdGenerator(List<UrlIdGenerationStrategy> strategies) {
+        return new CompositeUrlIdGenerator(strategies);
     }
 }

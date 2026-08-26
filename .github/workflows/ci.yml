@@ -20,20 +20,9 @@ jobs:
       - name: Run unit tests
         run: mvn test
       - name: Architecture boundary check
-        run: |
-          VIOLATIONS=$(grep -rEn "import ca\.tyny\.urlshortener\.infra" src/main/java/ca/tyny/urlshortener/core || true)
-          if [ -n "$VIOLATIONS" ]; then
-            echo "ERROR: core/ imports infra:"
-            echo "$VIOLATIONS"
-            exit 1
-          fi
-          FRAMEWORK=$(grep -rlE "org\.springframework|org\.mongodb|org\.redisson|io\.jsonwebtoken|io\.micrometer" src/main/java/ca/tyny/urlshortener/core || true)
-          if [ -n "$FRAMEWORK" ]; then
-            echo "ERROR: core/ imports framework types:"
-            echo "$FRAMEWORK"
-            exit 1
-          fi
-          echo "Architecture boundary check passed."
+        run: bash scripts/check-boundaries.sh
+      - name: Boundary gate self-test
+        run: bash scripts/check-boundaries.sh --self-test
 
   integration-tests:
     name: Integration Tests

@@ -168,11 +168,11 @@ variants**. Prefer the pattern that matches existing code; if none fits, ask the
 
 ## 6. Spring Boot conventions
 
-- **Java 21 / Spring Boot 3.5.7.** Annotate services with `@Component`/`@Service`, or register them
-  via `@Bean` in `infra/config` (explicit wiring is preferred for use cases, as in `ServiceConfig`).
-  Keep `core/` annotation-free after the refactor.
-- **Constructor injection only** (`@RequiredArgsConstructor` for Lombok-managed fields, or an explicit
-  constructor). Never field injection.
+- **Java 21 / Spring Boot 3.5.7.** `core/` is annotation-free: no `@Component`/`@Service`, no
+  Lombok. Domain/use-case classes use explicit constructors; beans are registered via `@Bean` in
+  `infra/config` (see `ServiceConfig`). Lombok is allowed in `infra/` adapters only.
+- **Constructor injection only** (`@RequiredArgsConstructor` for Lombok-managed fields in `infra/`,
+  or an explicit constructor). Never field injection.
 - **Typed configuration.** Use `@ConfigurationProperties` (`app.prop.*`, `rate-limiter.*` are the
   pattern). Do **not** scatter new `@Value` fields for config.
 - **Secrets via env vars.** `MONGODB_URI`, `REDIS_HOST`/`REDIS_PORT`, `APP_JWT_SECRET`. The bundled
@@ -198,9 +198,13 @@ variants**. Prefer the pattern that matches existing code; if none fits, ask the
 - Follow the layout of the layer you are editing; Maven/Spring Boot convention. No formatter config is
   committed — keep style consistent manually.
 - Imports: keep them clean and ordered (IDE auto-organize); **no wildcard imports** in new code.
-- Run `mvn test` (fast loop) before commit; run `mvn clean package` after significant changes.
-- There is **no Maven wrapper** (`./mvnw`) and **no `failsafe` plugin** yet — use `mvn`. Converting
-  the integration-test convention to `*IT` + failsafe is tracked in the debt matrix.
+- Run `mvn test` (fast loop) before commit; run `mvn verify` after significant changes — it is the
+  full gate (unit + IT/E2E + JaCoCo coverage floor + SpotBugs + jar).
+- Quality gates: JaCoCo 0.8.15 (LINE ≥ 60%, BRANCH ≥ 60%) and SpotBugs 4.9.8.5 (effort Max,
+  threshold High) fail the build at `verify`. Do not weaken thresholds or add suppressions without
+  explicit human approval.
+- There is **no Maven wrapper** (`./mvnw`) — use `mvn`. Integration tests follow the `*IT` +
+  failsafe convention.
 
 ---
 

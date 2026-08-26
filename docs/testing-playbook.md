@@ -45,10 +45,8 @@ the same change set.
 | **HTTP end-to-end**      | `*IT`                  | `@SpringBootTest(RANDOM_PORT)` + RestAssured + Testcontainers | Full request flow, auth, validation, redirect contracts (`ShortenFlowIT`) |
 | **Release smoke**        | Manual until automated | Compose/local runtime                                     | Small, high-value path before release/deployment                                 |
 
-> **Convention migration (in progress):** the current integration tests are named `*IntegrationTest`
-> and are run by Surefire in `mvn test`. The target convention is `*IT` run by the **maven-failsafe-plugin**
-> in `mvn verify`, so they do not run in the default fast loop. Wire the failsafe plugin and rename the
-> IT classes (tracked in `AGENTS.md` debt item / testing gaps).
+> **Convention (landed):** integration/E2E tests are named `*IT`, run by the **maven-failsafe-plugin**
+> in `mvn verify`, and are excluded from the fast `mvn test` loop.
 
 ### Test placement
 
@@ -81,36 +79,36 @@ shouldDescribeExpectedBehaviour
 mvn test
 ```
 
-This runs `*Test` / `*Tests` classes (domain/application unit, context smoke, and, currently, the
-`*IntegrationTest` classes). It does **not** require Docker.
+This runs `*Test` / `*Tests` classes (domain/application unit and context smoke). It does **not**
+require Docker.
 
 ### 3.2 Integration + E2E — Docker required
 
 ```bash
-mvn test -Dtest='*IntegrationTest'
-# target (post-convention): mvn test -Dtest='*IT' -DfailIfNoTests=false
-# full gate (after failsafe is wired): mvn verify
+mvn test -Dtest='*IT'        # quick targeted run
+# full gate: mvn verify      # failsafe runs *IT during integration-test
 ```
 
 Docker must be available because `BaseIntegrationTest` starts MongoDB and Redis via Testcontainers.
+On hosts running Docker Engine ≥ 29, docker-java needs `api.version = 1.44` in
+`~/.docker-java.properties` (see `AGENTS.md` debt item 16).
 
-### 3.3 Quality checks (target)
+### 3.3 Quality checks
 
 ```bash
-mvn jacoco:check            # once JaCoCo is configured
-mvn spotbugs:check          # once SpotBugs is configured
+mvn verify                   # JaCoCo + SpotBugs run as part of the default lifecycle
+mvn jacoco:check             # coverage alone (LINE ≥ 60%, BRANCH ≥ 60%)
+mvn spotbugs:check           # static analysis alone (effort Max, threshold High)
 ```
 
-These are not yet wired into `pom.xml`; add them as part of hardening (see `AGENTS.md` debt item 12 /
-roadmap). Do not claim a coverage gate exists until the plugin and threshold are configured.
+Both gates are wired into `pom.xml` at the `verify` phase; a build that violates either floor fails.
 
 ### 3.4 Full gate
 
-`mvn verify` is intended to be the complete local gate: Surefire runs `*Test` during `test`,
+`mvn verify` is the complete local gate: Surefire runs `*Test` during `test`,
 maven-failsafe-plugin runs `*IT` during `integration-test`, and quality executions plus the packaged
-jar complete at `verify`. **Currently the failsafe plugin is not wired**, so `mvn verify` does not run
-the integration suite — wire it and rerun before relying on it. `mvn clean package` alone remains a
-production **artifact build**, not a test gate.
+jar complete at `verify`. `mvn clean package` alone remains a production **artifact build**, not a
+test gate.
 
 ---
 
@@ -191,9 +189,8 @@ A feature is not fully covered if its only test mocks the behaviour that carries
 
 Keep this section honest. Move an item out only when an automated test/gate exists.
 
-1. **Failsafe lifecycle — OPEN.** The `pom.xml` has no `maven-failsafe-plugin`, so `mvn verify` does
-   not run the `*IT` suite; the integration tests run under Surefire in `mvn test`. Wire failsafe and
-   rename `*IntegrationTest` → `*IT`, then set the fast-loop boundary correctly.
+1. **Failsafe lifecycle — CLOSED.** `maven-failsafe-plugin` is wired; `*IT` classes run in
+   `mvn verify` and are excluded from the fast `mvn test` loop.
 2. **No complete endpoint × method × role matrix.** Existing tests cover the main shorten/redirect/auth
    flows, not every `SecurityConfig` matcher (and `/actuator/**` exposure is still `permitAll`).
 3. **No rate-limit integration on the redirect path** — only the shorten endpoint is throttled today;
@@ -201,13 +198,14 @@ Keep this section honest. Move an item out only when an automated test/gate exis
 4. **No analytics/click persistence test** — the worker does not persist events yet; add once the
    durable queue + `click_events` collection exist.
 5. **No expiry (TTL) test** — add once `expiresAt`/TTL is implemented.
-6. **No coverage/static-analysis gate configured** — JaCoCo/SpotBugs are not wired; add them with a
-   sensible floor (start 60% line / 40% branch) and enforce locally + CI.
-7. **No CI workflow committed** — add `.github/workflows/ci.yml` running `mvn test`, `*IT` (with
-   Docker), and `mvn clean package` on every push/PR.
+6. **Coverage/static-analysis gate — CLOSED.** JaCoCo 0.8.15 (LINE ≥ 60%, BRANCH ≥ 60%) and SpotBugs
+   4.9.8.5 (effort Max, threshold High) are enforced at `mvn verify`, locally and in CI.
+7. **CI workflow — CLOSED.** `.github/workflows/ci.yml` runs the boundary gate (+ self-test),
+   `mvn test`, `mvn verify` (Testcontainers), and packaging on every push/PR.
 8. **No performance/load baseline** — add a k6/Gatling scenario for the redirect path and record
    p50/p95/p99 as a regression tripwire.
-9. **Boundary check not automated in CI** — add the grep as a local/CI gate once the refactor lands.
+9. **Boundary check automated in CI — CLOSED.** `scripts/check-boundaries.sh` runs locally/CI with a
+   `--self-test` mode proving the gate detects planted violations.
 
 ---
 

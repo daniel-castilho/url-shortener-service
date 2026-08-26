@@ -1,14 +1,14 @@
 package ca.tyny.urlshortener.core.idgeneration;
 
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 import java.util.List;
 
-@Component
-@RequiredArgsConstructor
 public class CompositeUrlIdGenerator implements UrlIdGenerator {
 
     private final List<UrlIdGenerationStrategy> strategies;
+
+    public CompositeUrlIdGenerator(List<UrlIdGenerationStrategy> strategies) {
+        this.strategies = strategies;
+    }
 
     @Override
     public String generateId(String customAlias, String userId) {

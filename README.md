@@ -213,11 +213,14 @@ Implemented on `main`:
   circuit-breaker endpoints.
 - **API docs** — springdoc OpenAPI / Swagger UI, bean validation and structured error responses via a
   global exception handler.
+- **Quality gates** — `mvn verify` enforces JaCoCo coverage (LINE ≥ 60%, BRANCH ≥ 60%), SpotBugs
+  static analysis (effort Max, threshold High), integration/E2E suites via Testcontainers, and an
+  architecture boundary check with self-test. `core/` is framework-free: no Spring/Lombok
+  annotations; beans are wired explicitly in `infra/config`.
 
-> **Scope note adapted from the original README:** the architecture, caching, resiliency and
-> observability structure is in place, but several claims in the previous README (e.g. "invalid IDs
-> never reach the database", persisted analytics, a fully framework-free `core`) were only partially
-> true. The documentation now reflects the code as it stands, and the gaps are listed in the Roadmap.
+> **Scope note adapted from the original README:** earlier revisions of this README overclaimed
+> (e.g. "invalid IDs never reach the database", persisted analytics). The documentation now reflects
+> the code as it stands, and remaining gaps are listed in the Roadmap and in `AGENTS.md` (debt matrix).
 
 ## Roadmap
 
@@ -233,8 +236,9 @@ Deliberately not implemented yet — candidate backlog, in priority order:
   the unique index on `originalUrl`, isolate generated codes from vanity aliases (debt items 3, 4, 7).
   The **contract** is documented in this README and `docs/data-model-decisions.md`.
   **Status: landed** in this codebase.
-- **Fix the framework-free `core` claim** — refactor `UserService` to depend on ports/domain objects
-  and remove Spring annotations from the domain layer; remove inline fully-qualified class names.
+- **Framework-free `core` — landed.** Spring/Lombok annotations removed from the domain layer;
+  beans registered in `infra/config` (`ServiceConfig`); boundary gate enforces it in CI with a
+  self-test. Quality gates (JaCoCo + SpotBugs) run at `mvn verify`.
 - **Validate the destination** — strengthen URL validation (enforce HTTPS, block internal/private IPs
   to mitigate SSRF) and add an extensibility hook for destination reputation checks.
 - **Tighten operational exposure** — restrict `/actuator/**` and Swagger in production; manage schema

@@ -1,14 +1,14 @@
 package ca.tyny.urlshortener.core.idgeneration;
 
 import ca.tyny.urlshortener.core.ports.outgoing.IdGeneratorPort;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 
-@Component
-@RequiredArgsConstructor
 public class RandomUrlIdStrategy implements UrlIdGenerationStrategy {
 
     private final IdGeneratorPort idGenerator;
+
+    public RandomUrlIdStrategy(IdGeneratorPort idGenerator) {
+        this.idGenerator = idGenerator;
+    }
 
     @Override
     public boolean supports(String customAlias) {

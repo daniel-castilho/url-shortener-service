@@ -7,6 +7,25 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ## [Unreleased]
 
+### Added
+
+- **Coverage gate** — `jacoco-maven-plugin` 0.8.15 wired at `verify`: LINE ≥ 60%, BRANCH ≥ 60%
+  (both green; unit suite expanded from 87 to 125 tests to clear the floor).
+- **Static analysis gate** — `spotbugs-maven-plugin` 4.9.8.5 wired at `verify` (effort Max,
+  threshold High); zero findings.
+- **Boundary gate self-test** — `scripts/check-boundaries.sh --self-test` plants a violation in a
+  temp dir and asserts the gate catches it, guarding against silent gate breakage; CI runs both
+  modes.
+
+### Changed
+
+- **Framework-free `core/`** — Spring/Lombok annotations removed from
+  `CompositeUrlIdGenerator`, `RandomUrlIdStrategy`, `VanityUrlIdStrategy`, `QuotaService`,
+  `ReservedWordsValidator`; explicit constructors instead. Beans registered in
+  `infra/config/ServiceConfig`. Lombok remains in use in `infra/` only.
+- **Testcontainers 1.19.3 → 1.21.3** — required for Docker Engine ≥ 29 (API `1.44+`) compatibility;
+  IT/E2E suites run again on current engines.
+
 ### Fixed
 
 - **CI boundary check** — updated grep paths from `com.example.urlshortener` to `ca.tyny.urlshortener`.
@@ -22,6 +41,8 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
   (returns 500 instead of falling through to generic handler).
 - **English-only cleanup** — translated Portuguese comments/logs in `MongoUrlRepository`,
   `ShortUrlEntity`, `MongoCollections`, `UrlIdGenerationStrategy`, `RandomUrlIdStrategy`.
+- **`JwtTokenProvider` default encoding** — signing key bytes now use explicit `StandardCharsets.UTF_8`
+  (SpotBugs `DM_DEFAULT_ENCODING`); token output no longer depends on the JVM platform charset.
 
 ### Changed
 

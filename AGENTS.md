@@ -28,10 +28,10 @@ Sources of truth: `README.md`, `pom.xml`, `src/main/resources/application.yaml`,
 
    _Verification command before declaring a task done:_
    ```bash
-   grep -rEn "import com\.example\.urlshortener\.infra" src/main/java/com/example/urlshortener/core
-   grep -rlE "org\.springframework|org\.mongodb|org\.redisson|io\.jsonwebtoken|io\.micrometer" src/main/java/com/example/urlshortener/core
+   bash scripts/check-boundaries.sh          # must report PASS (0 violations)
+   bash scripts/check-boundaries.sh --self-test   # must PASS: proves the gate detects violations
    ```
-   _Both must return 0 matches._
+   _The self-test plants a violation in a temp dir and asserts the gate catches it — run both._
 
 2. **ID Generation Standard (base62, random, collision retry):**
    Short codes are generated from a **cryptographically secure random** source (`java.security.SecureRandom`)
@@ -97,12 +97,9 @@ Sources of truth: `README.md`, `pom.xml`, `src/main/resources/application.yaml`,
 | **Build the GraalVM native binary** | `mvn clean package -Pnative` | Root |
 | **Start external services (Mongo + Redis)** | `docker-compose up -d` | Root |
 | **Stop external services** | `docker-compose down` | Root |
-| **Architecture boundary check** | the two `grep` commands in Rule 1 | Root |
-| **Coverage gate (if tooling added)** | `mvn verify -Pcoverage` (JaCoCo, planned) | Root |
-
-> **Build caveat:** the `native` profile's `mainClass` is currently `ca.tyny.urlshortener.infra.Application`
-> (a class that does not exist). The correct entry point is `ca.tyny.urlshortener.Application`.
-> Fixing this is tracked in the debt matrix (item 11). Do **not** rely on `-Pnative` until resolved.
+| **Coverage gate** | `mvn verify` (JaCoCo runs at `verify`; LINE ≥ 60%, BRANCH ≥ 60%) | Root |
+| **Static analysis gate** | `mvn verify` (SpotBugs runs at `verify`; effort Max, threshold High) | Root |
+| **Architecture boundary check** | `bash scripts/check-boundaries.sh` (+ `--self-test`) | Root |
 
 ---
 
@@ -240,8 +237,11 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
    Refactored to depend on `UserRepositoryPort`, `TokenPort`, `PasswordEncoderPort`,
    `AuthenticationPort`; REST DTO mapping moved to `AuthController`. — `resolved`
 2. **Spring annotations in `core/`** — `@Component`/`@Service`/`@RequiredArgsConstructor` in
-   `core/idgeneration`, `core/service/QuotaService`, `core/validation/ReservedWordsValidator`. Move to
-   `infra/config` beans so `core/` is annotation-free. — `open`
+   `core/idgeneration`, `core/service/QuotaService`, `core/validation/ReservedWordsValidator`. Lombok
+   and Spring annotations removed from all five affected classes (explicit constructors); beans are
+   now registered in `infra/config` (`ServiceConfig`, with `@Order(1)` so the vanity strategy wins
+   evaluation order in the composite generator). Boundary gate extended with a `lombok` regex check
+   and a `--self-test` mode; wired into CI. — `resolved`
 3. **Land random Base62 in code (Rule 2)** — the locked identity model is random Base62
    (`SecureRandom`) + bounded collision retry; **not** a Redis counter or Hashids. Remaining work is
    to replace `RangeAwareIdGenerator` / `org.hashids` / `SHORTENER_SALT` with that contract (stories
@@ -280,6 +280,12 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     (`set(get()+1)`), which loses increments under concurrency. Use `$inc` (Rule 7). — `open`
 15. **In-memory analytics queue drops events** — `LinkedBlockingQueue` (100k) discards events when full
     with only a warning; replace with a durable, backpressure-aware queue (item 5). — `open`
+16. **Quality gates wired** — JaCoCo 0.8.15 (LINE ≥ 60%, BRANCH ≥ 60%) and SpotBugs 4.9.8.5
+    (effort Max, threshold High) run at `mvn verify`; both gates green. Testcontainers upgraded
+    1.19.3 → 1.21.3. **Environment note:** Docker Engine ≥ 29 only serves API `1.44+` while docker-java
+    probes with older defaults — machines running such engines need `~/.docker-java.properties`
+    containing `api.version = 1.44` (already configured on the dev workstation; CI runners are
+    unaffected). — `resolved`
 
 ---
 

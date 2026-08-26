@@ -5,16 +5,14 @@ import ca.tyny.urlshortener.core.model.QuotaUsage;
 import ca.tyny.urlshortener.core.model.SubscriptionPlan;
 import ca.tyny.urlshortener.core.model.User;
 import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
-
-@Service
-@RequiredArgsConstructor
 public class QuotaService {
 
     private final UserRepositoryPort userRepository;
+
+    public QuotaService(UserRepositoryPort userRepository) {
+        this.userRepository = userRepository;
+    }
 
     public void checkVanityUrlQuota(User user, String alias) {
         SubscriptionPlan plan = user.plan();

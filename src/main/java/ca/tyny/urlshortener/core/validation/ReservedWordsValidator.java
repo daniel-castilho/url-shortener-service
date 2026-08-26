@@ -1,10 +1,7 @@
 package ca.tyny.urlshortener.core.validation;
 
-import org.springframework.stereotype.Component;
-
 import java.util.Set;
 
-@Component
 public class ReservedWordsValidator {
 
     private static final Set<String> RESERVED_WORDS = Set.of(

@@ -104,6 +104,19 @@ non-obvious failure or design decision cost real debugging time.
 - **GraalVM native `mainClass` must point at the real class.** The `native` profile referenced
   `ca.tyny.urlshortener.infra.Application` (a class that does not exist; the entry point is
   `ca.tyny.urlshortener.Application`). A wrong `mainClass` silently breaks `-Pnative`.
+- **Framework-free core = explicit wiring, not annotation purgery.** Removing `@Component` from
+  `core/` classes without registering replacements breaks the Spring context at startup. The pattern
+  that works: explicit constructors in `core/`, `@Bean` methods in `infra/config/ServiceConfig`
+  (with `@Order(1)` on the vanity strategy so the composite generator evaluates it first). Lombok
+  stays available in `infra/` adapters — the boundary is what matters, not zero-Lombok everywhere.
+- **A gate without a self-test can rot silently.** The CI boundary check grepped the wrong package
+  path after a rename and reported PASS on a violating tree — a green check proved nothing. Any
+  boolean gate (grep, regex, policy) needs a `--self-test` mode that plants a violation and asserts
+  the gate catches it; run both modes in CI.
+- **Quality gates need headroom or they get bypassed.** Wiring JaCoCo at 60% against an existing
+  codebase sitting at ~41% line coverage invites "skip the gate" pressure. Land the gate *and* the
+  tests that clear it in the same change set (unit suite went 87 → 125 tests), so the floor starts
+  honest.
 
 ## Operations
 
