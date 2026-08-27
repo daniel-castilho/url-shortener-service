@@ -1,7 +1,24 @@
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
-    <property name="CONSOLE_LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} %X{traceId} %X{spanId} - %msg%n"/>
-    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <!-- Plain console/file appenders are the local dev default (no active profile). -->
+    <springProfile name="!json">
+        <property name="CONSOLE_LOG_PATTERN" value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} %X{traceId} %X{spanId} - %msg%n"/>
+        <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+    </springProfile>
+
+    <!-- Structured (JSON) logging to stdout: activate with -Dspring.profiles.active=json
+         so a log shipper can parse one JSON object per line. Only traceId/spanId are
+         copied from the MDC; no PII/secrets are added here (see GlobalExceptionHandler). -->
+    <springProfile name="json">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <customFields>{"service":"url-shortener"}</customFields>
+                <includeMdcKeyName>traceId</includeMdcKeyName>
+                <includeMdcKeyName>spanId</includeMdcKeyName>
+            </encoder>
+        </appender>
+    </springProfile>
 
     <appender name="ASYNC" class="ch.qos.logback.classic.AsyncAppender">
         <appender-ref ref="CONSOLE"/>

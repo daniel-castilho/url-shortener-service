@@ -54,6 +54,13 @@ class MetricsIT extends BaseIntegrationTest {
         }
 
         @Test
+        @DisplayName("Should expose the analytics queue depth gauge")
+        void shouldExposeAnalyticsQueueDepthGauge() {
+                // When/Then
+                assertThat(meterRegistry.find("analytics.queue.depth").gauge()).isNotNull();
+        }
+
+        @Test
         @DisplayName("Should count expired URL hits")
         void shouldCountExpiredUrls() {
                 // Given

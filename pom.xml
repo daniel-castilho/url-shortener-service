@@ -60,6 +60,13 @@
             <version>2.2.0</version>
         </dependency>
 
+        <!-- Structured (JSON) logging — logstash-logback-encoder 8.x (logback 1.5, Jackson 2) -->
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+            <version>8.1</version>
+        </dependency>
+
         <!-- Developer Tools -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

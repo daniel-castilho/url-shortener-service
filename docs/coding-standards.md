@@ -213,6 +213,18 @@ variants**. Prefer the pattern that matches existing code; if none fits, ask the
   collector tail-sampling (`deploy/otel/otel-collector-config.yml`). Logback patterns include
   `%X{traceId}` `%X{spanId}`. Metrics must be registered once (one adapter owns each meter) and
   recorded exactly once per business event.
+- **Structured logging (applied).** `logback-spring.xml` provides a `json` profile (activate with
+  `-Dspring.profiles.active=json`) using `logstash-logback-encoder`. The JSON output includes
+  `@timestamp`, `level`, `logger`, `message`, `service`, `traceId`, `spanId`. **Never log secrets/PII**:
+  no passwords, JWTs, bearer tokens, full destination URLs with credentials, or IPs as high-cardinality
+  tags. The default profile (no active profile) stays plain text for local dev.
+- **Tracing rules.** All distributed tracing is via Spring Boot auto-instrumentation
+  (`micrometer-tracing-bridge-otel` + OTLP exporter). **No manual span creation in `core/`**.
+  The redirect hot path must not be degraded by tracing — spans are async/best-effort.
+  Exporter is configurable (`management.otlp.tracing.endpoint`); dev uses in-memory/basic exporter.
+- **Metric tag rules.** Use **low-cardinality tags only** (e.g., `pipeline`, `scope`, `status`).
+  Never tag with user ID, IP, raw short code, or any high-cardinality value. Fixed tag conventions
+  are defined in `MicrometerMetricsAdapter` and `MetricsService`.
 - **Bean scoping.** Default singleton; services are stateless — no per-request mutable fields.
   The analytics event queue is durable (Redis Stream), not in-memory.
 - **DTOs for every external input/output.** Never expose domain entities through the API.

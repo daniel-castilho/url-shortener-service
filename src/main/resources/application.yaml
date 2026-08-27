@@ -1,4 +1,5 @@
 server:
+  shutdown: graceful
   undertow:
     threads:
       io: 16           # I/O threads (Usually cores * 2)
@@ -12,6 +13,8 @@ spring:
   threads:
     virtual:
       enabled: true  # Enables Virtual Threads across the container (Undertow)
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
   data:
     mongodb:
       uri: ${MONGODB_URI:mongodb://localhost:27017/url_shortener}
@@ -47,6 +50,16 @@ app:
     # Token expiration times
     expiration-ms: ${APP_JWT_EXPIRATION_MS:86400000}        # 24 hours (in milliseconds)
     refresh-expiration-ms: ${APP_JWT_REFRESH_EXPIRATION_MS:604800000}  # 7 days (in milliseconds)
+
+  analytics:
+    # Retention purge for click_events (run daily at 02:00 UTC)
+    retention-days: ${APP_ANALYTICS_RETENTION_DAYS:90}
+    retention-cron: ${APP_ANALYTICS_RETENTION_CRON:0 0 2 * * *}
+    poll-interval-ms: ${APP_ANALYTICS_POLL_INTERVAL_MS:5000}
+    stream-key: ${APP_ANALYTICS_STREAM_KEY:urlshortener:clicks}
+    group: ${APP_ANALYTICS_GROUP:click-worker}
+    consumer: ${APP_ANALYTICS_CONSUMER:worker-1}
+    batch-size: ${APP_ANALYTICS_BATCH_SIZE:500}
 
 # ========================================
 # Observability & Monitoring

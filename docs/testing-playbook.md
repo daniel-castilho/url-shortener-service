@@ -152,6 +152,8 @@ policy intentionally changes, update `AGENTS.md`, coding standards and architect
 | **Error handler**          | `GlobalExceptionHandlerTest`                                                          | Standard bodies for 400/401/403/404/409/500                                    |
 | **Persistence**            | `MongoUrlRepositoryIntegrationTest`, `MongoUserRepositoryTest`                       | Real Mongo save/findById; `_id` uniqueness; duplicate original URL allowed     |
 | **Cache / Redis**          | `RedisIntegrationTest`, `RedisUrlCacheTest`, `RedisRateLimiterAdapterTest`           | Redis cache get/put + bloom filter, rate limiter counting                       |
+| **Analytics / clicks**     | `ClickPipelineIT`, `RedisClickEventQueueTest`, `RedisClickEventQueueFailOpenTest`    | Durable Redis Stream queue, batch persist + `$inc`, fail-open policy            |
+| **Tracing / metrics**      | `TracingFailOpenIT`, `MetricsIT`, `MicrometerMetricsAdapterTest`, `MetricsServiceTest` | OTel tracing fail-open, latency timers at runtime, Prometheus metrics registration |
 | **End-to-end**             | `UrlShortenerIntegrationTest` (→ `ShortenFlowIT` target)                              | Run against `RANDOM_PORT` + Testcontainers; full shorten → redirect flow        |
 | **Context smoke**          | `ApplicationTests` (base)                                                             | Spring context start                                                           |
 
@@ -184,6 +186,9 @@ requirement / risk
 | Warm cache never serves an expired link     | Adapter + E2E      | `RedisUrlCacheTest`, `ExpiredUrlIT`              | Slice + E2E step         |
 | Schema migrations run once, idempotent, fail-fast | Unit + Adapter | `MongoSchemaMigratorTest`, `SchemaMigrationIT`   | `test`; then `*Migration*IT` |
 | Expiry / migration metrics registered       | E2E                | `MetricsIT`                                      | E2E step                 |
+| Tracing spans controller → service → DB   | E2E                | `TracingFailOpenIT`                              | E2E step                 |
+| Latency timers recorded at runtime (p50/p95/p99) | E2E            | `MetricsIT`                                      | E2E step                 |
+| Load baseline passes thresholds            | Manual / CI        | `scripts/performance-baseline.sh`                | Manual; `load-test.yml`  |
 | Domain independent of infrastructure       | Static boundary    | Rule-1 grep                                       | Local; add to CI         |
 
 A feature is not fully covered if its only test mocks the behaviour that carries the main risk.

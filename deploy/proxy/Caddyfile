@@ -1,0 +1,60 @@
+# Caddy TLS Termination for URL Shortener Service
+#
+# Caddy automatically provisions and renews TLS certificates via Let's Encrypt
+# (or uses provided certs). Simpler than NGINX for on-prem deployments.
+#
+# Usage:
+#   1. Save as Caddyfile
+#   2. Replace short.example.com with your domain
+#   3. Run: caddy run --config Caddyfile
+#
+# The app must be configured with:
+#   rate-limiter:
+#     client-ip-header: X-Forwarded-For
+#     trusted-proxy-cidrs:
+#       - 10.0.0.0/8
+#       - 172.16.0.0/12
+#       - 192.168.0.0/16
+
+{
+    # Admin API (optional)
+    # admin localhost:2019
+    
+    # Email for Let's Encrypt (change for production)
+    email admin@example.com
+    
+    # Use local certs if preferred (comment out email + add tls directive in site)
+    # local_certs
+}
+
+short.example.com {
+    # For local certs instead of Let's Encrypt:
+    # tls /etc/caddy/certs/tls.crt /etc/caddy/certs/tls.key
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    # Reverse proxy to app
+    reverse_proxy 127.0.0.1:8080 {
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {host}
+        header_up X-Forwarded-Port {server_port}
+        
+        # Timeouts
+        transport http {
+            connect_timeout 5s
+            read_timeout 30s
+            write_timeout 10s
+        }
+    }
+
+    # Health endpoints (no special handling needed, just pass through)
+    # They're included in the main reverse_proxy above
+}

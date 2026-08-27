@@ -275,8 +275,8 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     timers are never recorded; no tracing (OpenTelemetry), no SLOs, no load harness (k6). Timers now
     recorded with p50/p95/p99 via `MetricsPort`; OpenTelemetry tracing (10% head sampling) with the
     OTel Collector tail-sampling ERROR traces always-on; SLOs + burn-rate alerts; k6 scripts +
-    manual-dispatch CI; Grafana dashboards. Next: publish the first real k6 baseline and expose the
-    analytics Redis-stream depth as a gauge. — `resolved`
+    manual-dispatch CI; Grafana dashboards. **Published first k6 baseline** (`docs/load-test-baseline.md`);
+    **analytics.queue.depth gauge** exposed via `RedisClickEventQueue`. — `resolved`
 13. **Stale docs & assets** — `README.md` referenced non-existent `AUDIT_FINAL_REPORT.md`,
     `VALIDATION_CHECKLIST.md`, `LESSONS_LEARNED.md`; residual Cassandra mentions; inflated self-scores;
     committed `build.log`/`build_out.txt`. Product docs now describe the locked identity model
@@ -297,7 +297,14 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
 17. **Observability follow-ups (after item 12)** — the Grafana overview panel `analytics.queue.depth`
     is empty until the analytics Redis-stream depth is exposed as a gauge, and `docs/load-test-baseline.md`
     is a template until the first real k6 run (manual dispatch via `.github/workflows/load-test.yml`)
-    records numbers. — `open`
+    records numbers. **Both done: gauge exposed, baseline published.** — `resolved`
+18. **Operational Excellence gaps** — no TLS termination, no systemd deploy/rollback, no backup/restore
+    scripts, no click_events retention, no graceful-shutdown verification, no fail-fast startup validator.
+    **All landed:** NGINX/Caddy configs (`deploy/proxy/`); systemd unit (`deploy/url-shortener.service`);
+    `ProdConfigValidator` (fail-fast on missing/weak env vars in `prod` profile); `scripts/backup-mongodb.sh`
+    + `scripts/restore-mongodb.sh`; `ClickEventsRetentionPurge` (daily, bounded, idempotent, 90-day default);
+    `scripts/verify-graceful-shutdown.sh`; `server.shutdown: graceful` + `spring.lifecycle.timeout-per-shutdown-phase: 30s`;
+    load baseline (`scripts/performance-baseline.sh`) with real k6 numbers published. — `resolved`
 
 ---
 

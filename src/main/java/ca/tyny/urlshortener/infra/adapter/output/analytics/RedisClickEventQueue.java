@@ -3,6 +3,7 @@ package ca.tyny.urlshortener.infra.adapter.output.analytics;
 import ca.tyny.urlshortener.core.model.ClickEvent;
 import ca.tyny.urlshortener.core.ports.outgoing.AnalyticsPort;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,6 +59,25 @@ public class RedisClickEventQueue implements AnalyticsPort {
                 .description("Click events dropped (Redis unavailable or stream write failed)")
                 .tag("pipeline", "clicks")
                 .register(meterRegistry);
+        Gauge.builder("analytics.queue.depth",
+                        this,
+                        RedisClickEventQueue::streamLength)
+                .description("Approximate number of click events pending in the Redis Stream (XLEN)")
+                .tag("pipeline", "clicks")
+                .register(meterRegistry);
+    }
+
+    /**
+     * Current stream depth for the metrics gauge. Fail-open: reports 0 when
+     * Redis is unavailable so scraping never breaks.
+     */
+    long streamLength() {
+        try {
+            Long len = redisTemplate.opsForStream().size(streamKey);
+            return len != null ? len : 0L;
+        } catch (Exception e) {
+            return 0L;
+        }
     }
 
     @Override

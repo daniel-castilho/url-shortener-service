@@ -264,12 +264,27 @@ Deliberately not implemented yet — candidate backlog, in priority order:
 - **Tighten operational exposure — landed.** Actuator endpoints tiered (liveness/readiness/info public; health detail requires ADMIN; metrics/prometheus require ADMIN/METRICS_VIEWER; other actuator endpoints require ADMIN). Swagger conditionally enabled via `app.security.swagger.enabled` (default false). Health detail defaults to `when-authorized`. Swagger loaded conditionally via `@ConditionalOnProperty`.
 - **Fix the GraalVM native build** — correct the `mainClass` in the `native` profile, and verify the
   documented startup/memory targets under load.
-- **Observability — landed.** Timer metrics (`id.generation.duration`, `url.retrieval.duration`,
-  p50/p95/p99) behind `MetricsPort`; OpenTelemetry tracing (10% head sampling, collector tail-sampling
-  always keeps ERROR traces, fail-open proven by `TracingFailOpenIT`); SLOs + burn-rate alerts;
-  Prometheus recording rules; Grafana dashboards; k6 load tests with manual-dispatch CI
-  (`.github/workflows/load-test.yml`). Next (debt item 17): expose the analytics Redis-stream depth
-  gauge and publish the first k6 baseline.
+- **Observability (four pillars) — landed.** Micrometer metrics + Prometheus endpoint with latency
+  percentiles and the `id.generation.duration` / `url.retrieval.duration` timers; OpenTelemetry
+  tracing via Spring Boot auto-instrumentation (`micrometer-tracing-bridge-otel`) exported through
+  OTLP/HTTP with 10% head sampling and collector **tail-sampling that always keeps ERROR traces**
+  (`deploy/otel/otel-collector-config.yml`); `traceId`/`spanId` MDC in logs; **SLOs** — availability
+  99.9%, latency p99 < 200 ms, error rate < 0.1% (`docs/slos.md`, Prometheus recording rules +
+  burn-rate alerts under `deploy/monitoring/`); Grafana dashboards (`dashboards/`); k6 load tests
+  (`load-tests/`, manual dispatch via `.github/workflows/load-test.yml`) and baselines
+  (`docs/load-test-baseline.md`). **Structured (JSON) logging** via a `json` profile (`-Dspring.profiles.active=json`)
+  using `logstash-logback-encoder`; default profile stays plain for local dev. Tracing is fail-open,
+  proven by `TracingFailOpenIT`. See `docs/observability.md`.
+- **Operational excellence — landed.** TLS termination via reverse proxy (NGINX/Caddy configs in
+  `deploy/proxy/`); systemd unit (`deploy/url-shortener.service`) with graceful shutdown
+  (`server.shutdown: graceful`, `spring.lifecycle.timeout-per-shutdown-phase: 30s`); fail-fast
+  startup validation (`ProdConfigValidator` checks required env vars in `prod` profile); MongoDB
+  backup/restore scripts (`scripts/backup-mongodb.sh`, `scripts/restore-mongodb.sh`); `click_events`
+  retention purge (daily at 02:00 UTC, deletes events older than `app.analytics.retention-days`,
+  default 90 days, in bounded batches); load baseline script (`scripts/performance-baseline.sh`)
+  with k6 thresholds-as-code; graceful shutdown verification (`scripts/verify-graceful-shutdown.sh`).
+- **CI** — `ci.yml` runs `mvn verify` with Testcontainers on push/PR; `load-test.yml` runs k6 on manual
+  dispatch.
 - **CI** — `ci.yml` runs `mvn verify` with Testcontainers on push/PR; `load-test.yml` runs k6 on manual
   dispatch.
 

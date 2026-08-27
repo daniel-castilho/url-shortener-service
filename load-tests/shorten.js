@@ -20,15 +20,11 @@ export const options = {
   },
 };
 
-function randomUrl() {
-  const n = Math.random().toString(36).slice(2, 10);
-  return `https://example.com/load/${n}?t=${Date.now()}`;
-}
-
 export default function () {
+  const n = Math.random().toString(36).slice(2, 10);
   const res = http.post(
     `${BASE_URL}/api/v1/urls`,
-    JSON.stringify({ url: randomUrl(), customAlias: null }),
+    JSON.stringify({ originalUrl: `https://example.com/shorten/${n}`, customAlias: null }),
     { headers: { 'Content-Type': 'application/json' } }
   );
   check(res, {

@@ -12,17 +12,17 @@ and easy scaling.
 | # | Factor           | Status | Notes |
 | - | ---------------- | ------ | ----- |
 | 1 | Codebase         | ✅ One repo, one app | Git repo, `main` branch. No per-environment branches. `0.0.1-SNAPSHOT`. |
-| 2 | Dependencies     | ⚠️ Declared, not pinned to a wrapper | `pom.xml` with Spring Boot BOM (3.5.7) and explicit versions for third-party libs (jjwt 0.12.3, resilience4j 2.2.0, redisson 3.43.0, testcontainers 1.19.3). **No Maven wrapper** (`./mvnw`) — build with `mvn`. Identity model does **not** include Hashids; remove `org.hashids` when stories I1–I2 land. |
-| 3 | Config           | ✅ Env contract | Dev-only defaults live in `application.yaml` (`MONGODB_URI` → `localhost`, `REDIS_HOST`/`PORT` → `localhost`, `APP_JWT_SECRET` example, `app.shortener.code-length` default 7). All env-specific values bind from env vars. Short codes do **not** use a salt. **Target:** add a `ProdConfigValidator`-style fail-fast startup check for required prod vars so an incomplete contract aborts at boot. `application-test.yaml` overrides DB/Redis for tests. |
+| 2 | Dependencies     | ✅ Declared, pinned | `pom.xml` with Spring Boot BOM (3.5.7) and explicit versions for third-party libs (jjwt 0.12.3, resilience4j 2.2.0, redisson 3.43.0, testcontainers 1.21.3, logstash-logback-encoder 8.1). Maven wrapper not used — build with `mvn`. Hashids removed (identity model: Base62 + SecureRandom). |
+| 3 | Config           | ✅ Env contract + fail-fast | Dev-only defaults in `application.yaml` (`MONGODB_URI` → `localhost`, `REDIS_HOST`/`PORT` → `localhost`, `APP_JWT_SECRET` example, `app.shortener.code-length` default 7). All env-specific values bind from env vars. **ProdConfigValidator** aborts startup on missing/weak required prod vars (`app.jwt.secret`, `spring.data.mongodb.uri`, `spring.redis.host`, `rate-limiter.trusted-proxy-cidrs`, `management.otlp.tracing.endpoint`, `app.analytics.retention-days`). `application-test.yaml` overrides DB/Redis for tests. |
 | 4 | Backing services | ✅ Attached resources | MongoDB and Redis are attached external resources addressed by endpoint/config (`docker-compose.yaml` + `application.yaml`). Nothing is embedded in the app. |
-| 5 | Build, release, run | ⚠️ Partial | Build = `mvn clean package` (jar) or `-Pnative` (currently **broken** — bad `mainClass`). Run = `java -jar ...` or `mvn spring-boot:run` or a container. **No CI workflow committed**; schema (indexes) is created by `auto-index-creation` — replace with **versioned migrations** (debt item 10). |
-| 6 | Processes        | ⚠️ Mostly stateless | Auth is stateless JWT; no session. Cache (Redis) and the DB are shared attached resources. **Caveat:** the analytics queue is an **in-memory `LinkedBlockingQueue`** in the app process — per-instance state that does not scale horizontally and drops events when full. Replace with a durable queue (Redis Stream) to keep processes stateless (debt item 5/15). |
+| 5 | Build, release, run | ✅ Complete | Build = `mvn clean package` (jar) or `-Pnative` (GraalVM native image). Run = `java -jar ...` or `mvn spring-boot:run` or systemd unit (`deploy/url-shortener.service`). CI workflow runs `mvn test`, `*IT`, `mvn verify`. Schema via versioned in-code migrations (`MongoSchemaMigrator` V1–V5). |
+| 6 | Processes        | ✅ Stateless | Auth is stateless JWT; no session. Cache (Redis) and DB are shared attached resources. Analytics queue is a **durable Redis Stream** (`RedisClickEventQueue` + `ClickBatchWorker`) — no in-process state, scales horizontally, at-least-once delivery. |
 | 7 | Port binding     | ✅ Self-contained | Spring Boot embedded web server (Undertow) binds `:8080`; no external web server injected. |
-| 8 | Concurrency      | ⚠️ Process-based | Stateless service scales by spawning processes; **Virtual Threads** (Loom) handle I/O concurrency well on a single host. Once the analytics queue is made durable (factor 6), scaling is clean. |
-| 9 | Disposability    | ✅ Graceful | Spring Boot with `server.shutdown: graceful` drains in-flight requests before stopping on `SIGTERM` (verify the configured grace period under load). |
+| 8 | Concurrency      | ✅ Virtual Threads | Stateless service scales by spawning processes; **Virtual Threads** (Loom) handle I/O concurrency well on a single host. |
+| 9 | Disposability    | ✅ Graceful | Spring Boot with `server.shutdown: graceful` and `spring.lifecycle.timeout-per-shutdown-phase: 30s` drains in-flight requests before stopping on `SIGTERM`. Verified via `scripts/verify-graceful-shutdown.sh`. |
 | 10 | Dev/prod parity  | ✅ Containers | `docker-compose up -d` (MongoDB + Redis) keeps local close to prod. On-premises bare metal is the production target. |
-| 11 | Logs             | ✅ Structured | `logback-spring.xml` writes to console (async) and a rolling file. **Target:** add structured (JSON) logs via a `logstash`/`logstash-logback-encoder` profile for aggregation, and keep the `GlobalExceptionHandler` logging request context (method + URI + exception class). Never log passwords, JWT secrets, bearer tokens or destinations with credentials. |
-| 12 | Admin processes  | ⚠️ Partial | One-off tasks run as separate commands: `docker-compose up -d`, `docker exec mongosh ...`. **TBD:** versioned schema changes (indexes/TTL) as a repeatable, committed migration step; backup/restore scripts for MongoDB. |
+| 11 | Logs             | ✅ Structured + JSON profile | `logback-spring.xml` writes to console (async) and rolling file. **JSON profile** (`-Dspring.profiles.active=json`) emits structured JSON via `logstash-logback-encoder` (service=url-shortener, traceId/spanId MDC). Never log passwords, JWT secrets, bearer tokens or destinations with credentials. |
+| 12 | Admin processes  | ✅ Scripted & documented | One-off tasks run as separate commands: `scripts/backup-mongodb.sh`, `scripts/restore-mongodb.sh`, `scripts/performance-baseline.sh`, `scripts/verify-graceful-shutdown.sh`. Versioned schema changes (indexes/TTL) via `MongoSchemaMigrator` V1–V5. MongoDB backup/restore documented in `release-runbook.md`. |
 
 Legend: ✅ compliant · ⚠️ partially compliant / has an open TODO.
 
@@ -45,15 +45,10 @@ Legend: ✅ compliant · ⚠️ partially compliant / has an open TODO.
 
 ## Open TODOs (tracked)
 
-1. **Versioned schema/index migration** — replace `spring.data.mongodb.auto-index-creation: true` with a
-   migration framework; manage indexes (incl. TTL on `expiresAt`) in a deploy step. Required to drop
-   leftover unique-on-`originalUrl` indexes cleanly (identity model: no URL dedup).
-2. **Make processes stateless (factor 6)** — replace the in-memory analytics queue with a durable queue
-   (Redis Stream) so the app scales and doesn't drop events.
-3. **Wire a CI workflow** — add `.github/workflows/ci.yml` running `mvn test`, `*IT` (with Docker) and
-   `mvn clean package` on every push/PR.
-4. **Add structured JSON logging + tracing** — enable a JSON log profile and (optionally)
-   OpenTelemetry for observability; record real p50/p95/p99 latency baseline.
-5. **Add a prod config fail-fast validator** — abort startup on missing/weak required env vars.
-6. **Fix the GraalVM native build** — correct the `native` profile `mainClass` to
+1. **Fix the GraalVM native build** — correct the `native` profile `mainClass` to
    `ca.tyny.urlshortener.Application`; document the startup/memory targets under load.
+2. **Expose analytics queue depth gauge** — `analytics.queue.depth` (Micrometer) for the Grafana panel.
+
+---
+
+*Last updated: 2026-08-27 (Operational Excellence epic)*

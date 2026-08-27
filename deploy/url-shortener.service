@@ -1,0 +1,60 @@
+# Systemd Unit for URL Shortener Service
+#
+# Install: sudo cp url-shortener.service /etc/systemd/system/
+# Enable:  sudo systemctl daemon-reload && sudo systemctl enable --now url-shortener
+#
+# Requirements:
+#   - Java 21+ in PATH
+#   - Application JAR at /opt/url-shortener/url-shortener.jar
+#   - Config via environment variables (see EnvironmentFile)
+#   - MongoDB and Redis accessible per MONGODB_URI / REDIS_HOST
+#
+# The service runs as a dedicated user 'urlshortener' for security.
+
+[Unit]
+Description=URL Shortener Service
+Documentation=https://github.com/daniel-castilho/url-shortener-service
+After=network-online.target
+Wants=network-online.target
+# If MongoDB/Redis run on same host via systemd:
+# After=mongodb.service redis.service
+# Wants=mongodb.service redis.service
+
+[Service]
+Type=notify
+User=urlshortener
+Group=urlshortener
+WorkingDirectory=/opt/url-shortener
+EnvironmentFile=-/etc/url-shortener/url-shortener.env
+ExecStart=/usr/bin/java \
+    -XX:+UseZGC \
+    -XX:+ZGenerational \
+    -Dspring.profiles.active=prod \
+    -jar /opt/url-shortener/url-shortener.jar
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+# Graceful shutdown: Spring Boot 3.x supports graceful shutdown with SIGTERM
+# The app will drain in-flight requests during the grace period (see application.yaml)
+Restart=on-failure
+RestartSec=10
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/url-shortener/logs /var/log/url-shortener
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=url-shortener
+
+[Install]
+WantedBy=multi-user.target
