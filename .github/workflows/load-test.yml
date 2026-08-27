@@ -1,0 +1,83 @@
+name: Load Test (manual dispatch)
+
+on:
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 'Test duration per scenario'
+        required: false
+        default: '2m'
+      shorten-rps:
+        description: 'Shorten requests per second'
+        required: false
+        default: '20'
+      redirect-rps:
+        description: 'Redirect requests per second'
+        required: false
+        default: '200'
+
+jobs:
+  load-test:
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+      redis:
+        image: redis:alpine
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Start app (relaxed per-IP rate limits for the load window)
+        env:
+          RATE_LIMITER_LIMIT: '1000000'
+          RATE_LIMITER_REDIRECT_LIMIT: '1000000'
+        run: |
+          mvn -q spring-boot:run > /tmp/app.log 2>&1 &
+
+      - name: Wait for app readiness
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:8080/actuator/health/liveness > /dev/null; then
+              echo "app is up"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "app failed to start"
+          tail -100 /tmp/app.log
+          exit 1
+
+      - name: Run k6 mixed load test
+        uses: grafana/k6-action@v0.3.1
+        with:
+          filename: load-tests/mixed.js
+          flags: --out json=results.json
+        env:
+          BASE_URL: http://localhost:8080
+          DURATION: ${{ inputs.duration }}
+          SHORTEN_RPS: ${{ inputs.shorten-rps }}
+          REDIRECT_RPS: ${{ inputs.redirect-rps }}
+
+      - name: Upload k6 results artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-results
+          path: results.json
+          if-no-files-found: error
+
+      - name: Print app log tail on failure
+        if: failure()
+        run: tail -100 /tmp/app.log

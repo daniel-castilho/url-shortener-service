@@ -1,5 +1,7 @@
 package ca.tyny.urlshortener.core.ports.outgoing;
 
+import java.time.Duration;
+
 /**
  * Port for recording application metrics.
  * Allows the core domain to track business events without depending on
@@ -14,4 +16,8 @@ public interface MetricsPort {
     void recordCacheMiss();
 
     void recordBloomFilterRejection();
+
+    void recordIdGeneration(Duration duration);
+
+    void recordUrlRetrieval(Duration duration);
 }

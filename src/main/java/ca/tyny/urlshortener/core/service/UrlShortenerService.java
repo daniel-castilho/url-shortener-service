@@ -3,6 +3,7 @@ package ca.tyny.urlshortener.core.service;
 import ca.tyny.urlshortener.core.exception.CodeGenerationException;
 import ca.tyny.urlshortener.core.exception.InvalidDestinationException;
 import ca.tyny.urlshortener.core.exception.ShortCodeCollisionException;
+import ca.tyny.urlshortener.core.exception.UrlNotFoundException;
 import ca.tyny.urlshortener.core.idgeneration.Base62CodeGenerator;
 import ca.tyny.urlshortener.core.idgeneration.UrlIdGenerator;
 import ca.tyny.urlshortener.core.model.ShortUrl;
@@ -18,6 +19,7 @@ import ca.tyny.urlshortener.core.validation.UrlValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
@@ -29,7 +31,7 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
     private static final String LOG_CACHE_MISS = "Cache Miss for ID: {}. Fetching from DB...";
     static final int MAX_COLLISION_RETRIES = 8;
 
-private final UrlRepositoryPort urlRepository;
+    private final UrlRepositoryPort urlRepository;
     private final UrlCachePort urlCache;
     private final MetricsPort metrics;
     private final UrlIdGenerator urlIdGenerator;
@@ -62,8 +64,6 @@ private final UrlRepositoryPort urlRepository;
     @Override
     public ShortUrl shorten(String originalUrl, String customAlias, String userId) {
         Objects.requireNonNull(originalUrl, "URL cannot be null");
-
-        // SSRF and format validation
         urlValidator.validate(originalUrl);
 
         Url validatedUrl = new Url(originalUrl);
@@ -102,7 +102,9 @@ private final UrlRepositoryPort urlRepository;
 
     private ShortUrl saveWithCollisionRetry(String originalUrl, String userId) {
         for (int attempt = 0; attempt <= MAX_COLLISION_RETRIES; attempt++) {
+            long startNs = System.nanoTime();
             String id = base62CodeGenerator.generate();
+            metrics.recordIdGeneration(Duration.ofNanos(System.nanoTime() - startNs));
             ShortUrl candidate = new ShortUrl(id, originalUrl, LocalDateTime.now(), userId, false);
             try {
                 urlRepository.save(candidate);
@@ -120,30 +122,31 @@ private final UrlRepositoryPort urlRepository;
 
     @Override
     public String getOriginalUrl(String id) {
-        // Input validation
         Objects.requireNonNull(id, "ID cannot be null");
         if (id.isBlank()) {
             throw new IllegalArgumentException("ID cannot be empty");
         }
 
-        // 1. Check Cache
+        long startNs = System.nanoTime();
+
         String cachedUrl = urlCache.get(id);
         if (cachedUrl != null) {
             log.info(LOG_CACHE_HIT, id);
             metrics.recordCacheHit();
+            metrics.recordUrlRetrieval(Duration.ofNanos(System.nanoTime() - startNs));
             return cachedUrl;
         }
 
-        // 2. Check Database
         log.info(LOG_CACHE_MISS, id);
         metrics.recordCacheMiss();
 
-        return urlRepository.findById(id)
+        String originalUrl = urlRepository.findById(id)
                 .map(shortUrl -> {
-                    // 3. Populate Cache
                     urlCache.put(id, shortUrl.originalUrl());
                     return shortUrl.originalUrl();
                 })
-                .orElseThrow(() -> new ca.tyny.urlshortener.core.exception.UrlNotFoundException(id));
+                .orElseThrow(() -> new UrlNotFoundException(id));
+        metrics.recordUrlRetrieval(Duration.ofNanos(System.nanoTime() - startNs));
+        return originalUrl;
     }
 }

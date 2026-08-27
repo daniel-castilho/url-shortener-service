@@ -1,0 +1,42 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  tail_sampling:
+    decision_wait: 10s
+    num_traces: 10000
+    expected_new_traces_per_sec: 100
+    policies:
+      # Always keep ERROR traces regardless of head-sampling rate.
+      - name: keep-errors
+        type: status_code
+        status_code:
+          status_codes: [ERROR]
+      # Keep the remainder (already head-sampled at 10% by the app).
+      - name: keep-sampled
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 100
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+
+exporters:
+  debug:
+    verbosity: basic
+  otlp:
+    endpoint: ${OTLP_BACKEND_ENDPOINT:tempo:4317}
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [tail_sampling, batch]
+      exporters:
+      - ${OTLP_BACKEND_EXPORTER:otlp}
+      - debug

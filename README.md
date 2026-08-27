@@ -179,8 +179,9 @@ With the application running, open the API docs:
 - **Circuit breakers:** `GET /actuator/circuitbreakers` (Resilience4j state)
 
 Custom business metrics exposed via Micrometer include `urls.shortened.total`, `redirects.total`,
-`shorten.latency` (p50/p95/p99), `redirect.latency`, `cache.hits.total` / `cache.misses.total`, and
-`bloomfilter.rejections.total`.
+`shorten.latency` (p50/p95/p99), `redirect.latency`, `cache.hits.total` / `cache.misses.total`,
+`bloomfilter.rejections.total`, `id.generation.duration` (p50/p95/p99) and
+`url.retrieval.duration` (p50/p95/p99).
 
 ## Current State
 
@@ -192,9 +193,8 @@ Implemented on `main`:
 - **ID generation (locked model)** — random **Base62** (`SecureRandom`), default length 7, bounded
   retry on `_id` collision. Generated codes and vanity aliases are namespace-isolated (length /
   alphabet / reserved words). `409` is **only** “custom alias already exists”.
-  Code landing of this contract is tracked as `AGENTS.md` debt items 3, 4, 7 (stories I1–I6); do not
-  treat a Redis counter, Hashids, or unique-on-URL as the product design.
-  Stories I1–I6 are **landed** in this codebase (Base62 + collision retry, no URL dedup, namespace isolation).
+  No URL dedup: the same long URL may be shortened repeatedly, each call yielding a **distinct**
+  code.
 - **Custom aliases (vanity URLs)** — authenticated users can create custom slugs; blocked reserved
   words, plan-minimum alias length, and quota enforcement per subscription plan (`FREE`/`SILVER`/
   `GOLD`/`DIAMOND`).
@@ -210,8 +210,16 @@ Implemented on `main`:
   `rateLimiterCb` fail-open for the rate limiter / ID generator), exposed via Actuator.
 - **Auth & users** — stateless JWT (HS256, access + refresh), BCrypt password hashing, `FREE` plan by
   default.
-- **Observability** — Micrometer metrics + Prometheus endpoint, latency percentiles, health and
-  circuit-breaker endpoints.
+- **Observability (four pillars)** — Micrometer metrics + Prometheus endpoint with latency
+  percentiles and the `id.generation.duration` / `url.retrieval.duration` timers; OpenTelemetry
+  tracing via Spring Boot auto-instrumentation (`micrometer-tracing-bridge-otel`) exported through
+  OTLP/HTTP with 10% head sampling and collector **tail-sampling that always keeps ERROR traces**
+  (`deploy/otel/otel-collector-config.yml`); `traceId`/`spanId` MDC in logs; **SLOs** — availability
+  99.9%, latency p99 < 200 ms, error rate < 0.1% (`docs/slos.md`, Prometheus recording rules +
+  burn-rate alerts under `deploy/monitoring/`); Grafana dashboards (`dashboards/`); k6 load tests
+  (`load-tests/`, manual dispatch via `.github/workflows/load-test.yml`) and baselines
+  (`docs/load-test-baseline.md`). Tracing is fail-open, proven by `TracingFailOpenIT`. See
+  `docs/observability.md`.
 - **API docs** — springdoc OpenAPI / Swagger UI, bean validation and structured error responses via a
   global exception handler.
 - **Quality gates** — `mvn verify` enforces JaCoCo coverage (LINE ≥ 60%, BRANCH ≥ 60%), SpotBugs
@@ -243,8 +251,14 @@ Deliberately not implemented yet — candidate backlog, in priority order:
 - **Tighten operational exposure — landed.** Actuator endpoints tiered (liveness/readiness/info public; health detail requires ADMIN; metrics/prometheus require ADMIN/METRICS_VIEWER; other actuator endpoints require ADMIN). Swagger conditionally enabled via `app.security.swagger.enabled` (default false). Health detail defaults to `when-authorized`. Swagger loaded conditionally via `@ConditionalOnProperty`.
 - **Fix the GraalVM native build** — correct the `mainClass` in the `native` profile, and verify the
   documented startup/memory targets under load.
-- **CI** — add a workflow that runs `mvn verify` with Testcontainers and the architecture-boundary
-  grep.
+- **Observability — landed.** Timer metrics (`id.generation.duration`, `url.retrieval.duration`,
+  p50/p95/p99) behind `MetricsPort`; OpenTelemetry tracing (10% head sampling, collector tail-sampling
+  always keeps ERROR traces, fail-open proven by `TracingFailOpenIT`); SLOs + burn-rate alerts;
+  Prometheus recording rules; Grafana dashboards; k6 load tests with manual-dispatch CI
+  (`.github/workflows/load-test.yml`). Next (debt item 17): expose the analytics Redis-stream depth
+  gauge and publish the first k6 baseline.
+- **CI** — `ci.yml` runs `mvn verify` with Testcontainers on push/PR; `load-test.yml` runs k6 on manual
+  dispatch.
 
 ## Documentation
 
@@ -256,6 +270,9 @@ Deliberately not implemented yet — candidate backlog, in priority order:
 | `docs/coding-standards.md` | Day-to-day Java/Spring conventions |
 | `docs/testing-playbook.md` | How to design, run and maintain tests |
 | `docs/twelve-factor.md` | Twelve-factor compliance |
+| `docs/observability.md` | Metrics, tracing, SLOs, dashboards and runbooks |
+| `docs/slos.md` | SLO definitions, error budgets, burn-rate alerting |
+| `docs/load-test-baseline.md` | k6 load-test baselines (p50/p95/p99 vs SLOs) |
 | `docs/release-runbook.md` | Operate and release the service |
 | `docs/lessons.md` | Durable engineering lessons |
 | `MONGODB_ARCHITECTURE.md` | MongoDB layering notes (Portuguese prose being migrated to English) |

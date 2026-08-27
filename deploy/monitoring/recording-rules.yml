@@ -1,0 +1,31 @@
+# SLO recording rules for the URL shortener.
+# SLO targets (see docs/slos.md): availability 99.9%, latency p99 < 200ms,
+# error rate < 0.1%, all over a rolling 30d window.
+# Metrics are the Spring Boot / Micrometer "http.server.requests" histogram
+# exposed at /actuator/prometheus.
+groups:
+  - name: url-shortener-slo
+    rules:
+      # 1 - requested_ratio = error ratio (5xx)
+      - record: slo:url_shortener:error_ratio_30d
+        expr: |
+          1 - sum(rate(http_server_requests_seconds_count{status!~"5.."}[30d]))
+              / sum(rate(http_server_requests_seconds_count[30d]))
+
+      # Fraction of requests served under the 200ms SLO latency target.
+      - record: slo:url_shortener:latency_ok_ratio_30d
+        expr: |
+          sum(rate(http_server_requests_seconds_bucket{le="0.2"}[30d]))
+              / sum(rate(http_server_requests_seconds_count[30d]))
+
+      # Availability SLI (OK / total).
+      - record: slo:url_shortener:availability_30d
+        expr: |
+          sum(rate(http_server_requests_seconds_count{status!~"5.."}[30d]))
+              / sum(rate(http_server_requests_seconds_count[30d]))
+
+      # Error budget remaining for the availability SLO (0 = all spent).
+      # Error budget = 1 - 0.999 = 0.001.
+      - record: slo:url_shortener:availability_budget_remaining_30d
+        expr: |
+          clamp_min((0.999 - slo:url_shortener:error_ratio_30d) / 0.001, 0)

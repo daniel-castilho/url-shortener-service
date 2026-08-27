@@ -72,6 +72,18 @@ non-obvious failure or design decision cost real debugging time.
   The locked model has **no URL dedup**; `409` means only “custom alias already exists”.
 - **Dead metrics lie.** Timers registered but never recorded (`id.generation.duration`,
   `url.retrieval.duration`) look like coverage. Either wire them or delete them (story I7).
+- **Tracing belongs outside the domain layer.** Putting `Tracer`/`Span` (Micrometer/OTel) inside a
+  `core/` service blows the architectural boundary instantly (the `check-boundaries.sh` gate flags
+  `io.micrometer` on the first compile). Rely on Spring Boot HTTP auto-instrumentation for spans and
+  keep business timers behind `MetricsPort` — the redirect path still performs a **single** DB hit.
+- **“Always sample errors” is a collector-side concern.** A sampler sees a span when it starts, before
+  its outcome is known. Do head sampling (10%) in the app and tail-sampling
+  (`status_code: ERROR → keep`) in the OTel Collector (`deploy/otel/otel-collector-config.yml`).
+- **OTLP export must never block the hot path.** `OtlpSpanExporter`/bridge export is asynchronous and
+  fail-open; assert it (`TracingFailOpenIT` points the endpoint at a dead port and still passes).
+- **Spring Boot owns the endpoints.** Use `management.otlp.tracing.endpoint` (not
+  `management.otel.exporter.*`); a re-declared `CONSOLE` logback appender (already provided by
+  `console-appender.xml`) halts startup — override `CONSOLE_LOG_PATTERN` instead.
 
 ## Caching & the bloom filter
 

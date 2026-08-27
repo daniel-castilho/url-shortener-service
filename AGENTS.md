@@ -267,8 +267,11 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
 11. **GraalVM native build broken** — `native` profile `mainClass` points to the non-existent
     `ca.tyny.urlshortener.infra.Application`. Fix to `ca.tyny.urlshortener.Application`. — `resolved`
 12. **Observability gaps** — metrics exist but `id.generation.duration` / `url.retrieval.duration`
-    timers are never recorded; no tracing (OpenTelemetry), no SLOs, no load harness (k6). When added,
-    record real p50/p95/p99 and publish a baseline. — `open`
+    timers are never recorded; no tracing (OpenTelemetry), no SLOs, no load harness (k6). Timers now
+    recorded with p50/p95/p99 via `MetricsPort`; OpenTelemetry tracing (10% head sampling) with the
+    OTel Collector tail-sampling ERROR traces always-on; SLOs + burn-rate alerts; k6 scripts +
+    manual-dispatch CI; Grafana dashboards. Next: publish the first real k6 baseline and expose the
+    analytics Redis-stream depth as a gauge. — `resolved`
 13. **Stale docs & assets** — `README.md` referenced non-existent `AUDIT_FINAL_REPORT.md`,
     `VALIDATION_CHECKLIST.md`, `LESSONS_LEARNED.md`; residual Cassandra mentions; inflated self-scores;
     committed `build.log`/`build_out.txt`. Product docs now describe the locked identity model
@@ -286,6 +289,10 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     probes with older defaults — machines running such engines need `~/.docker-java.properties`
     containing `api.version = 1.44` (already configured on the dev workstation; CI runners are
     unaffected). — `resolved`
+17. **Observability follow-ups (after item 12)** — the Grafana overview panel `analytics.queue.depth`
+    is empty until the analytics Redis-stream depth is exposed as a gauge, and `docs/load-test-baseline.md`
+    is a template until the first real k6 run (manual dispatch via `.github/workflows/load-test.yml`)
+    records numbers. — `open`
 
 ---
 

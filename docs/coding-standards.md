@@ -206,6 +206,13 @@ variants**. Prefer the pattern that matches existing code; if none fits, ask the
   other actuator endpoints require ADMIN. Swagger conditionally enabled via
   `app.security.swagger.enabled` (default false). Health detail defaults to `when-authorized`.
   Swagger conditionally loaded via `@ConditionalOnProperty(name="app.security.swagger.enabled")`.
+- **Observability (applied).** Business timers (`id.generation.duration`, `url.retrieval.duration`)
+  are recorded behind `MetricsPort` only — `core/` never imports Micrometer/OTel. Tracing uses Spring
+  Boot auto-instrumentation (`micrometer-tracing-bridge-otel`) exported via OTLP/HTTP; **no manual
+  span code in `core/`** — HTTP spans come from auto-instrumentation, error traces are always kept by
+  collector tail-sampling (`deploy/otel/otel-collector-config.yml`). Logback patterns include
+  `%X{traceId}` `%X{spanId}`. Metrics must be registered once (one adapter owns each meter) and
+  recorded exactly once per business event.
 - **Bean scoping.** Default singleton; services are stateless — no per-request mutable fields.
   The analytics event queue is durable (Redis Stream), not in-memory.
 - **DTOs for every external input/output.** Never expose domain entities through the API.

@@ -19,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
@@ -166,5 +167,35 @@ class UrlShortenerServiceTest {
         verify(urlCache).get(TEST_ID);
         verify(urlRepository).findById(TEST_ID);
         verify(urlCache).put(TEST_ID, TEST_URL);
+    }
+
+    @Test
+    @DisplayName("Should record id generation duration metric on shorten")
+    void shouldRecordIdGenerationMetric() {
+        service.shorten(TEST_URL);
+
+        verify(metrics).recordIdGeneration(any(Duration.class));
+    }
+
+    @Test
+    @DisplayName("Should record url retrieval duration metric on cache hit")
+    void shouldRecordUrlRetrievalMetricOnHit() {
+        when(urlCache.get(TEST_ID)).thenReturn(TEST_URL);
+
+        service.getOriginalUrl(TEST_ID);
+
+        verify(metrics).recordUrlRetrieval(any(Duration.class));
+    }
+
+    @Test
+    @DisplayName("Should record url retrieval duration metric on cache miss")
+    void shouldRecordUrlRetrievalMetricOnMiss() {
+        when(urlCache.get(TEST_ID)).thenReturn(null);
+        ShortUrl shortUrl = new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now());
+        when(urlRepository.findById(TEST_ID)).thenReturn(Optional.of(shortUrl));
+
+        service.getOriginalUrl(TEST_ID);
+
+        verify(metrics).recordUrlRetrieval(any(Duration.class));
     }
 }

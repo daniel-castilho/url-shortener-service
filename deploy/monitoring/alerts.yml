@@ -1,0 +1,59 @@
+# Burn-rate alerting for the availability SLO (99.9%, 30d window,
+# error budget = 0.001). Burn rate = error_ratio / error_budget.
+#   Fast burn: consumes >2% of budget in 1h  -> rate ~14.4x budget.
+#   Slow burn: consumes >5% of budget in 6h  -> rate ~6x budget.
+# Multi-window: alert only when the long window AND a shorter burst window
+# both indicate the burn, to tolerate brief traffic spikes.
+groups:
+  - name: url-shortener-alerts
+    rules:
+      - alert: SLOAvailabilityFastBurn
+        expr: |
+          (
+            sum(rate(http_server_requests_seconds_count{status=~"5.."}[1h]))
+            / sum(rate(http_server_requests_seconds_count[1h]))
+          ) > 0.001 * 14.4
+          and
+          (
+            sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+            / sum(rate(http_server_requests_seconds_count[5m]))
+          ) > 0.001 * 14.4
+          and sum(rate(http_server_requests_seconds_count[5m])) > 0
+        for: 2m
+        labels:
+          severity: critical
+          slo: availability
+        annotations:
+          summary: "Availability SLO fast burn — error budget being consumed at 14.4x rate (>2% of the 30d budget in 1h)"
+          description: "Error ratio over 1h ({{ $value | humanizePercentage }}) exceeds the fast-burn threshold. Investigate immediately."
+
+      - alert: SLOAvailabilitySlowBurn
+        expr: |
+          (
+            sum(rate(http_server_requests_seconds_count{status=~"5.."}[6h]))
+            / sum(rate(http_server_requests_seconds_count[6h]))
+          ) > 0.001 * 6
+          and
+          (
+            sum(rate(http_server_requests_seconds_count{status=~"5.."}[30m]))
+            / sum(rate(http_server_requests_seconds_count[30m]))
+          ) > 0.001 * 6
+          and sum(rate(http_server_requests_seconds_count[30m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+          slo: availability
+        annotations:
+          summary: "Availability SLO slow burn — error budget being consumed at 6x rate (>5% of the 30d budget in 6h)"
+          description: "Error ratio over 6h ({{ $value | humanizePercentage }}) exceeds the slow-burn threshold. Plan investigation."
+
+      - alert: SLOErrorBudgetExhausted
+        expr: |
+          slo:url_shortener:availability_budget_remaining_30d == 0
+        for: 30m
+        labels:
+          severity: critical
+          slo: availability
+        annotations:
+          summary: "Availability SLO error budget exhausted for the 30d window"
+          description: "The 99.9% availability SLO cannot be met this window. Execute the response runbook (docs/slos.md)."

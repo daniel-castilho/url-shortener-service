@@ -7,7 +7,23 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ## [Unreleased]
 
-## [0.6.0] - 2026-08-26
+## [0.7.0] - 2026-08-27
+
+### Added
+
+- **Timer metrics** — `id.generation.duration` and `url.retrieval.duration` with p50/p95/p99 publishing, recorded behind `MetricsPort` (`recordIdGeneration`, `recordUrlRetrieval`) for the shorten ID-generation and the redirect cache+DB lookup paths.
+- **OpenTelemetry tracing** — `micrometer-tracing-bridge-otel` + `opentelemetry-exporter-otlp` + `opentelemetry-sdk-extension-autoconfigure`; OTLP/HTTP exporter (`management.otlp.tracing.endpoint`, default `localhost:4318`); 10% head sampling. HTTP spans auto-instrumented by Spring Boot; **no tracing code in `core/`** (boundary preserved).
+- **Log correlation** — `traceId`/`spanId` in console and file log patterns via logback MDC.
+- **Tracing fail-open** — proven by `TracingFailOpenIT` (collector unreachable → requests still succeed).
+- **SLOs** — `docs/slos.md` (availability 99.9%, latency p99 < 200 ms, error rate < 0.1%, 30d window), Prometheus recording rules (`deploy/monitoring/recording-rules.yml`) and burn-rate alerts (`deploy/monitoring/alerts.yml`: fast 14.4x → critical, slow 6x → warning).
+- **OTel collector config** — `deploy/otel/otel-collector-config.yml` with tail sampling that always keeps ERROR traces.
+- **Grafana dashboards** — `dashboards/url-shortener-overview.json`, `dashboards/url-shortener-tracing.json`, `dashboards/url-shortener-slo.json`.
+- **k6 load tests** — `load-tests/shorten.js`, `load-tests/redirect.js`, `load-tests/mixed.js` with SLO thresholds (p95 < 200 ms, error rate < 0.1%); manual-dispatch workflow `.github/workflows/load-test.yml`; baseline template `docs/load-test-baseline.md`.
+
+### Fixed
+
+- **AGENTS.md debt item 12 resolved** — observability gaps closed: timers recorded, tracing, SLOs and k6 load harness added.
+- **Compilation blocker** — `UrlShortenerService.shorten` had been left with an unbalanced closing brace by a previous refactor; restored the committed structure while wiring the new timers.
 
 ### Added
 

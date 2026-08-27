@@ -1,0 +1,104 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "type": "gauge",
+      "title": "Availability SLO (30d)",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "slo:url_shortener:availability_30d" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "yellow", "value": 0.9989 }, { "color": "green", "value": 0.999 } ] }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "gauge",
+      "title": "Latency OK ratio (p99 < 200ms, 30d)",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "slo:url_shortener:latency_ok_ratio_30d" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "yellow", "value": 0.999 }, { "color": "green", "value": 0.9999 } ] }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "gauge",
+      "title": "Error budget remaining (30d)",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "A", "expr": "slo:url_shortener:availability_budget_remaining_30d * 100" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [ { "color": "red", "value": null }, { "color": "yellow", "value": 50 }, { "color": "green", "value": 80 } ] }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Availability burn rate (multi-window)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "refId": "burn1h",
+          "expr": "(1 - sum(rate(http_server_requests_seconds_count{status!~\"5..\"}[1h])) / sum(rate(http_server_requests_seconds_count[1h]))) / 0.001"
+        },
+        {
+          "refId": "burn6h",
+          "expr": "(1 - sum(rate(http_server_requests_seconds_count{status!~\"5..\"}[6h])) / sum(rate(http_server_requests_seconds_count[6h]))) / 0.001"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "thresholds" }, "thresholds": { "mode": "absolute", "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 6 }, { "color": "red", "value": 14.4 } ] } },
+        "overrides": []
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Error ratio by window",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        { "refId": "r1h", "expr": "sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[1h])) / sum(rate(http_server_requests_seconds_count[1h]))" },
+        { "refId": "r6h", "expr": "sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[6h])) / sum(rate(http_server_requests_seconds_count[6h]))" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] }
+    }
+  ],
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "tags": ["url-shortener", "slo"],
+  "templating": { "list": [] },
+  "time": { "from": "now-7d", "to": "now" },
+  "timezone": "browser",
+  "title": "URL Shortener — SLO",
+  "uid": "url-shortener-slo",
+  "version": 1
+}
