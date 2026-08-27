@@ -259,8 +259,7 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
    structurally in code (story I3). — `resolved`
 8. **Weak URL validation / SSRF** — only `^https?://.*`; strengthen to enforce HTTPS, validate the
    host, and block internal/private/link-local IPs (Rule 6). — `resolved`
-9. **Actuator & Swagger publicly exposed** — `/actuator/**` and `/swagger-ui/**` are `permitAll` and
-   `health.show-details: always`. Restrict in production and gate detail exposure. — `open`
+9. **Actuator & Swagger publicly exposed** — `/actuator/**` and `/swagger-ui/**` are now tiered: liveness/readiness/info public; health detail requires ADMIN; metrics/prometheus require ADMIN or METRICS_VIEWER; other actuator endpoints require ADMIN. Swagger enabled only when `app.security.swagger.enabled=true` (default false). Health detail defaults to `when-authorized`. — `resolved`
 10. **No versioned schema/index migrations** — `spring.data.mongodb.auto-index-creation: true`; adopt a
     migration framework and manage indexes in a deploy step. Required to drop the `originalUrl`
     unique index (item 4). `IndexMigration` now drops `originalUrl_1` index and ensures `userId`

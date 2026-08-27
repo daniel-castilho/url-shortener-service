@@ -5,6 +5,29 @@ All notable changes to URL Shortener Service will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); this project
 intends to follow [Semantic Versioning](https://semver.org/) starting from its first tag.
 
+## [Unreleased]
+
+## [0.6.0] - 2026-08-26
+
+### Added
+
+- **Actuator tiered access** — liveness/readiness/info endpoints public; health detail requires ADMIN; metrics/prometheus require ADMIN or METRICS_VIEWER; other actuator endpoints require ADMIN.
+- **Conditional Swagger** — Swagger UI/OpenAPI enabled only when `app.security.swagger.enabled=true` (default false); disabled by default in production.
+- **Health detail configurable** — `management.endpoint.health.show-details` defaults to `when-authorized`; `always` available for development.
+- **SecurityProperties** — typed configuration for actuator/swagger security (`app.security.*`).
+- **OpenApiConfig** — conditionally loaded via `@ConditionalOnProperty(name="app.security.swagger.enabled")`.
+
+### Changed
+
+- **Actuator endpoints** — moved from single `permitAll()` to tiered access: liveness/readiness/info public; health detail ADMIN only; metrics/prometheus ADMIN or METRICS_VIEWER; other actuator endpoints ADMIN only.
+- **Swagger** — now conditionally loaded via `@ConditionalOnProperty(name="app.security.swagger.enabled")`; disabled by default.
+- **SecurityProperties** — new typed configuration record (`app.security.actuator.*`, `app.security.swagger.*`, `app.security.trusted-proxy-cidrs`).
+
+### Fixed
+
+- **AGENTS.md debt item 9 resolved** — Actuator & Swagger no longer publicly exposed; tiered access implemented.
+- **Swagger exposure** — now disabled by default; enabled via `app.security.swagger.enabled=true`.
+
 ## [0.5.0] - 2026-08-26
 
 ### Added

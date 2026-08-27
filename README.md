@@ -205,6 +205,7 @@ Implemented on `main`:
   collection and increments the per-link `clickCount` atomically (`$inc`). Analytics failure never
   blocks or fails a redirect (fail-open).
 - **Rate limiting** — per-IP token-bucket over Redis on **both shorten and redirect endpoints**, independent scopes (SHORTEN/REDIRECT), configurable via `rate-limiter.limit` / `rate-limiter.window` and `rate-limiter.redirect-limit` / `rate-limiter.redirect-window`. Trusted-proxy CIDR IP resolution; fails open (does not block) if Redis is unavailable. 429 responses include `Retry-After`, `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` headers.
+- **Security hardening** — Actuator endpoints tiered: liveness/readiness/info public; health detail requires ADMIN; metrics/prometheus require ADMIN or METRICS_VIEWER; other actuator endpoints require ADMIN. Swagger enabled only when `app.security.swagger.enabled=true` (default false). Health detail defaults to `when-authorized`. Swagger conditionally loaded via `@ConditionalOnProperty`.
 - **Fault tolerance** — Resilience4j circuit breakers (`databaseCb` fail-fast for Mongo,
   `rateLimiterCb` fail-open for the rate limiter / ID generator), exposed via Actuator.
 - **Auth & users** — stateless JWT (HS256, access + refresh), BCrypt password hashing, `FREE` plan by
@@ -239,8 +240,7 @@ Deliberately not implemented yet — candidate backlog, in priority order:
   beans registered in `infra/config` (`ServiceConfig`); boundary gate enforces it in CI with a
   self-test. Quality gates (JaCoCo + SpotBugs) run at `mvn verify`.
 - **Validate the destination — landed.** SSRF protection implemented: HTTPS enforced by default, host validation, private/internal IP blocking (RFC1918, loopback, link-local, metadata IPs), userinfo rejection, DNS resolution with caching. Extensibility hook via `DestinationValidatorPort` for reputation checks. ITs: `SsrfProtectionIT` proves rejection of HTTP, userinfo, invalid schemes, private IPs; valid HTTPS allowed.
-- **Tighten operational exposure** — restrict `/actuator/**` and Swagger in production; manage schema
-  and index creation via versioned migrations instead of `auto-index-creation`.
+- **Tighten operational exposure — landed.** Actuator endpoints tiered (liveness/readiness/info public; health detail requires ADMIN; metrics/prometheus require ADMIN/METRICS_VIEWER; other actuator endpoints require ADMIN). Swagger conditionally enabled via `app.security.swagger.enabled` (default false). Health detail defaults to `when-authorized`. Swagger loaded conditionally via `@ConditionalOnProperty`.
 - **Fix the GraalVM native build** — correct the `mainClass` in the `native` profile, and verify the
   documented startup/memory targets under load.
 - **CI** — add a workflow that runs `mvn verify` with Testcontainers and the architecture-boundary

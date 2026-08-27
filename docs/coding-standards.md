@@ -201,6 +201,11 @@ variants**. Prefer the pattern that matches existing code; if none fits, ask the
   (RFC1918, loopback, link-local, cloud metadata), userinfo rejection. Configurable via
   `app.url.*` properties. Extensible via `DestinationValidatorPort` for reputation checks
   (Safe Browsing, VirusTotal, etc.). Fail-closed on DNS failure (secure default).
+- **Actuator & Swagger security (applied).** Actuator endpoints tiered: liveness/readiness/info
+  public; health detail requires ADMIN; metrics/prometheus require ADMIN or METRICS_VIEWER;
+  other actuator endpoints require ADMIN. Swagger conditionally enabled via
+  `app.security.swagger.enabled` (default false). Health detail defaults to `when-authorized`.
+  Swagger conditionally loaded via `@ConditionalOnProperty(name="app.security.swagger.enabled")`.
 - **Bean scoping.** Default singleton; services are stateless — no per-request mutable fields.
   The analytics event queue is durable (Redis Stream), not in-memory.
 - **DTOs for every external input/output.** Never expose domain entities through the API.

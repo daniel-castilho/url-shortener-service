@@ -191,8 +191,7 @@ Keep this section honest. Move an item out only when an automated test/gate exis
 
 1. **Failsafe lifecycle — CLOSED.** `maven-failsafe-plugin` is wired; `*IT` classes run in
    `mvn verify` and are excluded from the fast `mvn test` loop.
-2. **No complete endpoint × method × role matrix.** Existing tests cover the main shorten/redirect/auth
-   flows, not every `SecurityConfig` matcher (and `/actuator/**` exposure is still `permitAll`).
+2. **Actuator/Swagger exposure — CLOSED.** Actuator endpoints tiered: liveness/readiness/info public; health detail requires ADMIN; metrics/prometheus require ADMIN/METRICS_VIEWER; other actuator endpoints require ADMIN. Swagger conditionally enabled via `app.security.swagger.enabled` (default false). `SsrfProtectionIT` and `RedirectRateLimitIT` verify throttling headers.
 3. **Rate-limit integration on the redirect path — CLOSED.** `RedirectRateLimitIT` proves the token bucket (capacity 3, PT1M window) throttles both valid and unknown codes with 429 + `Retry-After` + `RateLimit-*` headers; scope isolation (shorten budget untouched); concurrent burst admits exactly the configured capacity.
 4. **Analytics/click persistence — CLOSED.** `ClickPipelineIT` proves redirect→persist+`$inc`,
    exact counts under burst, blank-code skip; `RedisClickEventQueueFailOpenTest` proves the

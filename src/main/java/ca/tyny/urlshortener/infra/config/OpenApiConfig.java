@@ -1,36 +1,42 @@
 package ca.tyny.urlshortener.infra.config;
 
+import ca.tyny.urlshortener.infra.config.properties.SecurityProperties;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
-import io.swagger.v3.oas.models.info.Contact;
-import io.swagger.v3.oas.models.servers.Server;
+import io.swagger.v3.oas.models.info.License;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Conditional;
+import org.springframework.context.annotation.Condition;
+import org.springframework.context.annotation.ConditionContext;
+import org.springframework.core.type.AnnotatedTypeMetadata;
 
-import java.util.List;
-
+/**
+ * OpenAPI/Swagger configuration — only enabled when {@code app.security.swagger.enabled=true}.
+ */
 @Configuration
+@Conditional(OpenApiConfig.SwaggerEnabledCondition.class)
 public class OpenApiConfig {
 
     @Bean
-    public OpenAPI customOpenAPI() {
+    public OpenAPI openAPI(@Value("${spring.application.name:URL Shortener}") String appName) {
         return new OpenAPI()
                 .info(new Info()
-                        .title("High-Performance URL Shortener API")
-                        .version("1.0.0")
-                        .description("""
-                                Ultra-fast URL shortening service built with:
-                                - Java 21 Virtual Threads
-                                - Spring Boot 3.5.7 + Undertow
-                                - MongoDB + Redis
-                                - Bloom Filters & Multi-Level Caching
+                        .title(appName + " API")
+                        .version("v1")
+                        .description("High-performance URL Shortener API with rate limiting, analytics, and SSRF protection.")
+                        .license(new License().name("MIT").url("https://opensource.org/licenses/MIT")));
+    }
 
-                                Designed to handle 100M+ writes/day and 1B+ reads/day.
-                                """)
-                        .contact(new Contact()
-                                .name("API Support")
-                                .url("https://github.com/seu-usuario/url-shortener")))
-                .servers(List.of(
-                        new Server().url("http://localhost:8080").description("Local Development")));
+    /**
+     * Condition to enable Swagger only when {@code app.security.swagger.enabled=true}.
+     */
+    static class SwaggerEnabledCondition implements Condition {
+        @Override
+        public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
+            var env = context.getEnvironment();
+            return env.getProperty("app.security.swagger.enabled", Boolean.class, false);
+        }
     }
 }

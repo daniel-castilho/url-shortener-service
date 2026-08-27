@@ -22,6 +22,7 @@ import ca.tyny.urlshortener.core.validation.UrlValidator;
 import ca.tyny.urlshortener.infra.adapter.output.validation.DefaultUrlValidator;
 import ca.tyny.urlshortener.infra.config.properties.RateLimiterProperties;
 import ca.tyny.urlshortener.infra.config.properties.UrlValidationProperties;
+import ca.tyny.urlshortener.infra.config.properties.SecurityProperties;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -33,7 +34,8 @@ import java.util.List;
 @Configuration
 @EnableConfigurationProperties({
         ca.tyny.urlshortener.infra.config.properties.RateLimiterProperties.class,
-        ca.tyny.urlshortener.infra.config.properties.UrlValidationProperties.class
+        ca.tyny.urlshortener.infra.config.properties.UrlValidationProperties.class,
+        ca.tyny.urlshortener.infra.config.properties.SecurityProperties.class
 })
 public class ServiceConfig {
 

@@ -54,9 +54,10 @@ management:
     web:
       exposure:
         include: health, info, metrics, prometheus, circuitbreakers
+      base-path: /actuator
   endpoint:
     health:
-      show-details: always
+      show-details: ${HEALTH_SHOW_DETAILS:when-authorized}
       probes:
         enabled: true
       show-components: always
@@ -77,6 +78,21 @@ rate-limiter:
   trusted-proxy-cidrs:              # Peers allowed to set the client-ip-header
     - 127.0.0.0/8
     - ::1/128
+
+# ========================================
+# Security Hardening
+# ========================================
+security:
+  actuator:
+    enabled: true
+    health-detail-enabled: false
+    public-endpoints:
+      - health/liveness
+      - health/readiness
+      - info
+  swagger:
+    enabled: false
+    allowed-ips: []
 
 # ========================================
 # Resilience4j Circuit Breakers
