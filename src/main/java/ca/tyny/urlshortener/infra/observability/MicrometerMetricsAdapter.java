@@ -22,6 +22,9 @@ public class MicrometerMetricsAdapter implements MetricsPort {
     private final Counter cacheHitsCounter;
     private final Counter cacheMissesCounter;
     private final Counter bloomFilterRejectionsCounter;
+    private final Counter urlsExpiredCounter;
+    private final Counter migrationsAppliedCounter;
+    private final Counter migrationsFailedCounter;
 
     public MicrometerMetricsAdapter(io.micrometer.core.instrument.MeterRegistry registry) {
         this.idGenerationTimer = Timer.builder("id.generation.duration")
@@ -55,6 +58,21 @@ public class MicrometerMetricsAdapter implements MetricsPort {
                 .description("Total number of requests rejected by Bloom Filter")
                 .tag("protection", "cache-penetration")
                 .register(registry);
+
+        this.urlsExpiredCounter = Counter.builder("urls.expired.total")
+                .description("Total number of short URLs that expired before being resolved")
+                .tag("service", "url-shortener")
+                .register(registry);
+
+        this.migrationsAppliedCounter = Counter.builder("schema.migrations.applied.total")
+                .description("Total number of schema migrations applied")
+                .tag("service", "url-shortener")
+                .register(registry);
+
+        this.migrationsFailedCounter = Counter.builder("schema.migrations.failed.total")
+                .description("Total number of failed schema migrations")
+                .tag("service", "url-shortener")
+                .register(registry);
     }
 
     @Override
@@ -85,5 +103,20 @@ public class MicrometerMetricsAdapter implements MetricsPort {
     @Override
     public void recordUrlRetrieval(Duration duration) {
         urlRetrievalTimer.record(duration.toNanos(), TimeUnit.NANOSECONDS);
+    }
+
+    @Override
+    public void recordUrlExpired() {
+        urlsExpiredCounter.increment();
+    }
+
+    @Override
+    public void recordMigrationApplied() {
+        migrationsAppliedCounter.increment();
+    }
+
+    @Override
+    public void recordMigrationFailed() {
+        migrationsFailedCounter.increment();
     }
 }

@@ -260,10 +260,19 @@ variants**. Prefer the pattern that matches existing code; if none fits, ask the
 - **All MongoDB access lives in `infra/adapter/output/persistence`.** Adapters implement the domain
   port; repositories are thin `MongoTemplate` queries; entities (`*Entity`) are persistence records;
   `*Mapper` translates explicitly between domain and entity — no silent casts.
-- **Indexes**: there is **no unique index on `originalUrl`** (no URL dedup; Rule 3). Add a
+- **Indexes / migrations**: there is **no unique index on `originalUrl`** (no URL dedup; Rule 3). Add a
   **non-unique** index only if you query by URL, and store a SHA-256 `urlHash`. Keep `_id` unique for
-  code resolution. MongoDB TTL index `expires_at` drives link expiry (later epic). Dropping any leftover
-  unique-on-URL index is story I4, not a product-rule change.
+  code resolution. The MongoDB **TTL index on `expiresAt`** (migration `V5`) purges expired links; the
+  application expiry check stays the source of truth (a not-yet-purged row must still be treated as
+  expired). Schema and index changes ship only as **versioned in-code migrations** (`SchemaMigration`
+  + `MongoSchemaMigrator`, history in `schema_migrations`) — never `auto-index-creation`, never ad-hoc
+  `@PostConstruct` index code (`IndexMigration` retired).
+- **Link expiry.** `expiresAt` (`Instant`, nullable = never) is set from an optional `ttlSeconds`
+  (positive, server-capped via `app.shortener.max-ttl-seconds`) on shorten. The read path checks
+  `isExpired(now)` **eagerly**: expired → `410 Gone`, unknown → `404`, valid → `302`. An expired link
+  must **never** be served — not even from cache. The cache value carries `expiresAt`
+  (`CachedUrlValue`) and its Redis TTL is capped at the remaining time, so a warm expired link is
+  evicted at/before expiry; the service still re-checks on hit (defense-in-depth).
 - **Atomic counters.** Quota and click counters must be incremented with **`$inc`** (atomic), never
   read-modify-write — `QuotaService.incrementVanityUrlUsage` currently does `set(get()+1)` and loses
   increments under concurrency (debt item 14). Fix to `$inc`.
@@ -273,8 +282,9 @@ variants**. Prefer the pattern that matches existing code; if none fits, ask the
 - **Redis** (`StringRedisTemplate` + Redisson): cache only. TTLs set in the cache adapter, with jitter
   to avoid stampede; the bloom filter short-circuits non-existent codes. Never store secrets. The
   cache is **best-effort** — a Redis outage degrades to DB lookups, never fails the redirect.
-- Schema/index creation: `auto-index-creation` is convenient but non-deterministic — replace with
-  **versioned migrations** (debt item 10). Until then, keep the README/IT provisioning in sync.
+- Schema/index creation: managed by **versioned in-code migrations**
+  (`MongoSchemaMigrator`, history in `schema_migrations`; `auto-index-creation` is off). Add new
+  schema changes as new `SchemaMigration` versions, never by hand-editing a shared environment.
 
 ---
 

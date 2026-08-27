@@ -1,5 +1,6 @@
 package ca.tyny.urlshortener.infra.adapter.input.rest.advice;
 
+import ca.tyny.urlshortener.core.exception.UrlExpiredException;
 import ca.tyny.urlshortener.core.exception.UrlNotFoundException;
 import ca.tyny.urlshortener.core.ports.outgoing.AnalyticsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.RateLimiterPort;
@@ -59,6 +60,9 @@ class GlobalExceptionHandlerTest {
         private ca.tyny.urlshortener.infra.security.JwtTokenProvider jwtTokenProvider;
 
         @MockitoBean
+        private ca.tyny.urlshortener.infra.config.properties.ShortenerProperties shortenerProperties;
+
+        @MockitoBean
         private ca.tyny.urlshortener.infra.adapter.input.rest.ClientAddressResolver clientAddressResolver;
 
         @org.junit.jupiter.api.BeforeEach
@@ -81,6 +85,24 @@ class GlobalExceptionHandlerTest {
                                 .andExpect(status().isNotFound())
                                 .andExpect(jsonPath("$.status").value(404))
                                 .andExpect(jsonPath("$.error").value("URL Not Found"))
+                                .andExpect(jsonPath("$.message").exists())
+                                .andExpect(jsonPath("$.timestamp").exists());
+        }
+
+        @Test
+        @DisplayName("Should return 410 when URL has expired")
+        void shouldReturn410WhenUrlExpired() throws Exception {
+                // Given
+                when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
+                String expiredId = "expired1";
+                when(getUrlUseCase.getOriginalUrl(expiredId))
+                                .thenThrow(new UrlExpiredException(expiredId));
+
+                // When/Then
+                mockMvc.perform(get("/" + expiredId))
+                                .andExpect(status().isGone())
+                                .andExpect(jsonPath("$.status").value(410))
+                                .andExpect(jsonPath("$.error").value("URL Expired"))
                                 .andExpect(jsonPath("$.message").exists())
                                 .andExpect(jsonPath("$.timestamp").exists());
         }
@@ -143,7 +165,7 @@ class GlobalExceptionHandlerTest {
                 // Given
                 when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
                 ShortenRequest request = new ShortenRequest("https://example.com", null);
-                when(shortenUrlUseCase.shorten(any(), isNull(), isNull()))
+                when(shortenUrlUseCase.shorten(any(), isNull(), isNull(), isNull()))
                                 .thenThrow(new IllegalArgumentException("Invalid input"));
 
                 // When/Then
@@ -162,7 +184,7 @@ class GlobalExceptionHandlerTest {
                 // Given
                 when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
                 ShortenRequest request = new ShortenRequest("https://example.com", null);
-                when(shortenUrlUseCase.shorten(any(), isNull(), isNull()))
+                when(shortenUrlUseCase.shorten(any(), isNull(), isNull(), isNull()))
                                 .thenThrow(new RuntimeException("Unexpected error"));
 
                 // When/Then

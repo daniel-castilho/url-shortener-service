@@ -7,6 +7,29 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-27
+
+### Added
+
+- **Link expiry (TTL)** — optional `ttlSeconds` on `POST /api/v1/urls` (`@Positive`, server-capped by
+  `app.shortener.max-ttl-seconds`, default 1 year; `null` = never expires) mapped to an `expiresAt`
+  `Instant` on the short URL. Redirect path checks expiry eagerly: **`410 Gone`** for expired, `404`
+  for unknown, `302` for valid. A MongoDB TTL index on `expiresAt` (migration `V5`) purges expired rows.
+- **Expiry-aware cache** — `CachedUrlValue(originalUrl, expiresAt)`; Redis TTL capped at the remaining
+  time for expiring links (evicted at/before expiry, never served past it); service re-checks expiry on
+  cache hits as defense-in-depth.
+- **Versioned in-code schema migrations** — `MongoSchemaMigrator` + `SchemaMigration` (checksummed,
+  idempotent, fail-fast, history in `schema_migrations`); migrations `V1`–`V5` (baseline, drop
+  `originalUrl` unique, `userId`, `click_events` indexes, `expiresAt` TTL). `IndexMigration` retired.
+- **Expiry/migration metrics** — `urls.expired.total`, `schema.migrations.applied.total`,
+  `schema.migrations.failed.total`.
+
+### Changed
+
+- **Schema management** — Flyway-for-MongoDB was attempted and rejected (JDBC driver not on Maven
+  Central; native connectors are CLI-only); the spec's default in-code runner was adopted after human
+  approval. No `pom.xml` changes.
+
 ## [0.7.0] - 2026-08-27
 
 ### Added

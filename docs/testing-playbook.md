@@ -179,6 +179,11 @@ requirement / risk
 | Collision retry on random code            | Unit + Adapter     | `CompositeUrlIdGeneratorTest`, `MongoUrlRepositoryIT` | `test`; then `*IT`   |
 | Malformed/expired JWT → standard 401       | E2E                | `GlobalExceptionHandlerTest`, `ShortenFlowIT`    | E2E step                 |
 | Rate limit on the redirect path            | Adapter + E2E      | `RedisRateLimiterAdapterTest`, `ShortenFlowIT`   | Slice + E2E step         |
+| Expired link → `410`, unknown → `404`       | E2E                | `ExpiredUrlIT`, `GlobalExceptionHandlerTest`     | E2E step                 |
+| TTL sets `expiresAt`, bounds enforced       | Unit + E2E         | `UrlShortenerServiceTest`, `UrlControllerTest`, `ExpiredUrlIT` (end-to-end `ttlSeconds=1`) | `test`; then `*IT` |
+| Warm cache never serves an expired link     | Adapter + E2E      | `RedisUrlCacheTest`, `ExpiredUrlIT`              | Slice + E2E step         |
+| Schema migrations run once, idempotent, fail-fast | Unit + Adapter | `MongoSchemaMigratorTest`, `SchemaMigrationIT`   | `test`; then `*Migration*IT` |
+| Expiry / migration metrics registered       | E2E                | `MetricsIT`                                      | E2E step                 |
 | Domain independent of infrastructure       | Static boundary    | Rule-1 grep                                       | Local; add to CI         |
 
 A feature is not fully covered if its only test mocks the behaviour that carries the main risk.

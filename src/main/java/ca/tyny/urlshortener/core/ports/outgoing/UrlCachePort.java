@@ -1,7 +1,10 @@
 package ca.tyny.urlshortener.core.ports.outgoing;
 
-public interface UrlCachePort {
-    String get(String id);
+import ca.tyny.urlshortener.core.model.CachedUrlValue;
 
-    void put(String id, String originalUrl);
+public interface UrlCachePort {
+
+    CachedUrlValue get(String id);
+
+    void put(String id, CachedUrlValue value);
 }

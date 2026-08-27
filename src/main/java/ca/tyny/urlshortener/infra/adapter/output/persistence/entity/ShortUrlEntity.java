@@ -5,6 +5,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 /**
@@ -54,12 +55,35 @@ public class ShortUrlEntity {
      */
     private long clickCount;
 
+    /**
+     * Instant at which this short URL expires (UTC); {@code null} = never expires.
+     * A MongoDB TTL index (expireAfter 0s) purges documents once this instant has passed —
+     * the application still checks expiry eagerly (a row may exist until the TTL monitor runs).
+     */
+    private Instant expiresAt;
+
     public ShortUrlEntity() {
     }
 
     public ShortUrlEntity(String id, String originalUrl, String urlHash, LocalDateTime createdAt, String userId,
             boolean isCustomAlias) {
-        this(id, originalUrl, urlHash, createdAt, userId, isCustomAlias, 0);
+        this(id, originalUrl, urlHash, createdAt, userId, isCustomAlias, 0, null);
+    }
+
+    /**
+     * Constructor with all fields except the expiry.
+     *
+     * @param id            unique identifier for the short URL
+     * @param originalUrl   original URL to be stored
+     * @param urlHash       SHA-256 hash of the original URL
+     * @param createdAt     creation timestamp
+     * @param userId        ID of the user who created the short URL
+     * @param isCustomAlias whether this is a user-supplied vanity alias
+     * @param clickCount    running click count (atomic $inc target)
+     */
+    public ShortUrlEntity(String id, String originalUrl, String urlHash, LocalDateTime createdAt, String userId,
+            boolean isCustomAlias, long clickCount) {
+        this(id, originalUrl, urlHash, createdAt, userId, isCustomAlias, clickCount, null);
     }
 
     /**
@@ -72,9 +96,10 @@ public class ShortUrlEntity {
      * @param userId        ID of the user who created the short URL
      * @param isCustomAlias whether this is a user-supplied vanity alias
      * @param clickCount    running click count (atomic $inc target)
+     * @param expiresAt     instant at which the link expires (UTC); {@code null} = never expires
      */
     public ShortUrlEntity(String id, String originalUrl, String urlHash, LocalDateTime createdAt, String userId,
-            boolean isCustomAlias, long clickCount) {
+            boolean isCustomAlias, long clickCount, Instant expiresAt) {
         this.id = id;
         this.originalUrl = originalUrl;
         this.urlHash = urlHash;
@@ -82,6 +107,7 @@ public class ShortUrlEntity {
         this.userId = userId;
         this.isCustomAlias = isCustomAlias;
         this.clickCount = clickCount;
+        this.expiresAt = expiresAt;
     }
 
     public String getId() {
@@ -138,5 +164,13 @@ public class ShortUrlEntity {
 
     public void setClickCount(long clickCount) {
         this.clickCount = clickCount;
+    }
+
+    public Instant getExpiresAt() {
+        return expiresAt;
+    }
+
+    public void setExpiresAt(Instant expiresAt) {
+        this.expiresAt = expiresAt;
     }
 }

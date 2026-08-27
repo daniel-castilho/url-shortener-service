@@ -67,8 +67,12 @@ class UrlControllerTest {
     @MockitoBean
     private ClientAddressResolver clientAddressResolver;
 
+    @MockitoBean
+    private ca.tyny.urlshortener.infra.config.properties.ShortenerProperties shortenerProperties;
+
     private static final String TEST_URL = "https://www.example.com/very/long/url";
     private static final String TEST_ID = "abc123";
+    private static final long MAX_TTL_SECONDS = 31_536_000L;
 
     @org.junit.jupiter.api.BeforeEach
     void setUpRateLimitAllow() {
@@ -76,6 +80,7 @@ class UrlControllerTest {
                 .thenReturn("127.0.0.1");
         org.mockito.Mockito.when(rateLimiter.tryAcquire(any(), anyString()))
                 .thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
+        org.mockito.Mockito.when(shortenerProperties.maxTtlSeconds()).thenReturn(MAX_TTL_SECONDS);
     }
 
     @Test
@@ -85,8 +90,8 @@ class UrlControllerTest {
         ShortenRequest request = new ShortenRequest(TEST_URL, null);
         ShortUrl shortUrl = new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now());
 
-        // Expect shorten called with null customAlias and null userId (anonymous)
-        when(shortenUrlUseCase.shorten(eq(TEST_URL), isNull(), isNull())).thenReturn(shortUrl);
+        // Expect shorten called with null customAlias, null userId (anonymous) and no expiry
+        when(shortenUrlUseCase.shorten(eq(TEST_URL), isNull(), isNull(), isNull())).thenReturn(shortUrl);
 
         // When/Then
         mockMvc.perform(post("/api/v1/urls")
@@ -96,7 +101,7 @@ class UrlControllerTest {
                 .andExpect(jsonPath("$.id").value(TEST_ID))
                 .andExpect(jsonPath("$.shortUrl").value("http://localhost/" + TEST_ID));
 
-        verify(shortenUrlUseCase).shorten(eq(TEST_URL), isNull(), isNull());
+        verify(shortenUrlUseCase).shorten(eq(TEST_URL), isNull(), isNull(), isNull());
     }
 
     @Test
@@ -109,7 +114,7 @@ class UrlControllerTest {
 
         // Note: In this test with TestSecurityConfig, user is anonymous, so userId is
         // null.
-        when(shortenUrlUseCase.shorten(eq(TEST_URL), eq(customAlias), isNull())).thenReturn(shortUrl);
+        when(shortenUrlUseCase.shorten(eq(TEST_URL), eq(customAlias), isNull(), isNull())).thenReturn(shortUrl);
 
         // When/Then
         mockMvc.perform(post("/api/v1/urls")
@@ -118,7 +123,7 @@ class UrlControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(customAlias));
 
-        verify(shortenUrlUseCase).shorten(eq(TEST_URL), eq(customAlias), isNull());
+        verify(shortenUrlUseCase).shorten(eq(TEST_URL), eq(customAlias), isNull(), isNull());
     }
 
     @Test
@@ -181,7 +186,7 @@ class UrlControllerTest {
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isTooManyRequests());
 
-        verify(shortenUrlUseCase, never()).shorten(anyString(), any(), any());
+        verify(shortenUrlUseCase, never()).shorten(anyString(), any(), any(), any());
     }
 
     @Test
@@ -190,7 +195,7 @@ class UrlControllerTest {
         // Given
         String customAlias = "existing-alias";
         ShortenRequest request = new ShortenRequest(TEST_URL, customAlias);
-        when(shortenUrlUseCase.shorten(eq(TEST_URL), eq(customAlias), isNull()))
+        when(shortenUrlUseCase.shorten(eq(TEST_URL), eq(customAlias), isNull(), isNull()))
                 .thenThrow(new ca.tyny.urlshortener.core.exception.AliasAlreadyExistsException(customAlias));
 
         // When/Then
@@ -199,5 +204,60 @@ class UrlControllerTest {
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error").value("Alias Already Exists"));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/urls should pass a resolved expiry for a valid ttlSeconds")
+    void shouldPassResolvedExpiryForValidTtl() throws Exception {
+        // Given
+        ShortUrl shortUrl = new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now());
+        when(shortenUrlUseCase.shorten(eq(TEST_URL), isNull(), isNull(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(shortUrl);
+        String body = "{\"originalUrl\":\"" + TEST_URL + "\",\"ttlSeconds\":60}";
+
+        // When/Then
+        mockMvc.perform(post("/api/v1/urls")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+                .andExpect(status().isOk());
+
+        org.mockito.ArgumentCaptor<java.time.Instant> expiresAt =
+                org.mockito.ArgumentCaptor.forClass(java.time.Instant.class);
+        verify(shortenUrlUseCase).shorten(eq(TEST_URL), isNull(), isNull(), expiresAt.capture());
+        assertThatWithinRoughly(expiresAt.getValue(), java.time.Instant.now().plusSeconds(60), 30);
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/urls should reject ttlSeconds over the server cap with 400")
+    void shouldRejectTtlOverCap() throws Exception {
+        String body = "{\"originalUrl\":\"" + TEST_URL + "\",\"ttlSeconds\":" + (MAX_TTL_SECONDS + 1) + "}";
+
+        mockMvc.perform(post("/api/v1/urls")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Invalid Request"));
+
+        verify(shortenUrlUseCase, never()).shorten(anyString(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/urls should reject non-positive ttlSeconds with 400")
+    void shouldRejectNonPositiveTtl() throws Exception {
+        String body = "{\"originalUrl\":\"" + TEST_URL + "\",\"ttlSeconds\":0}";
+
+        mockMvc.perform(post("/api/v1/urls")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("Validation Failed"));
+
+        verify(shortenUrlUseCase, never()).shorten(anyString(), any(), any(), any());
+    }
+
+    private static void assertThatWithinRoughly(java.time.Instant actual, java.time.Instant expected,
+            long toleranceSecs) {
+        long delta = java.time.Duration.between(actual, expected).abs().toSeconds();
+        org.assertj.core.api.Assertions.assertThat(delta).isLessThanOrEqualTo(toleranceSecs);
     }
 }

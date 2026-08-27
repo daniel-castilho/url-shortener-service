@@ -94,11 +94,32 @@ sync whenever the data model changes.
 
 ## Link expiry / TTL
 
-- **Decision:** add `expiresAt` (nullable; `null` = never expires) to a short URL.
-- Use a **MongoDB TTL index** on `expiresAt` so expired links are purged automatically.
-- The redirect path must check expiry: an expired link does **not** redirect — it returns an "expired"
-  response (not a 404, which would be indistinguishable from "not found"; a distinct code is clearer).
-- _Current state: no `expiresAt`; no TTL index; no expiry check (roadmap item T2.2)._
+- **Decision:** add `expiresAt` (nullable; `null` = never expires) to a short URL. Stored as an
+  `Instant` on the domain record; a domain predicate `isExpired(now)` is the source of truth.
+- Use a **MongoDB TTL index** on `expiresAt` (`expireAfter(0, SECONDS)`) so expired links are purged
+  automatically by the database (cadence ~60 s).
+- **Expiry is application-logic truth, not DB-TTL truth.** The redirect path checks `expiresAt`
+  eagerly — a not-yet-purged expired row must still be treated as expired.
+- **The redirect returns `410 Gone` for an expired link, `404` for a not-found code, `302` for a
+  valid link.** An expired link must **never** be redirectable (not even from a warm cache).
+- **The cache is expiry-aware:** the cached value holds `{ originalUrl, expiresAt }`; on read, if the
+  entry is logically expired it is treated as expired (and evicted) rather than served.
+- **Migration mechanism: in-code versioned runner** replaces the ad-hoc `IndexMigration`
+  `@PostConstruct`. Migrations are plain Java classes implementing `SchemaMigration`
+  (`infra/adapter/output/persistence/migration`), applied on startup by `MongoSchemaMigrator` in
+  ascending version order, once, idempotently, checksummed (SHA-256 of the class name) and recorded in
+  the `schema_migrations` history collection. Failure aborts startup (fail-fast).
+  `spring.data.mongodb.auto-index-creation` is disabled so indexes are managed only by migrations.
+- **Why not Flyway:** community Flyway-for-MongoDB is not usable here — the JDBC driver it depends on
+  (`com.github.kornilova203:mongo-jdbc-driver`) is not published to Maven Central (falls back to a
+  private GitHub Packages repo → 401), the native-connector mode is CLI-only (requires `mongosh`,
+  which is not installed) and its Java API artifact is unpublished, and Spring Boot 4.x does not
+  change any of this. **Explicit human approval** granted for the spec's default in-code runner after
+  the experiment failed.
+- **Epic status: applied (link-expiry epic).** `expiresAt` (nullable), TTL index, the `410`/`404`
+  distinction, the expiry-aware cache and the versioned in-code migration runner are all live
+  (`V1`–`V5` migrations: baseline, drop `originalUrl_1` unique, `userId`, `click_events` indexes,
+  `expiresAt` TTL).
 
 ## Registry of indexes (target)
 
@@ -106,16 +127,20 @@ sync whenever the data model changes.
 | -------------- | -------------------------- | --------- | -------------------------------------------------- |
 | `short_urls`   | `_id`                       | unique    | Code identity + retry-on-collision                 |
 | `short_urls`   | `userId`                    | non-unique | User link listing                                  |
-| `short_urls`   | `expiresAt`                 | TTL       | Auto-purge expired links (target)                  |
+| `short_urls`   | `expiresAt`                 | TTL       | Auto-purge expired links (applied via migration V5)   |
 | `short_urls`   | `urlHash`                   | non-unique | Optional URL aggregate queries (future)            |
 | `click_events` | `shortCode` + `timestamp`   | non-unique | Aggregate/retention queries (applied)              |
 | `click_events` | `timestamp`                 | non-unique | Retention purge (applied)                          |
 | `users`        | `_id`                       | unique    | User identity                                     |
 | `users`        | `email`                     | unique    | Email uniqueness (registration guard)              |
 
-- Indexes are managed via **versioned migrations** (not `auto-index-creation`) so removal of the
-  `originalUrl` unique index and addition of TTL/`urlHash` are deterministic (roadmap, `AGENTS.md`
-  debt item 10).
+- Indexes are managed via the **in-code versioned migration runner** (`MongoSchemaMigrator`, history
+  in `schema_migrations`; not `auto-index-creation`), so removal of the `originalUrl` unique index and
+  addition of the TTL index are deterministic and auditable. Migrations: `V1Baseline` (create
+  `short_urls`/`click_events`), `V2DropOriginalUrlUniqueIndex`, `V3EnsureUserIdIndex`,
+  `V4EnsureClickEventsIndexes`, `V5AddExpiresAtTtlIndex`
+  (`src/main/java/ca/tyny/urlshortener/infra/adapter/output/persistence/migration`).
+  `AGENTS.md` debt item 10 resolved.
 
 ## Registration (email uniqueness)
 
@@ -123,6 +148,10 @@ sync whenever the data model changes.
 - Registration writes the user and relies on the unique index; a concurrent second registration with
   the same email is rejected atomically by the DB (not by a pre-check).
 - Passwords stored as BCrypt hash only — never plaintext, never logged.
+- **Known gap (pre-existing, not part of the link-expiry epic):** no migration currently creates the
+  `users.email` unique index — uniqueness is enforced in application logic at registration. A future
+  migration (`V6…`) should add it so concurrent duplicate registrations are rejected atomically by the
+  DB, matching this decision.
 
 ## Multi-write / partial failure
 

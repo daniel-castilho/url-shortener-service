@@ -56,4 +56,19 @@ class ShortUrlEntityTest {
         assertThat(entity.getUserId()).isEqualTo("user1");
         assertThat(entity.isCustomAlias()).isTrue();
     }
+
+    @Test
+    @DisplayName("expiresAt defaults to null and is settable")
+    void expiresAtDefaultsToNullAndIsSettable() {
+        ShortUrlEntity entity = new ShortUrlEntity();
+        assertThat(entity.getExpiresAt()).isNull();
+
+        java.time.Instant expiry = java.time.Instant.parse("2026-12-31T23:59:59Z");
+        entity.setExpiresAt(expiry);
+        assertThat(entity.getExpiresAt()).isEqualTo(expiry);
+
+        ShortUrlEntity viaAllArgs = new ShortUrlEntity("abc123", "https://example.com", "hash123", LocalDateTime.now(),
+                "user1", true, 0, expiry);
+        assertThat(viaAllArgs.getExpiresAt()).isEqualTo(expiry);
+    }
 }

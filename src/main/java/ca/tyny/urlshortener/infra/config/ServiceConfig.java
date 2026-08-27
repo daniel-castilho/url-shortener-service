@@ -21,9 +21,9 @@ import ca.tyny.urlshortener.core.validation.ReservedWordsValidator;
 import ca.tyny.urlshortener.core.validation.UrlValidator;
 import ca.tyny.urlshortener.infra.adapter.output.validation.DefaultUrlValidator;
 import ca.tyny.urlshortener.infra.config.properties.RateLimiterProperties;
+import ca.tyny.urlshortener.infra.config.properties.ShortenerProperties;
 import ca.tyny.urlshortener.infra.config.properties.UrlValidationProperties;
 import ca.tyny.urlshortener.infra.config.properties.SecurityProperties;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -35,14 +35,14 @@ import java.util.List;
 @EnableConfigurationProperties({
         ca.tyny.urlshortener.infra.config.properties.RateLimiterProperties.class,
         ca.tyny.urlshortener.infra.config.properties.UrlValidationProperties.class,
-        ca.tyny.urlshortener.infra.config.properties.SecurityProperties.class
+        ca.tyny.urlshortener.infra.config.properties.SecurityProperties.class,
+        ca.tyny.urlshortener.infra.config.properties.ShortenerProperties.class
 })
 public class ServiceConfig {
 
     @Bean
-    public Base62CodeGenerator base62CodeGenerator(
-            @Value("${app.shortener.code-length:7}") int codeLength) {
-        return new Base62CodeGenerator(codeLength);
+    public Base62CodeGenerator base62CodeGenerator(ShortenerProperties properties) {
+        return new Base62CodeGenerator(properties.codeLength());
     }
 
     @Bean

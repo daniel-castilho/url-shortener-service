@@ -29,6 +29,8 @@ spring:
 app:
   shortener:
     code-length: ${SHORTENER_CODE_LENGTH:7}
+    # Maximum ttlSeconds accepted on shorten (server-side cap); over-cap is rejected with 400.
+    max-ttl-seconds: ${SHORTENER_MAX_TTL_SECONDS:31536000}   # 1 year
     # salt: removed (SHORTENER_SALT no longer used once Hashids is dropped)
   url:
     allow-http: false              # Reject http:// URLs (HTTPS-only by default)

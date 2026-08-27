@@ -260,10 +260,15 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
 8. **Weak URL validation / SSRF** — only `^https?://.*`; strengthen to enforce HTTPS, validate the
    host, and block internal/private/link-local IPs (Rule 6). — `resolved`
 9. **Actuator & Swagger publicly exposed** — `/actuator/**` and `/swagger-ui/**` are now tiered: liveness/readiness/info public; health detail requires ADMIN; metrics/prometheus require ADMIN or METRICS_VIEWER; other actuator endpoints require ADMIN. Swagger enabled only when `app.security.swagger.enabled=true` (default false). Health detail defaults to `when-authorized`. — `resolved`
-10. **No versioned schema/index migrations** — `spring.data.mongodb.auto-index-creation: true`; adopt a
-    migration framework and manage indexes in a deploy step. Required to drop the `originalUrl`
-    unique index (item 4). `IndexMigration` now drops `originalUrl_1` index and ensures `userId`
-    index. — `resolved`
+10. **No versioned schema/index migrations** — previously `spring.data.mongodb.auto-index-creation: true`.
+    `MongoSchemaMigrator` (a versioned, in-code, checksummed, fail-fast runner recording into
+    `schema_migrations`) now owns the schema: migrations `V1`–`V5` create core collections, drop the
+    `originalUrl` unique index, and ensure the `userId`, `click_events` and `expiresAt` TTL indexes.
+    `IndexMigration` is retired. A Flyway-for-MongoDB migration was attempted and rejected (JDBC
+    driver not published to Central; native connectors are CLI-only) after human approval of the
+    in-code runner. — `resolved`
+    _Remaining:_ the `users.email` unique index is still not created by any migration (uniqueness is
+    application-logic only) — see `docs/data-model-decisions.md`. — `open`
 11. **GraalVM native build broken** — `native` profile `mainClass` points to the non-existent
     `ca.tyny.urlshortener.infra.Application`. Fix to `ca.tyny.urlshortener.Application`. — `resolved`
 12. **Observability gaps** — metrics exist but `id.generation.duration` / `url.retrieval.duration`

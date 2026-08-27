@@ -2,6 +2,7 @@ package ca.tyny.urlshortener.infra.adapter.input.rest.advice;
 
 import ca.tyny.urlshortener.core.exception.CodeGenerationException;
 import ca.tyny.urlshortener.core.exception.InvalidDestinationException;
+import ca.tyny.urlshortener.core.exception.UrlExpiredException;
 import ca.tyny.urlshortener.core.exception.UrlNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +34,19 @@ public class GlobalExceptionHandler {
                                 LocalDateTime.now());
 
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+        }
+
+        @ExceptionHandler(UrlExpiredException.class)
+        public ResponseEntity<ErrorResponse> handleUrlExpired(UrlExpiredException ex) {
+                log.warn("URL expired: {}", ex.getMessage());
+
+                ErrorResponse error = new ErrorResponse(
+                                HttpStatus.GONE.value(),
+                                "URL Expired",
+                                ex.getMessage(),
+                                LocalDateTime.now());
+
+                return ResponseEntity.status(HttpStatus.GONE).body(error);
         }
 
         @ExceptionHandler(IllegalArgumentException.class)

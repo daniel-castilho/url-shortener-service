@@ -3,9 +3,11 @@ package ca.tyny.urlshortener.core.service;
 import ca.tyny.urlshortener.core.exception.CodeGenerationException;
 import ca.tyny.urlshortener.core.exception.InvalidDestinationException;
 import ca.tyny.urlshortener.core.exception.ShortCodeCollisionException;
+import ca.tyny.urlshortener.core.exception.UrlExpiredException;
 import ca.tyny.urlshortener.core.exception.UrlNotFoundException;
 import ca.tyny.urlshortener.core.idgeneration.Base62CodeGenerator;
 import ca.tyny.urlshortener.core.idgeneration.UrlIdGenerator;
+import ca.tyny.urlshortener.core.model.CachedUrlValue;
 import ca.tyny.urlshortener.core.model.ShortUrl;
 import ca.tyny.urlshortener.core.model.Url;
 import ca.tyny.urlshortener.core.ports.incoming.GetUrlUseCase;
@@ -20,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Objects;
 
@@ -62,7 +65,7 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
     }
 
     @Override
-    public ShortUrl shorten(String originalUrl, String customAlias, String userId) {
+    public ShortUrl shorten(String originalUrl, String customAlias, String userId, Instant expiresAt) {
         Objects.requireNonNull(originalUrl, "URL cannot be null");
         urlValidator.validate(originalUrl);
 
@@ -85,10 +88,11 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
         ShortUrl shortUrl;
         if (isCustomAlias) {
             String id = urlIdGenerator.generateId(customAlias, userId);
-            shortUrl = new ShortUrl(id, validatedUrl.value(), LocalDateTime.now(), userId, true);
+            shortUrl = new ShortUrl(id, validatedUrl.value(), LocalDateTime.now(), userId, true)
+                    .withExpiresAt(expiresAt);
             urlRepository.save(shortUrl);
         } else {
-            shortUrl = saveWithCollisionRetry(validatedUrl.value(), userId);
+            shortUrl = saveWithCollisionRetry(validatedUrl.value(), userId, expiresAt);
         }
 
         if (userId != null && customAlias != null && !customAlias.isBlank()) {
@@ -100,12 +104,13 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
         return shortUrl;
     }
 
-    private ShortUrl saveWithCollisionRetry(String originalUrl, String userId) {
+    private ShortUrl saveWithCollisionRetry(String originalUrl, String userId, Instant expiresAt) {
         for (int attempt = 0; attempt <= MAX_COLLISION_RETRIES; attempt++) {
             long startNs = System.nanoTime();
             String id = base62CodeGenerator.generate();
             metrics.recordIdGeneration(Duration.ofNanos(System.nanoTime() - startNs));
-            ShortUrl candidate = new ShortUrl(id, originalUrl, LocalDateTime.now(), userId, false);
+            ShortUrl candidate = new ShortUrl(id, originalUrl, LocalDateTime.now(), userId, false)
+                    .withExpiresAt(expiresAt);
             try {
                 urlRepository.save(candidate);
                 return candidate;
@@ -129,24 +134,31 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
 
         long startNs = System.nanoTime();
 
-        String cachedUrl = urlCache.get(id);
+        CachedUrlValue cachedUrl = urlCache.get(id);
         if (cachedUrl != null) {
             log.info(LOG_CACHE_HIT, id);
             metrics.recordCacheHit();
             metrics.recordUrlRetrieval(Duration.ofNanos(System.nanoTime() - startNs));
-            return cachedUrl;
+            if (cachedUrl.isExpired(Instant.now())) {
+                metrics.recordUrlExpired();
+                throw new UrlExpiredException(id);
+            }
+            return cachedUrl.originalUrl();
         }
 
         log.info(LOG_CACHE_MISS, id);
         metrics.recordCacheMiss();
 
-        String originalUrl = urlRepository.findById(id)
-                .map(shortUrl -> {
-                    urlCache.put(id, shortUrl.originalUrl());
-                    return shortUrl.originalUrl();
-                })
+        ShortUrl shortUrl = urlRepository.findById(id)
                 .orElseThrow(() -> new UrlNotFoundException(id));
+
+        if (shortUrl.isExpired(Instant.now())) {
+            metrics.recordUrlExpired();
+            throw new UrlExpiredException(id);
+        }
+
+        urlCache.put(id, new CachedUrlValue(shortUrl.originalUrl(), shortUrl.expiresAt()));
         metrics.recordUrlRetrieval(Duration.ofNanos(System.nanoTime() - startNs));
-        return originalUrl;
+        return shortUrl.originalUrl();
     }
 }

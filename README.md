@@ -40,7 +40,8 @@ technologies used by the `infra` layer.
 | **Testing** | ![JUnit 5](https://img.shields.io/badge/JUnit5-25A162?style=for-the-badge&logo=junit5&logoColor=white) ![Mockito](https://img.shields.io/badge/Mockito-D43A2A?style=for-the-badge&logo=mockito&logoColor=white) ![Testcontainers](https://img.shields.io/badge/Testcontainers-262261?style=for-the-badge&logo=testcontainers&logoColor=white) ![RestAssured](https://img.shields.io/badge/REST_Assured-000000?style=for-the-badge&logo=rest-assured&logoColor=white) |
 
 - **Web:** Spring Web + **Undertow** (non-blocking I/O, direct buffers) with **Virtual Threads** enabled.
-- **Data:** Spring Data MongoDB (`auto-index-creation: false`; schema managed by `IndexMigration`) and Spring Data Redis.
+- **Data:** Spring Data MongoDB (`auto-index-creation: false`; schema managed by versioned in-code
+  migrations via `MongoSchemaMigrator`) and Spring Data Redis.
 - **Cache:** **Caffeine** local (L1, 100 items / 5s TTL) → **Redis** (L2, 24h TTL + jitter) →
   MongoDB. A **Redisson Bloom Filter** short-circuits lookups for codes that certainly do not exist.
 - **ID generation (locked identity model):** cryptographically random **Base62** codes
@@ -110,8 +111,9 @@ With Docker running, start MongoDB and Redis via Docker Compose:
 docker-compose up -d
 ```
 
-This starts `mongo:6.0` and `redis:alpine`. MongoDB indexes are managed by the application's
-`IndexMigration` on startup (`auto-index-creation` is off).
+This starts `mongo:6.0` and `redis:alpine`. MongoDB indexes are managed on startup by the
+application's versioned schema migrations (`MongoSchemaMigrator`, versions `V1`–`V5`, recorded in the
+`schema_migrations` history; `auto-index-creation` is off).
 
 ### 2. Run the application
 
@@ -169,8 +171,8 @@ With the application running, open the API docs:
 | **Auth** | `POST` | `/api/v1/auth/register` | Register a new user (name, e-mail, password ≥ 6 chars) and return an access + refresh token. Fails `400` if the e-mail is already in use. |
 | | `POST` | `/api/v1/auth/login` | Authenticate and return an access + refresh token. |
 | | `POST` | `/api/v1/auth/refresh` | Exchange a valid refresh token for a new access token. |
-| **URLs** | `POST` | `/api/v1/urls` | Shorten a URL. Anonymous allowed; `customAlias` (vanity) requires authentication. `429` on rate limit. |
-| **Redirect** | `GET` | `/{id}` | Resolve a short code and redirect (`302`) to the original URL. `404` if unknown, and never blocks on analytics. |
+| **URLs** | `POST` | `/api/v1/urls` | Shorten a URL. Anonymous allowed; `customAlias` (vanity) requires authentication; optional `ttlSeconds` (bounded by `app.shortener.max-ttl-seconds`, default 1 year, `null` = never expires). `429` on rate limit. |
+| **Redirect** | `GET` | `/{id}` | Resolve a short code and redirect (`302`) to the original URL. `404` if unknown, `410 Gone` if expired, and never blocks on analytics. |
 
 ### Monitoring endpoints (Actuator)
 
@@ -179,6 +181,7 @@ With the application running, open the API docs:
 - **Circuit breakers:** `GET /actuator/circuitbreakers` (Resilience4j state)
 
 Custom business metrics exposed via Micrometer include `urls.shortened.total`, `redirects.total`,
+`urls.expired.total`, `schema.migrations.applied.total`, `schema.migrations.failed.total`,
 `shorten.latency` (p50/p95/p99), `redirect.latency`, `cache.hits.total` / `cache.misses.total`,
 `bloomfilter.rejections.total`, `id.generation.duration` (p50/p95/p99) and
 `url.retrieval.duration` (p50/p95/p99).
@@ -195,6 +198,15 @@ Implemented on `main`:
   alphabet / reserved words). `409` is **only** “custom alias already exists”.
   No URL dedup: the same long URL may be shortened repeatedly, each call yielding a **distinct**
   code.
+- **Link expiry (TTL) — landed.** Optional `ttlSeconds` on `POST /api/v1/urls` (positive, server-capped
+  via `app.shortener.max-ttl-seconds`, `null` = never expires) becomes an `expiresAt` `Instant` on the
+  short URL. The redirect path checks expiry **eagerly** (application logic is the source of truth): an
+  expired link returns **`410 Gone`**, an unknown code `404`, a valid code `302`. Expired links are
+  never served from cache: the cache value carries `expiresAt` and the Redis TTL is capped at the
+  remaining time. A **MongoDB TTL index** on `expiresAt` (migration `V5`) purges expired rows on the
+  database side (~60 s cadence). Schema is now managed by a **versioned in-code migration runner**
+  (`MongoSchemaMigrator`, `schema_migrations` history, checksummed, fail-fast) — `IndexMigration` is
+  retired.
 - **Custom aliases (vanity URLs)** — authenticated users can create custom slugs; blocked reserved
   words, plan-minimum alias length, and quota enforcement per subscription plan (`FREE`/`SILVER`/
   `GOLD`/`DIAMOND`).
@@ -238,8 +250,9 @@ Deliberately not implemented yet — candidate backlog, in priority order:
 - **Real analytics persistence — landed.** Click events persist to `click_events` via a durable
   Redis Stream + batched worker; `clickCount` is updated atomically (`$inc`), quota counters too.
 - **Rate limiting on the redirect path — landed.** `GET /{id}` now has per-IP token-bucket over Redis (Rule 5): independent REDIRECT scope with capacity 120/min (configurable), Redis TIME-driven atomic Lua script, trusted-proxy CIDR IP resolution, fail-open policy, 429 with `Retry-After` + `RateLimit-*` headers. Scope isolation: exhausting redirect budget never affects shorten. ITs prove anti-enumeration (unknown-code probes throttled), exact capacity under burst, and scope isolation.
-- **TTL / link expiration** — add `expiresAt` (with a MongoDB TTL index) and enforce it at redirect
-  time.
+- **TTL / link expiration — landed.** `ttlSeconds` input → `expiresAt`; `410 Gone` for expired at
+  redirect; expiry-aware cache (never serve an expired link); MongoDB TTL index via the versioned
+  migration `V5`. See Current State.
 - **Land the locked identity model in code** — stories I1–I6: random Base62 + collision retry, drop
   the unique index on `originalUrl`, isolate generated codes from vanity aliases (debt items 3, 4, 7).
   The **contract** is documented in this README and `docs/data-model-decisions.md`.

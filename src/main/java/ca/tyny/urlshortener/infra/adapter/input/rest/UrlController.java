@@ -9,6 +9,7 @@ import ca.tyny.urlshortener.core.ports.outgoing.RateLimiterPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.ShortenRequest;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.ShortenResponse;
+import ca.tyny.urlshortener.infra.config.properties.ShortenerProperties;
 import ca.tyny.urlshortener.infra.observability.MetricsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -41,6 +42,7 @@ public class UrlController {
         private final MetricsService metricsService;
         private final UserRepositoryPort userRepository;
         private final ClientAddressResolver clientAddressResolver;
+        private final ShortenerProperties shortenerProperties;
 
         public UrlController(ShortenUrlUseCase shortenUrlUseCase,
                         GetUrlUseCase getUrlUseCase,
@@ -49,7 +51,8 @@ public class UrlController {
                         HttpServletRequest request,
                         MetricsService metricsService,
                         UserRepositoryPort userRepository,
-                        ClientAddressResolver clientAddressResolver) {
+                        ClientAddressResolver clientAddressResolver,
+                        ShortenerProperties shortenerProperties) {
                 this.shortenUrlUseCase = shortenUrlUseCase;
                 this.getUrlUseCase = getUrlUseCase;
                 this.analyticsPort = analyticsPort;
@@ -58,6 +61,7 @@ public class UrlController {
                 this.metricsService = metricsService;
                 this.userRepository = userRepository;
                 this.clientAddressResolver = clientAddressResolver;
+                this.shortenerProperties = shortenerProperties;
         }
 
         @PostMapping("/api/v1/urls")
@@ -91,7 +95,7 @@ public class UrlController {
                         }
 
                         ShortUrl shortUrl = shortenUrlUseCase.shorten(request.originalUrl(), request.customAlias(),
-                                        userId);
+                                        userId, resolveExpiresAt(request.ttlSeconds()));
                         String baseUrl = org.springframework.web.servlet.support.ServletUriComponentsBuilder
                                         .fromCurrentContextPath().build().toUriString();
 
@@ -147,5 +151,22 @@ public class UrlController {
                                 .header("RateLimit-Remaining", "0")
                                 .header("RateLimit-Reset", Long.toString(verdict.resetSeconds()))
                                 .build();
+        }
+
+        /**
+         * Resolves the optional {@code ttlSeconds} into an absolute UTC expiry instant.
+         * {@code null} (absent) means "never expires". Values over the server cap are rejected with
+         * {@code 400} (IllegalArgumentException); non-positive values are already rejected by the
+         * {@code @Positive} DTO constraint.
+         */
+        private java.time.Instant resolveExpiresAt(Long ttlSeconds) {
+                if (ttlSeconds == null) {
+                        return null;
+                }
+                if (ttlSeconds > shortenerProperties.maxTtlSeconds()) {
+                        throw new IllegalArgumentException("ttlSeconds exceeds the maximum of "
+                                        + shortenerProperties.maxTtlSeconds() + " seconds");
+                }
+                return java.time.Instant.now().plusSeconds(ttlSeconds);
         }
 }

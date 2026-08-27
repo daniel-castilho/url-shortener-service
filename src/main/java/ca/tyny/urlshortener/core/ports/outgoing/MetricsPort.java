@@ -20,4 +20,10 @@ public interface MetricsPort {
     void recordIdGeneration(Duration duration);
 
     void recordUrlRetrieval(Duration duration);
+
+    void recordUrlExpired();
+
+    void recordMigrationApplied();
+
+    void recordMigrationFailed();
 }

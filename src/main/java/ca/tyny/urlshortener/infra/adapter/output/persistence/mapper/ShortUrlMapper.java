@@ -25,7 +25,8 @@ public class ShortUrlMapper {
                 domain.createdAt(),
                 domain.userId(),
                 domain.isCustomAlias(),
-                domain.clickCount());
+                domain.clickCount(),
+                domain.expiresAt());
     }
 
     public ShortUrl toDomain(ShortUrlEntity entity) {
@@ -39,7 +40,8 @@ public class ShortUrlMapper {
                 entity.getCreatedAt(),
                 entity.getUserId(),
                 entity.isCustomAlias(),
-                entity.getClickCount());
+                entity.getClickCount(),
+                entity.getExpiresAt());
     }
 
     private String sha256Hex(String input) {

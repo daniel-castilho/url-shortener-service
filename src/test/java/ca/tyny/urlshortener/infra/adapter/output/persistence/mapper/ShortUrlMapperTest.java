@@ -119,4 +119,25 @@ class ShortUrlMapperTest {
         assertThat(viaFourArgs.clickCount()).isZero();
         assertThat(viaSixArgs.getClickCount()).isZero();
     }
+
+    @Test
+    @DisplayName("Should round-trip expiresAt across domain and entity")
+    void shouldRoundTripExpiresAt() {
+        java.time.Instant expiry = java.time.Instant.parse("2026-12-31T23:59:59Z");
+        ShortUrl domain = new ShortUrl("abc123", "https://example.com", LocalDateTime.now(), "user1", true)
+                .withExpiresAt(expiry);
+
+        ShortUrlEntity entity = mapper.toPersistence(domain);
+        assertThat(entity.getExpiresAt()).isEqualTo(expiry);
+
+        ShortUrl converted = mapper.toDomain(entity);
+        assertThat(converted.expiresAt()).isEqualTo(expiry);
+
+        ShortUrl noExpiry = mapper.toDomain(mapper.toPersistence(baseWithoutExpiry()));
+        assertThat(noExpiry.expiresAt()).isNull();
+    }
+
+    private ShortUrl baseWithoutExpiry() {
+        return new ShortUrl("abc123", "https://example.com", LocalDateTime.now(), "user1", true);
+    }
 }
