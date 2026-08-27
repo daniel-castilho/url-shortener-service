@@ -4,9 +4,8 @@ Record of the single-source-of-truth decisions taken for the URL Shortener Servi
 sync whenever the data model changes.
 
 > **Identity model (locked):** random Base62 codes, **no URL dedup**, namespace isolation, `409` =
-> alias conflict only. That is the product contract. Other entries (analytics persistence, link
-> expiry, atomic quota `$inc`) remain target until their epics land. Do not describe a Redis
-> counter, Hashids, or unique-on-`originalUrl` as the identity design.
+> alias conflict only. That is the product contract. All entries (analytics persistence, link
+> expiry, atomic quota `$inc`, email uniqueness) are applied.
 
 ---
 
@@ -33,8 +32,6 @@ sync whenever the data model changes.
 - A repeated URL is simply a new row with its own code.
 - **Future analytics (optional):** store a SHA-256 **`urlHash`** to enable de-duplicated aggregate
   queries later, and add a **non-unique** index on it only if querying by URL becomes a requirement.
-- _Code landing: stories I4–I5 (`AGENTS.md` debt item 4). Until the unique index is dropped, treat
-  any unique-on-URL behaviour as a bug against this decision, not as the product rule._
 
 ## Custom (vanity) alias ↔ generated code — namespace isolation
 
@@ -121,7 +118,7 @@ sync whenever the data model changes.
   (`V1`–`V5` migrations: baseline, drop `originalUrl_1` unique, `userId`, `click_events` indexes,
   `expiresAt` TTL).
 
-## Registry of indexes (target)
+## Registry of indexes (applied)
 
 | Collection     | Index                      | Type      | Purpose                                            |
 | -------------- | -------------------------- | --------- | -------------------------------------------------- |
@@ -133,25 +130,24 @@ sync whenever the data model changes.
 | `click_events` | `timestamp`                 | non-unique | Retention purge (applied)                          |
 | `users`        | `_id`                       | unique    | User identity                                     |
 | `users`        | `email`                     | unique    | Email uniqueness (registration guard)              |
+| `users`        | `plan`                      | non-unique | Plan-based queries                                 |
+| `users`        | `createdAt`                 | non-unique | Time-based queries                                 |
 
 - Indexes are managed via the **in-code versioned migration runner** (`MongoSchemaMigrator`, history
   in `schema_migrations`; not `auto-index-creation`), so removal of the `originalUrl` unique index and
   addition of the TTL index are deterministic and auditable. Migrations: `V1Baseline` (create
   `short_urls`/`click_events`), `V2DropOriginalUrlUniqueIndex`, `V3EnsureUserIdIndex`,
-  `V4EnsureClickEventsIndexes`, `V5AddExpiresAtTtlIndex`
+  `V4EnsureClickEventsIndexes`, `V5AddExpiresAtTtlIndex`, `V6EnsureUserIndexes`
   (`src/main/java/ca/tyny/urlshortener/infra/adapter/output/persistence/migration`).
   `AGENTS.md` debt item 10 resolved.
 
 ## Registration (email uniqueness)
 
-- **Source of truth:** the `users` collection with a **unique index on `email`** (normalized).
+- **Source of truth:** the `users` collection with a **unique index on `email`** (normalized), applied
+  via migration `V6EnsureUserIndexes`.
 - Registration writes the user and relies on the unique index; a concurrent second registration with
   the same email is rejected atomically by the DB (not by a pre-check).
 - Passwords stored as BCrypt hash only — never plaintext, never logged.
-- **Known gap (pre-existing, not part of the link-expiry epic):** no migration currently creates the
-  `users.email` unique index — uniqueness is enforced in application logic at registration. A future
-  migration (`V6…`) should add it so concurrent duplicate registrations are rejected atomically by the
-  DB, matching this decision.
 
 ## Multi-write / partial failure
 

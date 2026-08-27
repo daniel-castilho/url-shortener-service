@@ -19,6 +19,7 @@ class SchemaMigrationIT extends BaseIntegrationTest {
 
     private static final String SHORT_URLS = "short_urls";
     private static final String CLICK_EVENTS = "click_events";
+    private static final String USERS = "users";
 
     @Autowired
     private MongoTemplate mongoTemplate;
@@ -33,8 +34,8 @@ class SchemaMigrationIT extends BaseIntegrationTest {
         migrator.migrate();
 
         List<Document> history = mongoTemplate.findAll(Document.class, MongoSchemaMigrator.HISTORY_COLLECTION);
-        assertThat(history).hasSize(5);
-        assertThat(history.stream().map(doc -> doc.getInteger("version"))).containsExactly(1, 2, 3, 4, 5);
+        assertThat(history).hasSize(6);
+        assertThat(history.stream().map(doc -> doc.getInteger("version"))).containsExactly(1, 2, 3, 4, 5, 6);
         assertThat(history).allSatisfy(doc -> {
             assertThat(doc.getString("checksum")).isNotBlank();
             assertThat(doc.getString("description")).isNotBlank();
@@ -52,6 +53,13 @@ class SchemaMigrationIT extends BaseIntegrationTest {
 
         List<String> clickEventsIndexes = indexNames(mongoTemplate.indexOps(CLICK_EVENTS).getIndexInfo());
         assertThat(clickEventsIndexes).contains("_id_", "shortCode_1_timestamp_1", "timestamp_1");
+
+        List<String> usersIndexes = indexNames(mongoTemplate.indexOps(USERS).getIndexInfo());
+        assertThat(usersIndexes).contains("_id_", "email_1", "plan_1", "createdAt_1");
+        IndexInfo emailUniqueIndex = mongoTemplate.indexOps(USERS).getIndexInfo().stream()
+                .filter(index -> "email_1".equals(index.getName()))
+                .findFirst().orElseThrow();
+        assertThat(emailUniqueIndex.isUnique()).isTrue();
     }
 
     @Test
@@ -62,7 +70,7 @@ class SchemaMigrationIT extends BaseIntegrationTest {
         migrator.migrate();
 
         List<Document> history = mongoTemplate.findAll(Document.class, MongoSchemaMigrator.HISTORY_COLLECTION);
-        assertThat(history).hasSize(5);
+        assertThat(history).hasSize(6);
         assertThat(indexNames(mongoTemplate.indexOps(SHORT_URLS).getIndexInfo()))
                 .contains("userId_1", "expiresAt_1");
         assertThat(indexNames(mongoTemplate.indexOps(CLICK_EVENTS).getIndexInfo()))

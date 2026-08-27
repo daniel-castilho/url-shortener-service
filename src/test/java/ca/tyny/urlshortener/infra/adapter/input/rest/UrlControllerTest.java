@@ -236,7 +236,7 @@ class UrlControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("Invalid Request"));
+                .andExpect(jsonPath("$.error").value("Invalid Expiry"));
 
         verify(shortenUrlUseCase, never()).shorten(anyString(), any(), any(), any());
     }

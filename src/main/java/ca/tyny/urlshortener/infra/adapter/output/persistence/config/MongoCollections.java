@@ -20,6 +20,11 @@ public class MongoCollections {
      */
     public static final String CLICK_EVENTS = "click_events";
 
+    /**
+     * Collection storing user accounts.
+     */
+    public static final String USERS = "users";
+
     private MongoCollections() {
         throw new AssertionError("Utility class should not be instantiated");
     }

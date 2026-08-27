@@ -3,6 +3,7 @@ package ca.tyny.urlshortener.infra.adapter.output.persistence;
 import ca.tyny.urlshortener.core.model.QuotaUsage;
 import ca.tyny.urlshortener.core.model.SubscriptionPlan;
 import ca.tyny.urlshortener.core.model.SubscriptionStatus;
+import ca.tyny.urlshortener.infra.adapter.output.persistence.config.MongoCollections;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
@@ -12,7 +13,7 @@ import java.time.LocalDateTime;
 /**
  * MongoDB entity for User persistence.
  */
-@Document(collection = "users")
+@Document(collection = MongoCollections.USERS)
 public class UserEntity {
 
     @Id

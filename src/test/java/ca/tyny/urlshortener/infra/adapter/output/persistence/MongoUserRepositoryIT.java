@@ -5,20 +5,31 @@ import ca.tyny.urlshortener.core.model.QuotaUsage;
 import ca.tyny.urlshortener.core.model.SubscriptionPlan;
 import ca.tyny.urlshortener.core.model.SubscriptionStatus;
 import ca.tyny.urlshortener.core.model.User;
+import ca.tyny.urlshortener.infra.adapter.output.persistence.UserEntity;
+import ca.tyny.urlshortener.infra.adapter.output.persistence.migration.MongoSchemaMigrator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.mongodb.core.MongoTemplate;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("MongoUserRepository Integration Tests")
 class MongoUserRepositoryIT extends BaseIntegrationTest {
 
     @Autowired
     private MongoUserRepository mongoUserRepository;
+
+    @Autowired
+    private MongoTemplate mongoTemplate;
+
+    @Autowired
+    private MongoSchemaMigrator migrator;
 
     @Test
     @DisplayName("Should save and find user by ID")
@@ -122,5 +133,34 @@ class MongoUserRepositoryIT extends BaseIntegrationTest {
         assertThat(found).isPresent();
         assertThat(found.get().name()).isEqualTo("Updated Name");
         assertThat(found.get().plan()).isEqualTo(SubscriptionPlan.SILVER);
+    }
+
+    @Test
+    @DisplayName("Should enforce storage-level email uniqueness via unique index")
+    void shouldEnforceEmailUniquenessAtStorageLevel() {
+        // Ensure migrations have run (in case DB was dropped by another test)
+        migrator.migrate();
+
+        // Given
+        String email = "unique@example.com";
+        UserEntity entity1 = new UserEntity(
+                "user1", email, "User One", "hash1",
+                SubscriptionPlan.FREE, SubscriptionStatus.ACTIVE,
+                LocalDateTime.now(), LocalDateTime.now().plusMonths(1),
+                new QuotaUsage(), null, null,
+                LocalDateTime.now(), LocalDateTime.now());
+        UserEntity entity2 = new UserEntity(
+                "user2", email, "User Two", "hash2",
+                SubscriptionPlan.FREE, SubscriptionStatus.ACTIVE,
+                LocalDateTime.now(), LocalDateTime.now().plusMonths(1),
+                new QuotaUsage(), null, null,
+                LocalDateTime.now(), LocalDateTime.now());
+
+        // When - first insert succeeds
+        mongoTemplate.insert(entity1);
+
+        // Then - second insert with same email fails at storage level (unique index)
+        assertThatThrownBy(() -> mongoTemplate.insert(entity2))
+                .isInstanceOf(DuplicateKeyException.class);
     }
 }

@@ -7,6 +7,7 @@ import ca.tyny.urlshortener.core.ports.incoming.ShortenUrlUseCase;
 import ca.tyny.urlshortener.core.ports.outgoing.AnalyticsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.RateLimiterPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
+import ca.tyny.urlshortener.core.service.ExpiryResolver;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.ShortenRequest;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.ShortenResponse;
 import ca.tyny.urlshortener.infra.config.properties.ShortenerProperties;
@@ -29,6 +30,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.time.Instant;
 
 @RestController
 @Tag(name = "URL Shortener", description = "High-performance URL shortening and redirection API")
@@ -94,8 +97,9 @@ public class UrlController {
                                                 .orElse(null);
                         }
 
+                        Instant expiresAt = ExpiryResolver.resolveExpiresAt(request.ttlSeconds(), shortenerProperties.maxTtlSeconds());
                         ShortUrl shortUrl = shortenUrlUseCase.shorten(request.originalUrl(), request.customAlias(),
-                                        userId, resolveExpiresAt(request.ttlSeconds()));
+                                        userId, expiresAt);
                         String baseUrl = org.springframework.web.servlet.support.ServletUriComponentsBuilder
                                         .fromCurrentContextPath().build().toUriString();
 
@@ -111,6 +115,7 @@ public class UrlController {
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "302", description = "Redirect to original URL"),
                         @ApiResponse(responseCode = "404", description = "Short URL not found", content = @Content),
+                        @ApiResponse(responseCode = "410", description = "Short URL has expired", content = @Content),
                         @ApiResponse(responseCode = "429", description = "Rate limit exceeded", content = @Content)
         })
         public ResponseEntity<Void> redirect(
@@ -151,22 +156,5 @@ public class UrlController {
                                 .header("RateLimit-Remaining", "0")
                                 .header("RateLimit-Reset", Long.toString(verdict.resetSeconds()))
                                 .build();
-        }
-
-        /**
-         * Resolves the optional {@code ttlSeconds} into an absolute UTC expiry instant.
-         * {@code null} (absent) means "never expires". Values over the server cap are rejected with
-         * {@code 400} (IllegalArgumentException); non-positive values are already rejected by the
-         * {@code @Positive} DTO constraint.
-         */
-        private java.time.Instant resolveExpiresAt(Long ttlSeconds) {
-                if (ttlSeconds == null) {
-                        return null;
-                }
-                if (ttlSeconds > shortenerProperties.maxTtlSeconds()) {
-                        throw new IllegalArgumentException("ttlSeconds exceeds the maximum of "
-                                        + shortenerProperties.maxTtlSeconds() + " seconds");
-                }
-                return java.time.Instant.now().plusSeconds(ttlSeconds);
         }
 }

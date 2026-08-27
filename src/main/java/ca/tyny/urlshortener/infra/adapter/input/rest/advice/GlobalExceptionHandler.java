@@ -2,6 +2,7 @@ package ca.tyny.urlshortener.infra.adapter.input.rest.advice;
 
 import ca.tyny.urlshortener.core.exception.CodeGenerationException;
 import ca.tyny.urlshortener.core.exception.InvalidDestinationException;
+import ca.tyny.urlshortener.core.exception.InvalidExpiryException;
 import ca.tyny.urlshortener.core.exception.UrlExpiredException;
 import ca.tyny.urlshortener.core.exception.UrlNotFoundException;
 import org.slf4j.Logger;
@@ -69,6 +70,19 @@ public class GlobalExceptionHandler {
                 ErrorResponse error = new ErrorResponse(
                                 HttpStatus.BAD_REQUEST.value(),
                                 "Invalid Destination",
+                                ex.getMessage(),
+                                LocalDateTime.now());
+
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+        }
+
+        @ExceptionHandler(InvalidExpiryException.class)
+        public ResponseEntity<ErrorResponse> handleInvalidExpiry(InvalidExpiryException ex) {
+                log.warn("Invalid expiry: {}", ex.getMessage());
+
+                ErrorResponse error = new ErrorResponse(
+                                HttpStatus.BAD_REQUEST.value(),
+                                "Invalid Expiry",
                                 ex.getMessage(),
                                 LocalDateTime.now());
 
