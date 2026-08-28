@@ -62,19 +62,25 @@ class UrlShortenerServiceTest {
     @Mock
     private UrlValidator urlValidator;
 
+    @Mock
+    private ca.tyny.urlshortener.core.ports.outgoing.CustomDomainRegistryPort customDomainRegistry;
+
     private Base62CodeGenerator base62CodeGenerator;
 
     private UrlShortenerService service;
 
     private static final String TEST_URL = "https://www.example.com/very/long/url";
     private static final String TEST_ID = "abc123";
+    private static final String DEFAULT_HOST = "localhost";
 
     @BeforeEach
     void setUp() {
         base62CodeGenerator = new Base62CodeGenerator(7);
         lenient().doNothing().when(urlValidator).validate(anyString());
+        lenient().when(customDomainRegistry.isActiveHost(anyString())).thenReturn(false);
         service = new UrlShortenerService(urlRepository, urlCache, metrics, urlIdGenerator,
-                base62CodeGenerator, quotaService, userRepository, reservedWordsValidator, urlValidator);
+                base62CodeGenerator, quotaService, userRepository, reservedWordsValidator, urlValidator,
+                customDomainRegistry, DEFAULT_HOST);
     }
 
     @Test
@@ -149,7 +155,7 @@ class UrlShortenerServiceTest {
         when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.hit(new CachedUrlValue(TEST_URL, null)));
 
         // When
-        String result = service.getOriginalUrl(TEST_ID);
+        String result = service.getOriginalUrl(DEFAULT_HOST, TEST_ID);
 
         // Then
         assertThat(result).isEqualTo(TEST_URL);
@@ -166,7 +172,7 @@ class UrlShortenerServiceTest {
         when(urlRepository.findById(TEST_ID)).thenReturn(Optional.of(shortUrl));
 
         // When
-        String result = service.getOriginalUrl(TEST_ID);
+        String result = service.getOriginalUrl(DEFAULT_HOST, TEST_ID);
 
         // Then
         assertThat(result).isEqualTo(TEST_URL);
@@ -185,7 +191,7 @@ class UrlShortenerServiceTest {
         when(urlRepository.findById(TEST_ID)).thenReturn(Optional.of(expired));
 
         // When
-        assertThatThrownBy(() -> service.getOriginalUrl(TEST_ID))
+        assertThatThrownBy(() -> service.getOriginalUrl(DEFAULT_HOST, TEST_ID))
                 .isInstanceOf(UrlExpiredException.class)
                 .hasMessageContaining(TEST_ID);
 
@@ -205,7 +211,7 @@ class UrlShortenerServiceTest {
         when(urlRepository.findById(TEST_ID)).thenReturn(Optional.of(shortUrl));
 
         // When
-        String result = service.getOriginalUrl(TEST_ID);
+        String result = service.getOriginalUrl(DEFAULT_HOST, TEST_ID);
 
         // Then
         assertThat(result).isEqualTo(TEST_URL);
@@ -226,7 +232,7 @@ class UrlShortenerServiceTest {
     void shouldRecordUrlRetrievalMetricOnHit() {
         when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.hit(new CachedUrlValue(TEST_URL, null)));
 
-        service.getOriginalUrl(TEST_ID);
+        service.getOriginalUrl(DEFAULT_HOST, TEST_ID);
 
         verify(metrics).recordUrlRetrieval(any(Duration.class));
     }
@@ -238,7 +244,7 @@ class UrlShortenerServiceTest {
         when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.hit(new CachedUrlValue(TEST_URL, Instant.now().plusSeconds(3600))));
 
         // When
-        String result = service.getOriginalUrl(TEST_ID);
+        String result = service.getOriginalUrl(DEFAULT_HOST, TEST_ID);
 
         // Then
         assertThat(result).isEqualTo(TEST_URL);
@@ -252,7 +258,7 @@ class UrlShortenerServiceTest {
         when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.hit(new CachedUrlValue(TEST_URL, Instant.now().minusSeconds(60))));
 
         // When
-        assertThatThrownBy(() -> service.getOriginalUrl(TEST_ID))
+        assertThatThrownBy(() -> service.getOriginalUrl(DEFAULT_HOST, TEST_ID))
                 .isInstanceOf(UrlExpiredException.class);
 
         // Then
@@ -267,7 +273,7 @@ class UrlShortenerServiceTest {
         ShortUrl shortUrl = new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now());
         when(urlRepository.findById(TEST_ID)).thenReturn(Optional.of(shortUrl));
 
-        service.getOriginalUrl(TEST_ID);
+        service.getOriginalUrl(DEFAULT_HOST, TEST_ID);
 
         verify(metrics).recordUrlRetrieval(any(Duration.class));
     }
@@ -305,5 +311,76 @@ class UrlShortenerServiceTest {
         ShortUrl result = service.shorten(TEST_URL);
 
         assertThat(result.expiresAt()).isNull();
+    }
+
+    // ========== Host-aware resolution (strict mirror) ==========
+
+    @Test
+    @DisplayName("Default host rejects a custom-domain-bound link")
+    void defaultHostRejectsBoundLink() {
+        when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.hit(
+                new CachedUrlValue(TEST_URL, null, "links.example.com")));
+
+        assertThatThrownBy(() -> service.getOriginalUrl(DEFAULT_HOST, TEST_ID))
+                .isInstanceOf(UrlNotFoundException.class);
+        verify(urlRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("Custom host serves a link bound to it")
+    void customHostServesBoundLink() {
+        when(customDomainRegistry.isActiveHost("links.example.com")).thenReturn(true);
+        when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.hit(
+                new CachedUrlValue(TEST_URL, null, "links.example.com")));
+
+        String result = service.getOriginalUrl("links.example.com", TEST_ID);
+
+        assertThat(result).isEqualTo(TEST_URL);
+        verify(urlRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("Custom host rejects a link bound to a different host")
+    void customHostRejectsDifferentDomain() {
+        when(customDomainRegistry.isActiveHost("links.example.com")).thenReturn(true);
+        when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.hit(
+                new CachedUrlValue(TEST_URL, null, "other.example.org")));
+
+        assertThatThrownBy(() -> service.getOriginalUrl("links.example.com", TEST_ID))
+                .isInstanceOf(UrlNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("Custom host without a binding resolves nothing")
+    void customHostWithoutBindingIsNotFound() {
+        when(customDomainRegistry.isActiveHost("links.example.com")).thenReturn(true);
+        when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.hit(new CachedUrlValue(TEST_URL, null)));
+
+        assertThatThrownBy(() -> service.getOriginalUrl("links.example.com", TEST_ID))
+                .isInstanceOf(UrlNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("Unknown host is rejected before any lookup")
+    void unknownHostIsRejected() {
+        assertThatThrownBy(() -> service.getOriginalUrl("unrelated.example.net", TEST_ID))
+                .isInstanceOf(UrlNotFoundException.class);
+        verify(urlCache, never()).lookup(anyString());
+    }
+
+    @Test
+    @DisplayName("Null host is treated as the default host")
+    void nullHostFallsBackToDefault() {
+        when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.hit(new CachedUrlValue(TEST_URL, null)));
+
+        assertThat(service.getOriginalUrl(null, TEST_ID)).isEqualTo(TEST_URL);
+    }
+
+    @Test
+    @DisplayName("Host header with port is normalized to host only")
+    void hostHeaderWithPortIsNormalized() {
+        when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.hit(new CachedUrlValue(TEST_URL, null)));
+
+        assertThat(service.getOriginalUrl("localhost:8080", TEST_ID)).isEqualTo(TEST_URL);
     }
 }

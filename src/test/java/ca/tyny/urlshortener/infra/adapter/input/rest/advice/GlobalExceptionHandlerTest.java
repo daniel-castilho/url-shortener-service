@@ -77,8 +77,8 @@ class GlobalExceptionHandlerTest {
                 // Given
                 when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
                 String nonExistentId = "notfound";
-                when(getUrlUseCase.getOriginalUrl(nonExistentId))
-                                .thenThrow(new UrlNotFoundException(nonExistentId));
+when(getUrlUseCase.getOriginalUrl(org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.eq(nonExistentId)))
+                        .thenThrow(new UrlNotFoundException(nonExistentId));
 
                 // When/Then
                 mockMvc.perform(get("/" + nonExistentId))
@@ -95,8 +95,8 @@ class GlobalExceptionHandlerTest {
                 // Given
                 when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
                 String expiredId = "expired1";
-                when(getUrlUseCase.getOriginalUrl(expiredId))
-                                .thenThrow(new UrlExpiredException(expiredId));
+when(getUrlUseCase.getOriginalUrl(org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.eq(expiredId)))
+                        .thenThrow(new UrlExpiredException(expiredId));
 
                 // When/Then
                 mockMvc.perform(get("/" + expiredId))

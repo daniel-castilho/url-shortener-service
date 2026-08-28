@@ -51,4 +51,26 @@ public final class Hostnames {
             throw new InvalidDomainException("Invalid domain host: " + normalizedHost);
         }
     }
+
+    /**
+     * Normalizes the value of an HTTP {@code Host} header: lower-cases, trims, strips a
+     * trailing dot and any {@code :port} suffix. Returns {@code null} for null/blank input.
+     */
+    public static String fromHostHeader(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String host = raw.trim();
+        if (host.startsWith("[")) {
+            int end = host.indexOf(']');
+            if (end > 0) {
+                return normalize(host.substring(0, end + 1));
+            }
+        }
+        int colon = host.lastIndexOf(':');
+        if (colon > 0 && host.indexOf(':') == colon) {
+            host = host.substring(0, colon);
+        }
+        return normalize(host);
+    }
 }

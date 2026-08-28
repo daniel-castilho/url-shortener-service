@@ -12,6 +12,7 @@ import ca.tyny.urlshortener.core.ports.incoming.GetLinkUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.ListUserLinksUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.UpdateLinkUseCase;
 import ca.tyny.urlshortener.core.ports.outgoing.AuthenticationPort;
+import ca.tyny.urlshortener.core.ports.outgoing.CustomDomainRegistryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.CustomDomainRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.IdGeneratorPort;
 import ca.tyny.urlshortener.core.ports.outgoing.LinkMutationPort;
@@ -72,9 +73,12 @@ public class ServiceConfig {
             QuotaService quotaService,
             UserRepositoryPort userRepository,
             ReservedWordsValidator reservedWordsValidator,
-            UrlValidator urlValidator) {
+            UrlValidator urlValidator,
+            CustomDomainRegistryPort customDomainRegistry,
+            DomainProperties domainProperties) {
         return new UrlShortenerService(urlRepository, urlCache, metrics, urlIdGenerator,
-                base62CodeGenerator, quotaService, userRepository, reservedWordsValidator, urlValidator);
+                base62CodeGenerator, quotaService, userRepository, reservedWordsValidator, urlValidator,
+                customDomainRegistry, domainProperties.defaultHost());
     }
 
     @Bean

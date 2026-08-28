@@ -35,7 +35,8 @@ public class ShortUrlMapper {
                 domain.title(),
                 domain.tags(),
                 utmEntity,
-                domain.deletedAt());
+                domain.deletedAt(),
+                domain.domain());
     }
 
     public ShortUrl toDomain(ShortUrlEntity entity) {
@@ -59,7 +60,8 @@ public class ShortUrlMapper {
                 entity.getTitle(),
                 entity.getTags(),
                 utm,
-                entity.getDeletedAt());
+                entity.getDeletedAt(),
+                entity.getDomain());
     }
 
     private UtmParamsEntity toUtmEntity(UtmParams utm) {

@@ -152,6 +152,9 @@ public class RedisUrlCache implements UrlCachePort {
             if (value.expiresAt() != null) {
                 fields.put("e", value.expiresAt().getEpochSecond());
             }
+            if (value.domain() != null) {
+                fields.put("d", value.domain());
+            }
             return objectMapper.writeValueAsString(fields);
         } catch (Exception e) {
             log.error("Failed to encode cache value for id={}", value.originalUrl(), e);
@@ -166,7 +169,8 @@ public class RedisUrlCache implements UrlCachePort {
             String url = (String) fields.get("u");
             Object exp = fields.get("e");
             Instant expiresAt = exp == null ? null : Instant.ofEpochSecond(((Number) exp).longValue());
-            return url == null ? null : new CachedUrlValue(url, expiresAt);
+            String domain = (String) fields.get("d");
+            return url == null ? null : new CachedUrlValue(url, expiresAt, domain);
         } catch (Exception e) {
             return null;
         }

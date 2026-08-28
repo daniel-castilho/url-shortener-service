@@ -130,14 +130,14 @@ class UrlControllerTest {
     @DisplayName("GET /{id} should redirect to original URL")
     void shouldRedirectToOriginalUrl() throws Exception {
         // Given
-        when(getUrlUseCase.getOriginalUrl(TEST_ID)).thenReturn(TEST_URL);
+        when(getUrlUseCase.getOriginalUrl(isNull(), eq(TEST_ID))).thenReturn(TEST_URL);
 
         // When/Then
         mockMvc.perform(get("/" + TEST_ID))
                 .andExpect(status().isFound())
                 .andExpect(header().string("Location", TEST_URL));
 
-        verify(getUrlUseCase).getOriginalUrl(TEST_ID);
+        verify(getUrlUseCase).getOriginalUrl(isNull(), eq(TEST_ID));
         verify(analyticsPort).track(any());
     }
 
@@ -145,14 +145,14 @@ class UrlControllerTest {
     @DisplayName("GET /{id} should return 404 when URL not found")
     void shouldReturn404WhenUrlNotFound() throws Exception {
         // Given
-        when(getUrlUseCase.getOriginalUrl(TEST_ID))
+        when(getUrlUseCase.getOriginalUrl(isNull(), eq(TEST_ID)))
                 .thenThrow(new UrlNotFoundException(TEST_ID));
 
         // When/Then
         mockMvc.perform(get("/" + TEST_ID))
                 .andExpect(status().isNotFound());
 
-        verify(getUrlUseCase).getOriginalUrl(TEST_ID);
+        verify(getUrlUseCase).getOriginalUrl(isNull(), eq(TEST_ID));
         verify(analyticsPort, never()).track(any());
     }
 
@@ -168,7 +168,7 @@ class UrlControllerTest {
                 .andExpect(header().string("Retry-After", "30"))
                 .andExpect(header().string("RateLimit-Remaining", "0"));
 
-        verify(getUrlUseCase, never()).getOriginalUrl(anyString());
+        verify(getUrlUseCase, never()).getOriginalUrl(any(), any());
         verify(analyticsPort, never()).track(any());
     }
 

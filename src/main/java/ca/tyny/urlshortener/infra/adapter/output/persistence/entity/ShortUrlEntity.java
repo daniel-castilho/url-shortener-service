@@ -84,6 +84,13 @@ public class ShortUrlEntity {
      */
     private Instant deletedAt;
 
+    /**
+     * Custom host this link is bound to ({@code null} = default host only).
+     * Presence is verified at claim time (ACTIVE domain of the owner); the redirect
+     * only serves the link under this host (strict mirror).
+     */
+    private String domain;
+
     public ShortUrlEntity() {
     }
 
@@ -114,6 +121,16 @@ public class ShortUrlEntity {
     public ShortUrlEntity(String id, String originalUrl, String urlHash, LocalDateTime createdAt, String userId,
             boolean isCustomAlias, long clickCount, Instant expiresAt, String title, List<String> tags,
             UtmParamsEntity utm, Instant deletedAt) {
+        this(id, originalUrl, urlHash, createdAt, userId, isCustomAlias, clickCount, expiresAt, title, tags,
+                utm, deletedAt, null);
+    }
+
+    /**
+     * Constructor with all persisted fields.
+     */
+    public ShortUrlEntity(String id, String originalUrl, String urlHash, LocalDateTime createdAt, String userId,
+            boolean isCustomAlias, long clickCount, Instant expiresAt, String title, List<String> tags,
+            UtmParamsEntity utm, Instant deletedAt, String domain) {
         this.id = id;
         this.originalUrl = originalUrl;
         this.urlHash = urlHash;
@@ -126,6 +143,7 @@ public class ShortUrlEntity {
         this.tags = tags;
         this.utm = utm;
         this.deletedAt = deletedAt;
+        this.domain = domain;
     }
 
     public String getId() {
@@ -222,5 +240,13 @@ public class ShortUrlEntity {
 
     public void setDeletedAt(Instant deletedAt) {
         this.deletedAt = deletedAt;
+    }
+
+    public String getDomain() {
+        return domain;
+    }
+
+    public void setDomain(String domain) {
+        this.domain = domain;
     }
 }

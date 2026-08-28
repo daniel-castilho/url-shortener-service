@@ -137,6 +137,23 @@ class ShortUrlMapperTest {
         assertThat(noExpiry.expiresAt()).isNull();
     }
 
+    @Test
+    @DisplayName("Should round-trip the custom-domain binding across domain and entity")
+    void shouldRoundTripDomain() {
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        ShortUrl domain = new ShortUrl("abc123", "https://example.com", now, "user1", true)
+                .withDomain("links.example.com");
+
+        ShortUrlEntity entity = mapper.toPersistence(domain);
+        assertThat(entity.getDomain()).isEqualTo("links.example.com");
+
+        ShortUrl converted = mapper.toDomain(entity);
+        assertThat(converted.domain()).isEqualTo("links.example.com");
+
+        ShortUrl unbound = mapper.toDomain(mapper.toPersistence(baseWithoutExpiry()));
+        assertThat(unbound.domain()).isNull();
+    }
+
     private ShortUrl baseWithoutExpiry() {
         return new ShortUrl("abc123", "https://example.com", LocalDateTime.now(), "user1", true);
     }

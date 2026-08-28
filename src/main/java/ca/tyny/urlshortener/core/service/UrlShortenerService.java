@@ -13,10 +13,12 @@ import ca.tyny.urlshortener.core.model.ShortUrl;
 import ca.tyny.urlshortener.core.model.Url;
 import ca.tyny.urlshortener.core.ports.incoming.GetUrlUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.ShortenUrlUseCase;
+import ca.tyny.urlshortener.core.ports.outgoing.CustomDomainRegistryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
+import ca.tyny.urlshortener.core.validation.Hostnames;
 import ca.tyny.urlshortener.core.validation.ReservedWordsValidator;
 import ca.tyny.urlshortener.core.validation.UrlValidator;
 import org.slf4j.Logger;
@@ -44,6 +46,8 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
     private final UserRepositoryPort userRepository;
     private final ReservedWordsValidator reservedWordsValidator;
     private final UrlValidator urlValidator;
+    private final CustomDomainRegistryPort customDomainRegistry;
+    private final String defaultHost;
 
     public UrlShortenerService(UrlRepositoryPort urlRepository,
             UrlCachePort urlCache,
@@ -54,6 +58,21 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
             UserRepositoryPort userRepository,
             ReservedWordsValidator reservedWordsValidator,
             UrlValidator urlValidator) {
+        this(urlRepository, urlCache, metrics, urlIdGenerator, base62CodeGenerator, quotaService,
+                userRepository, reservedWordsValidator, urlValidator, null, null);
+    }
+
+    public UrlShortenerService(UrlRepositoryPort urlRepository,
+            UrlCachePort urlCache,
+            MetricsPort metrics,
+            UrlIdGenerator urlIdGenerator,
+            Base62CodeGenerator base62CodeGenerator,
+            QuotaService quotaService,
+            UserRepositoryPort userRepository,
+            ReservedWordsValidator reservedWordsValidator,
+            UrlValidator urlValidator,
+            CustomDomainRegistryPort customDomainRegistry,
+            String defaultHost) {
         this.urlRepository = urlRepository;
         this.urlCache = urlCache;
         this.metrics = metrics;
@@ -63,6 +82,8 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
         this.userRepository = userRepository;
         this.reservedWordsValidator = reservedWordsValidator;
         this.urlValidator = urlValidator;
+        this.customDomainRegistry = customDomainRegistry;
+        this.defaultHost = defaultHost;
     }
 
     @Override
@@ -127,10 +148,25 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
     }
 
     @Override
-    public String getOriginalUrl(String id) {
+    public String getOriginalUrl(String host, String id) {
         Objects.requireNonNull(id, "ID cannot be null");
         if (id.isBlank()) {
             throw new IllegalArgumentException("ID cannot be empty");
+        }
+
+        String normalizedHost = Hostnames.fromHostHeader(host);
+        if (normalizedHost == null || normalizedHost.isBlank()) {
+            normalizedHost = defaultHost;
+        }
+        boolean onDefaultHost = normalizedHost.equalsIgnoreCase(defaultHost);
+        boolean onActiveCustomHost = !onDefaultHost && customDomainRegistry != null
+                && customDomainRegistry.isActiveHost(normalizedHost);
+
+        // Strict mirror: an unknown host is neither the default host nor a verified custom
+        // domain, so nothing is reachable under it. A custom host without a binding = 404.
+        if (!onDefaultHost && !onActiveCustomHost) {
+            log.info("Rejecting id={} on unbound host {}", id, normalizedHost);
+            throw new UrlNotFoundException(id);
         }
 
         long startNs = System.nanoTime();
@@ -140,11 +176,12 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
             log.info(LOG_CACHE_HIT, id);
             metrics.recordCacheHit();
             metrics.recordUrlRetrieval(Duration.ofNanos(System.nanoTime() - startNs));
-            if (lookup.value().isExpired(Instant.now())) {
+            CachedUrlValue cached = lookup.value();
+            if (cached.isExpired(Instant.now())) {
                 metrics.recordUrlExpired();
                 throw new UrlExpiredException(id);
             }
-            return lookup.value().originalUrl();
+            return serve(cached.originalUrl(), cached.domain(), onDefaultHost, normalizedHost, id);
         }
 
         // Policy B: BLOOM_NEGATIVE is treated as a lightweight cache-miss and resolved by findById.
@@ -169,8 +206,30 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
             throw new UrlExpiredException(id);
         }
 
-        urlCache.put(id, new CachedUrlValue(shortUrl.originalUrl(), shortUrl.expiresAt()));
+        String resolved = serve(shortUrl.originalUrl(), shortUrl.domain(),
+                onDefaultHost, normalizedHost, id);
+        urlCache.put(id, new CachedUrlValue(shortUrl.originalUrl(), shortUrl.expiresAt(), shortUrl.domain()));
         metrics.recordUrlRetrieval(Duration.ofNanos(System.nanoTime() - startNs));
-        return shortUrl.originalUrl();
+        return resolved;
+    }
+
+    /**
+     * Enforces the strict host mirror for a resolved link and returns the destination.
+     *
+     * @throws UrlNotFoundException when the link is not bound to this host (silent 404 —
+     *                              never leaks that a code exists on another host)
+     */
+    private String serve(String originalUrl, String domain, boolean onDefaultHost, String host,
+            String id) {
+        if (onDefaultHost) {
+            if (domain != null) {
+                throw new UrlNotFoundException(id);
+            }
+            return originalUrl;
+        }
+        if (domain == null || !domain.equals(host)) {
+            throw new UrlNotFoundException(id);
+        }
+        return originalUrl;
     }
 }
