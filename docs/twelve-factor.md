@@ -45,7 +45,7 @@ Legend: ✅ compliant · ⚠️ partially compliant / has an open TODO.
 
 ## Open TODOs (tracked)
 
-1. **Fix the GraalVM native build** — correct the `native` profile `mainClass` to
+1. **GraalVM native `mainClass` fixed** — `native` profile now points to `ca.tyny.urlshortener.Application`; `mvn clean package -Pnative` resolves correctly.
    `ca.tyny.urlshortener.Application`; document the startup/memory targets under load.
 2. **Expose analytics queue depth gauge** — `analytics.queue.depth` (Micrometer) for the Grafana panel.
 

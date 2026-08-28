@@ -268,8 +268,7 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     `IndexMigration` is retired. A Flyway-for-MongoDB migration was attempted and rejected (JDBC
     driver not published to Central; native connectors are CLI-only) after human approval of the
     in-code runner. — `resolved`
-11. **GraalVM native build broken** — `native` profile `mainClass` points to the non-existent
-    `ca.tyny.urlshortener.infra.Application`. Fix to `ca.tyny.urlshortener.Application`. — `resolved`
+11. **GraalVM native build broken** — `native` profile `mainClass` fixed to `ca.tyny.urlshortener.Application`. — `resolved`
 12. **Observability gaps** — metrics exist but `id.generation.duration` / `url.retrieval.duration`
     timers are never recorded; no tracing (OpenTelemetry), no SLOs, no load harness (k6). Timers now
     recorded with p50/p95/p99 via `MetricsPort`; OpenTelemetry tracing (10% head sampling) with the

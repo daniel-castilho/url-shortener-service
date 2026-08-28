@@ -120,9 +120,8 @@ non-obvious failure or design decision cost real debugging time.
 - **`@ConfigurationProperties` over scattered `@Value`.** Typed properties keep config reviewable and
   validate at startup. Add `ProdConfigValidator`-style fail-fast startup checks for required prod env
   vars, so an incomplete contract fails loudly at boot, not mid-traffic.
-- **GraalVM native `mainClass` must point at the real class.** The `native` profile referenced
-  `ca.tyny.urlshortener.infra.Application` (a class that does not exist; the entry point is
-  `ca.tyny.urlshortener.Application`). A wrong `mainClass` silently breaks `-Pnative`.
+- **GraalVM native `mainClass` must point at the real class.** The `native` profile now correctly
+  references `ca.tyny.urlshortener.Application` (the entry point). A wrong `mainClass` silently breaks `-Pnative`.
 - **Framework-free core = explicit wiring, not annotation purgery.** Removing `@Component` from
   `core/` classes without registering replacements breaks the Spring context at startup. The pattern
   that works: explicit constructors in `core/`, `@Bean` methods in `infra/config/ServiceConfig`

@@ -132,10 +132,10 @@ Cobre as decisões do dono e é a mudança que **inverte** o design atual do rep
 - Remover artefatos de build (`build.log`, `build_out.txt`) e adicionar a `.gitignore`.
 - Product docs descrevem o **modelo de identidade travado** (Base62, sem dedup, namespace); Hashids/unique-on-URL não são o desenho do produto.
 - **Aceite:** docs descrevem o contrato travado; gaps de código ficam na matriz de dívida (`AGENTS.md`).
+### T5.3 — Corrigir bug do build native  ·  Esforço: **S** — **DONE**
 
-### T5.3 — Corrigir bug do build native  ·  Esforço: **S**
-- `pom.xml` `native` → `<mainClass>ca.tyny.urlshortener.infra.Application</mainClass>` deve ser `ca.tyny.urlshortener.Application`.
-- **Aceite:** `mvn clean package -Pnative` resolve o main class corretamente.
+- `pom.xml` `native` `mainClass` fixed to `ca.tyny.urlshortener.Application`.
+- **Aceite:** `mvn clean package -Pnative` resolves the main class correctly.
 
 ### T5.4 — Observabilidade, TLS e deploy on-prem  ·  Esforço: **M/L**
 - Adicionar **tracing (OpenTelemetry)** e alertas; definir **SLOs** e **harness de carga** (k6/JMeter) para registrar p50/p95/p99 reais.
