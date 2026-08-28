@@ -7,6 +7,25 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ## [Unreleased]
 
+### Added
+
+- **Links as Resource (Phase B)** — authenticated, owner-scoped link management under `/api/v1/urls`:
+  cursor-paginated **list** of the caller's links (archived included via `deletedAt`; Base64url
+  cursor `<epochMillis>:<id>`, `createdAt DESC` + `_id` DESC, `limit` capped at 100, malformed → 400),
+  **get** a link's details (owner only, 403 otherwise), **PATCH** partial update applying **only
+  supplied fields** (`@JsonAnySetter` presence capture on `UpdateLinkRequest`; `expiresAt`/`utm`
+  present-and-`null` clears via `*Supplied` flags on `UpdateLinkCommand`; archived links immutable),
+  and **DELETE = soft delete** (`deletedAt`, idempotent). Mutations evict Redis/L1 cache entries
+  (`UrlCachePort.evict`); the `GET /{id}` redirect returns `404` for archived codes. Unauthenticated →
+  `401` (explicit authentication entry point), non-owner → 403 at the application layer. Ports split
+  by ISP: `LinkQueryPort` + `LinkMutationPort` (shortening/redirect stay on `UrlRepositoryPort`).
+  Tests: `LinkResourceIT` (25), `LinkUseCasesTest` (12), extended `MongoUrlRepositoryIT` (13).
+
+### Changed
+
+- **Security** — unauthenticated requests to protected endpoints now return `401` (explicit
+  `authenticationEntryPoint`) instead of the framework default `403`.
+
 ## [0.8.0] - 2026-08-27
 
 ### Added

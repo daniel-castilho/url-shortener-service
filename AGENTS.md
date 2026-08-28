@@ -313,6 +313,19 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     verifying the behaviour. Corrected "bloom avoids DB" claim in docs. `ReadPathIT` + k6 baseline
     published. — `resolved`
 
+20. **Links as Resource (Phase B) — link management endpoints** — implemented per `tasks/links-as-resource-*.md`:
+    ISP port split (`LinkQueryPort` + `LinkMutationPort`, `MongoUrlRepository` implements both;
+    `UrlRepositoryPort` for the shortening/redirect port unchanged), 4 use cases (`ListUserLinks`,
+    `GetLink`, `UpdateLink`, `ArchiveLink`), REST endpoints `GET/PATCH/DELETE /api/v1/urls[/{id}]`
+    (`LinkController`, authenticated, owner-scoped at the application layer with `ForbiddenException`
+    → 403), cursor pagination (Base64url `<epochMillis>:<id>`, `createdAt DESC` + `_id` DESC, limit 100,
+    malformed → 400, `PageResult<ShortUrl>` return type), PATCH supplied-field capture (`@JsonAnySetter`
+    on `UpdateLinkRequest`; `*Supplied` flags on `UpdateLinkCommand` so present-null clears only
+    `expiresAt`/`utm`), soft delete via `deletedAt` (idempotent; archived redirect → 404)](*), cache
+    eviction on update/archive (`UrlCachePort.evict`). Docs synced (README, data-model-decisions, coding-standards,
+    testing-playbook). Tests: `LinkResourceIT` (25), `LinkUseCasesTest` (12), extended `MongoUrlRepositoryIT`.
+    `mvn verify` + boundary gate green. — `resolved`
+
 ---
 
 ## 🔍 Operational Discipline & Debugging Guidelines

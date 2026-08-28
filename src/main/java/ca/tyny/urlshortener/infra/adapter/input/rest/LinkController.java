@@ -189,6 +189,8 @@ public class LinkController {
                 req.isFieldSupplied("title") ? req.getTitle() : null,
                 req.isFieldSupplied("tags") ? req.getTags() : null,
                 utm,
-                expiresAt);
+                req.isFieldSupplied("utm"),
+                expiresAt,
+                req.isFieldSupplied("expiresAt"));
     }
 }

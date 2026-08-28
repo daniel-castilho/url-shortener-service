@@ -20,6 +20,10 @@ server:
 app:
   shortener:
     salt: "test-salt"
+  jwt:
+    secret: "test-secret-key-at-least-32-characters-long-for-testing"
+    expiration-ms: 86400000
+    refresh-expiration-ms: 604800000
 
 management:
   endpoints:

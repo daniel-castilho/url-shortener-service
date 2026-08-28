@@ -5,6 +5,7 @@ import ca.tyny.urlshortener.core.exception.ForbiddenException;
 import ca.tyny.urlshortener.core.exception.InvalidExpiryException;
 import ca.tyny.urlshortener.core.exception.UrlNotFoundException;
 import ca.tyny.urlshortener.core.model.ShortUrl;
+import ca.tyny.urlshortener.core.model.UtmParams;
 import ca.tyny.urlshortener.core.ports.incoming.UpdateLinkUseCase;
 import ca.tyny.urlshortener.core.ports.outgoing.LinkMutationPort;
 import ca.tyny.urlshortener.core.ports.outgoing.LinkQueryPort;
@@ -50,8 +51,6 @@ public class UpdateLinkUseCaseImpl implements UpdateLinkUseCase {
             throw new IllegalArgumentException("Cannot update an archived link");
         }
 
-        Instant expiresAt = command.expiresAt();
-
         if (command.originalUrl() != null) {
             urlValidator.validate(command.originalUrl());
         }
@@ -72,11 +71,16 @@ public class UpdateLinkUseCaseImpl implements UpdateLinkUseCase {
             }
         }
 
+        String newTitle = command.title() != null ? command.title() : shortUrl.title();
+
+        Instant expiresAt = command.expiresAtSupplied() ? command.expiresAt() : shortUrl.expiresAt();
+        UtmParams utm = command.utmSupplied() ? command.utm() : shortUrl.utm();
+
         ShortUrl updated = shortUrl
                 .withOriginalUrl(command.originalUrl() != null ? command.originalUrl() : shortUrl.originalUrl())
-                .withTitle(command.title())
+                .withTitle(newTitle)
                 .withTags(tags != null ? tags : shortUrl.tags())
-                .withUtm(command.utm() != null ? command.utm() : shortUrl.utm())
+                .withUtm(utm)
                 .withExpiresAt(expiresAt);
 
         linkMutationPort.update(updated);

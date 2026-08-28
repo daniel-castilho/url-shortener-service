@@ -239,6 +239,24 @@ variants**. Prefer the pattern that matches existing code; if none fits, ask the
 - **DTOs for every external input/output.** Never expose domain entities through the API.
 - **Validation.** `spring-boot-starter-validation` + `jakarta.validation.constraints.*` on request
   DTOs, `@Valid` in controllers. Centralized errors (see § 8).
+- **Links as Resource (Phase B) — REST conventions.** Link management endpoints live under
+  `/api/v1/urls` (`LinkController`), are **authenticated** (`SecurityConfig`
+  `.requestMatchers("/api/v1/urls/**").authenticated()`), and are **owner-scoped at the application
+  layer** — `GetLinkUseCase`/`UpdateLinkUseCase`/`ArchiveLinkUseCase` throw `ForbiddenException`
+  (403) for non-owning users; list (`ListUserLinksUseCase`) is caller-scoped by construction and
+  never 403s.
+  - **PATCH presence semantics (locked):** `UpdateLinkRequest` captures **supplied fields** with
+    Jackson `@JsonAnySetter` into a `suppliedFields` map; every setter also records its key.
+    Absent field → keep current value. `expiresAt`/`utm` **present-and-null = clear**, encoded as
+    explicit `*Supplied` flags on `UpdateLinkCommand` so the use case never mistakes "absent" for
+    "clear". Code/`id` is immutable. Archived links reject PATCH.
+  - **List / pagination (locked):** `GET /api/v1/urls` returns the caller's links (archived
+    included, with `deletedAt`) ordered `createdAt DESC, _id DESC`, paginated by an **opaque
+    Base64url cursor** `<epochMillis>:<id>` (`PageResult<ShortUrl>` from `findByUserId`, not a bare
+    `List`). Malformed cursor → 400; `limit` capped at 100.
+  - **Delete = soft delete (locked):** `DELETE /api/v1/urls/{id}` sets `deletedAt` (idempotent),
+    `GET /{id}` redirect returns 404 for archived links, and archive/update **evict** the cache
+    (`UrlCachePort.evict`).
 
 ---
 
@@ -267,6 +285,9 @@ variants**. Prefer the pattern that matches existing code; if none fits, ask the
   - `QuotaExceededException` → `402`/`429` Quota Exceeded
   - `AliasAlreadyExistsException` → `409` Conflict
   - `UrlNotFoundException` → `404` Not Found
+  - `ForbiddenException` → `403` Forbidden (owner-scoped link operations)
+  - `InvalidDestinationException` / `InvalidExpiryException` → `400` Bad Request
+  - `CodeGenerationException` → `500` Internal Server Error (unexpected retry exhaustion)
   - anything else → `500` Internal Server Error (logged as `error` with stack trace)
 - Never empty `catch`. Log with context (id, operation, resource), not only `"error occurred"`.
 - Never log passwords, JWT secrets, full bearer tokens, or destinations containing credentials.

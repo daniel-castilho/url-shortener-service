@@ -124,6 +124,7 @@ sync whenever the data model changes.
 | -------------- | -------------------------- | --------- | -------------------------------------------------- |
 | `short_urls`   | `_id`                       | unique    | Code identity + retry-on-collision                 |
 | `short_urls`   | `userId`                    | non-unique | User link listing                                  |
+| `short_urls`   | `(userId, createdAt)`       | non-unique | Cursor-paginated user link listing (V7)           |
 | `short_urls`   | `expiresAt`                 | TTL       | Auto-purge expired links (applied via migration V5)   |
 | `short_urls`   | `urlHash`                   | non-unique | Optional URL aggregate queries (future)            |
 | `click_events` | `shortCode` + `timestamp`   | non-unique | Aggregate/retention queries (applied)              |
@@ -137,7 +138,8 @@ sync whenever the data model changes.
   in `schema_migrations`; not `auto-index-creation`), so removal of the `originalUrl` unique index and
   addition of the TTL index are deterministic and auditable. Migrations: `V1Baseline` (create
   `short_urls`/`click_events`), `V2DropOriginalUrlUniqueIndex`, `V3EnsureUserIdIndex`,
-  `V4EnsureClickEventsIndexes`, `V5AddExpiresAtTtlIndex`, `V6EnsureUserIndexes`
+  `V4EnsureClickEventsIndexes`, `V5AddExpiresAtTtlIndex`, `V6EnsureUserIndexes`,
+  `V7EnsureUserLinksIndex` (`(userId, createdAt)` for cursor-paginated listing)
   (`src/main/java/ca/tyny/urlshortener/infra/adapter/output/persistence/migration`).
   `AGENTS.md` debt item 10 resolved.
 
@@ -189,3 +191,38 @@ sync whenever the data model changes.
   absence signals.
 - **Metrics:** `bloomfilter.rejections.total` tracks bloom negatives; `cache.hits.total` / `cache.misses.total`
   track hit/miss rates.
+
+## Links as Resource — soft delete, listing & update (Phase B)
+
+- **Deletion = soft delete (`deletedAt`), locked.** `DELETE /api/v1/urls/{id}` never physically removes
+  a row: it sets `deletedAt` (UTC `Instant`) via an atomic targeted update (`archive`), leaving the
+  `_id` and all history intact. Deletion is **idempotent** (archiving an already-archived link is a
+  no-op success) and owner-scoped (application-layer 403 for non-owners).
+- **Archived link semantics:** the public redirect `GET /{id}` returns **`404`** for an archived code
+  (checked after `findById`, before the redirect) and the Redis/L1 cache entry is **evicted** on
+  archive/update so no stale destination is ever served. Archived links are **immutable**: `PATCH`
+  on an archived link is rejected.
+- **Listing = caller-scoped, includes archived, cursor-paginated.** `GET /api/v1/urls` always returns
+  **only the authenticated caller's** links (there is no "list someone else's links" operation, so no
+  ​403 on the list endpoint — it is scoped by construction). **Archived links are included** and expose
+  `deletedAt` (non-null when archived); filtering them out is a presentation concern, not a data-model
+  one.
+- **Pagination = opaque Base64url cursor (**`<epochMillis>:<id>`**), locked.** Order is `createdAt` DESC,
+  `_id` DESC as tiebreaker (monotonic, stable across inserts). The cursor encodes the last seen
+  row's `createdAt` + `_id`; a malformed cursor is a hard `400`. `limit` is capped server-side at
+  `PageRequest.MAX_LIMIT` (100). `findByUserId` returns a `PageResult<ShortUrl>` — **not** a bare
+  `List<ShortUrl>` — so the API can return `items` + `nextCursor` + `hasMore` without a second query.
+- **Update = capture-supplied-fields, owned & cached.** `PATCH /api/v1/urls/{id}` applies **only the
+  fields present in the request body** (presence captured by Jackson `@JsonAnySetter` into
+  `UpdateLinkRequest`); absent fields keep their current value. `expiresAt` (and `utm`) follow the
+  **present-with-null = clear** rule via explicit `*Supplied` flags on `UpdateLinkCommand` — `null` is
+  otherwise never a "written" value for those fields. Every successful update validates the new
+  destination and tags, persists, then **evicts** the cache entries (`UrlCachePort.evict`). The short
+  `id`/code is immutable once created.
+- **Indexes:** no index is added for `deletedAt` (archived links are included in lists by design);
+  listing is served by the **`(userId, createdAt DESC)` compound index** (migration `V7`) which matches
+  the `createdAt DESC, _id DESC` cursor order.
+- **Verification:** `LinkResourceIT` (25 cases) covers list pagination/scope/401, get owner/403/404,
+  PATCH partial/clear/400s, DELETE archive + idempotency + redirect-404, and the 403 matrix;
+  `MongoUrlRepositoryIT` covers `findByUserId` (own-only, cursor, limit cap) and archive/update at the
+  adapter level.

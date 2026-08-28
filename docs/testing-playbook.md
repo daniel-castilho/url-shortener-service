@@ -155,6 +155,7 @@ policy intentionally changes, update `AGENTS.md`, coding standards and architect
 | **Analytics / clicks**     | `ClickPipelineIT`, `RedisClickEventQueueTest`, `RedisClickEventQueueFailOpenTest`    | Durable Redis Stream queue, batch persist + `$inc`, fail-open policy            |
 | **Tracing / metrics**      | `TracingFailOpenIT`, `MetricsIT`, `MicrometerMetricsAdapterTest`, `MetricsServiceTest` | OTel tracing fail-open, latency timers at runtime, Prometheus metrics registration |
 | **End-to-end**             | `UrlShortenerIntegrationTest` (→ `ShortenFlowIT` target)                              | Run against `RANDOM_PORT` + Testcontainers; full shorten → redirect flow        |
+| **Links as Resource**      | `LinkResourceIT`, `LinkUseCasesTest`, `MongoUrlRepositoryIT` | List (own-only, cursor, limit cap, 401, archived included via `deletedAt`), get/patch/delete (owner 403, 404, patch partial-presence semantics + clear expiry, `@JsonAnySetter`), archive idempotency + redirect 404, unauthenticated 401, 403 matrix |
 | **Context smoke**          | `ApplicationTests` (base)                                                             | Spring context start                                                           |
 
 When behaviour covered by this map changes, extend the existing test where it remains cohesive; create
@@ -190,6 +191,11 @@ requirement / risk
 | Latency timers recorded at runtime (p50/p95/p99) | E2E            | `MetricsIT`                                      | E2E step                 |
 | Load baseline passes thresholds            | Manual / CI        | `scripts/performance-baseline.sh`                | Manual; `load-test.yml`  |
 | Domain independent of infrastructure       | Static boundary    | Rule-1 grep                                       | Local; add to CI         |
+| Non-owner link access → 403 (get/patch/delete) | App + E2E      | `LinkUseCasesTest`, `LinkResourceIT`             | `test`; then `*IT`       |
+| PATCH only changes supplied fields; absent keeps; present-null clears | App + E2E | `LinkUseCasesTest`, `LinkResourceIT` (partial update, expiry clear) | `test`; then `*IT` |
+| List is caller-scoped, cursor-paginated, limit-capped, malformed cursor → 400 | Adapter + E2E | `MongoUrlRepositoryIT`, `LinkResourceIT`     | `test`; then `*IT`       |
+| DELETE archives (soft); archived link redirects → 404; idempotent | App + E2E   | `LinkUseCasesTest`, `LinkResourceIT`, `MongoUrlRepositoryIT` | `test`; then `*IT` |
+| Unauthenticated `/api/v1/urls/**` → 401     | E2E                | `LinkResourceIT`                                 | `*IT` step               |
 
 A feature is not fully covered if its only test mocks the behaviour that carries the main risk.
 
@@ -206,7 +212,8 @@ Keep this section honest. Move an item out only when an automated test/gate exis
 4. **Analytics/click persistence — CLOSED.** `ClickPipelineIT` proves redirect→persist+`$inc`,
    exact counts under burst, blank-code skip; `RedisClickEventQueueFailOpenTest` proves the
    fail-open policy (no throw + dropped metric when Redis is unreachable).
-5. **No expiry (TTL) test** — add once `expiresAt`/TTL is implemented.
+5. **No expiry (TTL) test — CLOSED.** `ExpiredUrlIT` proves `410 Gone` on redirect + `ttlSeconds`
+   expiry; `ShortUrlTest`/`UrlShortenerServiceTest` pin `expiresAt` semantics.
 6. **Coverage/static-analysis gate — CLOSED.** JaCoCo 0.8.15 (LINE ≥ 60%, BRANCH ≥ 60%) and SpotBugs
    4.9.8.5 (effort Max, threshold High) are enforced at `mvn verify`, locally and in CI.
 7. **CI workflow — CLOSED.** `.github/workflows/ci.yml` runs the boundary gate (+ self-test),
@@ -228,6 +235,7 @@ Keep this section honest. Move an item out only when an automated test/gate exis
 | **Quota/atomic**  | Concurrent vanilla/vanity creates converge; counters use `$inc` (no lost increments)                                |
 | **HTTP errors**   | Standard body + correct status for validation 400, auth 401, authorization 403, missing 404, conflict 409, generic 500 |
 | **Security**      | Every endpoint has an explicit matcher; mutating routes never permit-all by default; SSRF/private-IP destinations rejected |
+| **Links as Resource** | List returns only caller's links (archived included, `deletedAt`); non-owner get/patch/delete → 403; unauthenticated → 401; PATCH applies only supplied fields and preserves un-supplied ones; expiry clear via explicit null; archive → soft delete, redirect → 404, cache evicted |
 | **Cache**         | Bloom filter short-circuits non-existent codes; Redis outage degrades to DB (doesn't fail redirect)                |
 | **Boundaries**    | Rule-1 grep has no matches; controllers call inbound use cases, not repositories                                     |
 

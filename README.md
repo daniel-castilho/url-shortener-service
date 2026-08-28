@@ -114,7 +114,7 @@ docker-compose up -d
 ```
 
 This starts `mongo:6.0` and `redis:alpine`. MongoDB indexes are managed on startup by the
-application's versioned schema migrations (`MongoSchemaMigrator`, versions `V1`–`V5`, recorded in the
+application's versioned schema migrations (`MongoSchemaMigrator`, versions `V1`–`V7`, recorded in the
 `schema_migrations` history; `auto-index-creation` is off).
 
 ### 2. Run the application
@@ -174,7 +174,11 @@ With the application running, open the API docs:
 | | `POST` | `/api/v1/auth/login` | Authenticate and return an access + refresh token. |
 | | `POST` | `/api/v1/auth/refresh` | Exchange a valid refresh token for a new access token. |
 | **URLs** | `POST` | `/api/v1/urls` | Shorten a URL. Anonymous allowed; `customAlias` (vanity) requires authentication; optional `ttlSeconds` (bounded by `app.shortener.max-ttl-seconds`, default 1 year, `null` = never expires). `429` on rate limit. |
-| **Redirect** | `GET` | `/{id}` | Resolve a short code and redirect (`302`) to the original URL. `404` if unknown, `410 Gone` if expired, and never blocks on analytics. |
+| | `GET` | `/api/v1/urls` | List the **caller's** links (archived included), newest first, cursor-paginated (`?limit=&cursor=`; `limit` capped at 100, malformed cursor → `400`). Requires authentication. |
+| | `GET` | `/api/v1/urls/{id}` | Get one link's details (owner only; `403` for non-owner, `404` unknown). |
+| | `PATCH` | `/api/v1/urls/{id}` | Partially update a link — only **supplied** fields change; `expiresAt`/`utm` present-and-`null` clears. Owner only. Archived links are immutable (`400`). |
+| | `DELETE` | `/api/v1/urls/{id}` | **Soft-delete** (archives) a link; idempotent; owner only. The redirect then returns `404`. |
+| **Redirect** | `GET` | `/{id}` | Resolve a short code and redirect (`302`) to the original URL. `404` if unknown or archived, `410 Gone` if expired, and never blocks on analytics. |
 
 ### Monitoring endpoints (Actuator)
 
@@ -234,6 +238,15 @@ Implemented on `main`:
   (`load-tests/`, manual dispatch via `.github/workflows/load-test.yml`) and baselines
   (`docs/load-test-baseline.md`). Tracing is fail-open, proven by `TracingFailOpenIT`. See
   `docs/observability.md`.
+- **Links as Resource — landed.** Authenticated, owner-scoped link management under `/api/v1/urls`:
+  cursor-paginated **list** of the caller's links (archived included, `deletedAt` exposed; order
+  `createdAt DESC, _id DESC`; opaque Base64url cursor; `limit` capped at 100; malformed cursor → 400),
+  **get** details (owner only, 403 otherwise), **PATCH** partial update applying **only supplied
+  fields** (`@JsonAnySetter` presence capture; `expiresAt`/`utm` present-and-`null` clears; archived
+  links immutable) and **DELETE = soft delete** (`deletedAt`, idempotent; the `GET /{id}` redirect
+  returns `404` for archived codes). Mutations **evict** the Redis/L1 cache entries so no stale
+  destination is ever served. Unauthenticated → `401`; non-owner → `403` (application-layer, both
+  tested). See `docs/data-model-decisions.md` → *Links as Resource*.
 - **API docs** — springdoc OpenAPI / Swagger UI, bean validation and structured error responses via a
   global exception handler.
 - **Quality gates** — `mvn verify` enforces JaCoCo coverage (LINE ≥ 60%, BRANCH ≥ 60%), SpotBugs
@@ -249,6 +262,9 @@ Implemented on `main`:
 
 Deliberately not implemented yet — candidate backlog, in priority order:
 
+- **Links as Resource (Phase B) — landed.** `/api/v1/urls` list/get/patch/delete (owner-scoped,
+  cursor pagination, soft delete, PATCH supplied-field semantics). See Current State and
+  `tasks/links-as-resource-*.md`.
 - **Real analytics persistence — landed.** Click events persist to `click_events` via a durable
   Redis Stream + batched worker; `clickCount` is updated atomically (`$inc`), quota counters too.
 - **Rate limiting on the redirect path — landed.** `GET /{id}` now has per-IP token-bucket over Redis (Rule 5): independent REDIRECT scope with capacity 120/min (configurable), Redis TIME-driven atomic Lua script, trusted-proxy CIDR IP resolution, fail-open policy, 429 with `Retry-After` + `RateLimit-*` headers. Scope isolation: exhausting redirect budget never affects shorten. ITs prove anti-enumeration (unknown-code probes throttled), exact capacity under burst, and scope isolation.

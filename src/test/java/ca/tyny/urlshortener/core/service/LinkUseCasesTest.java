@@ -141,7 +141,7 @@ class LinkUseCasesTest {
         UpdateLinkUseCaseImpl impl = new UpdateLinkUseCaseImpl(
                 linkQueryPort, mock(LinkMutationPort.class), mock(UrlCachePort.class), mock(UrlValidator.class), 31536000L);
 
-        UpdateLinkCommand cmd = new UpdateLinkCommand("https://new-example.com", null, null, null, null);
+        UpdateLinkCommand cmd = new UpdateLinkCommand("https://new-example.com", null, null, null, false, null, false);
 
         ca.tyny.urlshortener.core.model.ShortUrl updated = impl.update(USER_ID, LINK_ID, cmd);
 
@@ -154,7 +154,7 @@ class LinkUseCasesTest {
     void updateLinkThrows403ForNonOwner() {
         when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.of(createShortUrl()));
 
-        assertThatThrownBy(() -> updateLinkUseCase.update("other-user", LINK_ID, new UpdateLinkCommand(null, null, null, null, null)))
+        assertThatThrownBy(() -> updateLinkUseCase.update("other-user", LINK_ID, new UpdateLinkCommand(null, null, null, null, false, null, false)))
                 .isInstanceOf(ForbiddenException.class);
     }
 
@@ -163,7 +163,7 @@ class LinkUseCasesTest {
     void updateLinkThrows404WhenNotFound() {
         when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> updateLinkUseCase.update(USER_ID, LINK_ID, new UpdateLinkCommand(null, null, null, null, null)))
+        assertThatThrownBy(() -> updateLinkUseCase.update(USER_ID, LINK_ID, new UpdateLinkCommand(null, null, null, null, false, null, false)))
                 .isInstanceOf(UrlNotFoundException.class);
     }
 
@@ -172,7 +172,7 @@ class LinkUseCasesTest {
     void updateLinkThrowsOnArchived() {
         when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.of(createArchivedShortUrl()));
 
-        assertThatThrownBy(() -> updateLinkUseCase.update(USER_ID, LINK_ID, new UpdateLinkCommand("https://new.com", null, null, null, null)))
+        assertThatThrownBy(() -> updateLinkUseCase.update(USER_ID, LINK_ID, new UpdateLinkCommand("https://new.com", null, null, null, false, null, false)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("archived");
     }

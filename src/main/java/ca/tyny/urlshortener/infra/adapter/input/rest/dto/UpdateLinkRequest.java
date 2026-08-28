@@ -34,15 +34,15 @@ public class UpdateLinkRequest {
     }
 
     public String getOriginalUrl() { return originalUrl; }
-    public void setOriginalUrl(String originalUrl) { this.originalUrl = originalUrl; }
+    public void setOriginalUrl(String originalUrl) { this.originalUrl = originalUrl; suppliedFields.put("originalUrl", originalUrl); }
     public String getTitle() { return title; }
-    public void setTitle(String title) { this.title = title; }
+    public void setTitle(String title) { this.title = title; suppliedFields.put("title", title); }
     public List<String> getTags() { return tags; }
-    public void setTags(List<String> tags) { this.tags = tags; }
+    public void setTags(List<String> tags) { this.tags = tags; suppliedFields.put("tags", tags); }
     public UtmParamsRequest getUtm() { return utm; }
-    public void setUtm(UtmParamsRequest utm) { this.utm = utm; }
+    public void setUtm(UtmParamsRequest utm) { this.utm = utm; suppliedFields.put("utm", utm); }
     public Instant getExpiresAt() { return expiresAt; }
-    public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }
+    public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; suppliedFields.put("expiresAt", expiresAt); }
 
     public static class UtmParamsRequest {
         private String source;
