@@ -7,10 +7,12 @@ import ca.tyny.urlshortener.core.idgeneration.UrlIdGenerator;
 import ca.tyny.urlshortener.core.idgeneration.UrlIdGenerationStrategy;
 import ca.tyny.urlshortener.core.idgeneration.VanityUrlIdStrategy;
 import ca.tyny.urlshortener.core.ports.incoming.ArchiveLinkUseCase;
+import ca.tyny.urlshortener.core.ports.incoming.CustomDomainUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.GetLinkUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.ListUserLinksUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.UpdateLinkUseCase;
 import ca.tyny.urlshortener.core.ports.outgoing.AuthenticationPort;
+import ca.tyny.urlshortener.core.ports.outgoing.CustomDomainRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.IdGeneratorPort;
 import ca.tyny.urlshortener.core.ports.outgoing.LinkMutationPort;
 import ca.tyny.urlshortener.core.ports.outgoing.LinkQueryPort;
@@ -20,7 +22,9 @@ import ca.tyny.urlshortener.core.ports.outgoing.TokenPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
+import ca.tyny.urlshortener.core.ports.outgoing.VerificationTokenPort;
 import ca.tyny.urlshortener.core.service.ArchiveLinkUseCaseImpl;
+import ca.tyny.urlshortener.core.service.CustomDomainService;
 import ca.tyny.urlshortener.core.service.GetLinkUseCaseImpl;
 import ca.tyny.urlshortener.core.service.ListUserLinksUseCaseImpl;
 import ca.tyny.urlshortener.core.service.QuotaService;
@@ -36,6 +40,7 @@ import ca.tyny.urlshortener.infra.config.properties.RateLimiterProperties;
 import ca.tyny.urlshortener.infra.config.properties.ShortenerProperties;
 import ca.tyny.urlshortener.infra.config.properties.UrlValidationProperties;
 import ca.tyny.urlshortener.infra.config.properties.SecurityProperties;
+import ca.tyny.urlshortener.infra.config.properties.DomainProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -48,7 +53,8 @@ import java.util.List;
         ca.tyny.urlshortener.infra.config.properties.RateLimiterProperties.class,
         ca.tyny.urlshortener.infra.config.properties.UrlValidationProperties.class,
         ca.tyny.urlshortener.infra.config.properties.SecurityProperties.class,
-        ca.tyny.urlshortener.infra.config.properties.ShortenerProperties.class
+        ca.tyny.urlshortener.infra.config.properties.ShortenerProperties.class,
+        ca.tyny.urlshortener.infra.config.properties.DomainProperties.class
 })
 public class ServiceConfig {
 
@@ -141,5 +147,13 @@ public class ServiceConfig {
             LinkMutationPort linkMutationPort,
             UrlCachePort urlCachePort) {
         return new ArchiveLinkUseCaseImpl(linkQueryPort, linkMutationPort, urlCachePort);
+    }
+
+    @Bean
+    public CustomDomainUseCase customDomainUseCase(CustomDomainRepositoryPort customDomainRepository,
+            VerificationTokenPort verificationTokenPort,
+            DomainProperties domainProperties) {
+        return new CustomDomainService(customDomainRepository, verificationTokenPort,
+                domainProperties.defaultHost());
     }
 }

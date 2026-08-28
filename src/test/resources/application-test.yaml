@@ -24,6 +24,11 @@ app:
     secret: "test-secret-key-at-least-32-characters-long-for-testing"
     expiration-ms: 86400000
     refresh-expiration-ms: 604800000
+  domain:
+    default-host: localhost
+    dns-verify-enabled: false
+    dns-verify-cron: 0 */5 * * * *
+    dns-verify-timeout-ms: 500
 
 management:
   endpoints:

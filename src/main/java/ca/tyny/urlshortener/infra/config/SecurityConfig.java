@@ -57,6 +57,9 @@ public class SecurityConfig {
                         // Links as Resource — authenticated (owner guard at application layer)
                         .requestMatchers("/api/v1/urls/**").authenticated()
 
+                        // Custom Domains — authenticated (owner guard at application layer)
+                        .requestMatchers("/api/v1/domains/**").authenticated()
+
                         // Actuator - tiered access
                         .requestMatchers("/actuator/health/liveness", "/actuator/health/readiness").permitAll()
                         .requestMatchers("/actuator/info").permitAll()

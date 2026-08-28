@@ -61,6 +61,17 @@ app:
     consumer: ${APP_ANALYTICS_CONSUMER:worker-1}
     batch-size: ${APP_ANALYTICS_BATCH_SIZE:500}
 
+  domain:
+    # Host the service is served on; cannot be claimed as a custom domain,
+    # and the target of the legacy domain-less redirect branch.
+    default-host: ${APP_DOMAIN_DEFAULT_HOST:localhost}
+    # Master switch for the scheduled DNS health check job (disabled in tests/profile).
+    dns-verify-enabled: ${APP_DOMAIN_DNS_VERIFY_ENABLED:true}
+    dns-verify-cron: ${APP_DOMAIN_DNS_VERIFY_CRON:0 */5 * * * *}
+    dns-verify-timeout-ms: ${APP_DOMAIN_DNS_VERIFY_TIMEOUT_MS:3000}
+    # Prefix of the TXT record used for ownership verification.
+    verification-prefix: ${APP_DOMAIN_VERIFICATION_PREFIX:url-shortener-verify=}
+
 # ========================================
 # Observability & Monitoring
 # ========================================

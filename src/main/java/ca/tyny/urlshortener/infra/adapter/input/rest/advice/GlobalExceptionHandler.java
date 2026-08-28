@@ -2,8 +2,11 @@ package ca.tyny.urlshortener.infra.adapter.input.rest.advice;
 
 import ca.tyny.urlshortener.core.exception.AliasAlreadyExistsException;
 import ca.tyny.urlshortener.core.exception.CodeGenerationException;
+import ca.tyny.urlshortener.core.exception.DomainAlreadyExistsException;
+import ca.tyny.urlshortener.core.exception.DomainNotFoundException;
 import ca.tyny.urlshortener.core.exception.ForbiddenException;
 import ca.tyny.urlshortener.core.exception.InvalidDestinationException;
+import ca.tyny.urlshortener.core.exception.InvalidDomainException;
 import ca.tyny.urlshortener.core.exception.InvalidExpiryException;
 import ca.tyny.urlshortener.core.exception.QuotaExceededException;
 import ca.tyny.urlshortener.core.exception.UrlExpiredException;
@@ -142,6 +145,45 @@ public class GlobalExceptionHandler {
                                 LocalDateTime.now());
 
                 return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+        }
+
+        @ExceptionHandler(DomainAlreadyExistsException.class)
+        public ResponseEntity<ErrorResponse> handleDomainAlreadyExists(DomainAlreadyExistsException ex) {
+                log.warn("Domain already claimed: {}", ex.getMessage());
+
+                ErrorResponse error = new ErrorResponse(
+                                HttpStatus.CONFLICT.value(),
+                                "Domain Already Exists",
+                                ex.getMessage(),
+                                LocalDateTime.now());
+
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
+        }
+
+        @ExceptionHandler(DomainNotFoundException.class)
+        public ResponseEntity<ErrorResponse> handleDomainNotFound(DomainNotFoundException ex) {
+                log.warn("Domain not found: {}", ex.getMessage());
+
+                ErrorResponse error = new ErrorResponse(
+                                HttpStatus.NOT_FOUND.value(),
+                                "Domain Not Found",
+                                ex.getMessage(),
+                                LocalDateTime.now());
+
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+        }
+
+        @ExceptionHandler(InvalidDomainException.class)
+        public ResponseEntity<ErrorResponse> handleInvalidDomain(InvalidDomainException ex) {
+                log.warn("Invalid domain: {}", ex.getMessage());
+
+                ErrorResponse error = new ErrorResponse(
+                                HttpStatus.BAD_REQUEST.value(),
+                                "Invalid Domain",
+                                ex.getMessage(),
+                                LocalDateTime.now());
+
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
         }
 
         @ExceptionHandler(MethodArgumentNotValidException.class)
