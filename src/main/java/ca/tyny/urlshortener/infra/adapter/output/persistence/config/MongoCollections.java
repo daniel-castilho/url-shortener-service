@@ -25,6 +25,11 @@ public class MongoCollections {
      */
     public static final String USERS = "users";
 
+    /**
+     * Collection storing claimed custom domains (host ownership + DNS verification state).
+     */
+    public static final String CUSTOM_DOMAINS = "custom_domains";
+
     private MongoCollections() {
         throw new AssertionError("Utility class should not be instantiated");
     }

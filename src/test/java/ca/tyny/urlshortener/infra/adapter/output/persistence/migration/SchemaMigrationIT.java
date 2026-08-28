@@ -20,6 +20,7 @@ class SchemaMigrationIT extends BaseIntegrationTest {
     private static final String SHORT_URLS = "short_urls";
     private static final String CLICK_EVENTS = "click_events";
     private static final String USERS = "users";
+    private static final String CUSTOM_DOMAINS = "custom_domains";
 
     @Autowired
     private MongoTemplate mongoTemplate;
@@ -34,8 +35,8 @@ class SchemaMigrationIT extends BaseIntegrationTest {
         migrator.migrate();
 
         List<Document> history = mongoTemplate.findAll(Document.class, MongoSchemaMigrator.HISTORY_COLLECTION);
-        assertThat(history).hasSize(7);
-        assertThat(history.stream().map(doc -> doc.getInteger("version"))).containsExactly(1, 2, 3, 4, 5, 6, 7);
+        assertThat(history).hasSize(8);
+        assertThat(history.stream().map(doc -> doc.getInteger("version"))).containsExactly(1, 2, 3, 4, 5, 6, 7, 8);
         assertThat(history).allSatisfy(doc -> {
             assertThat(doc.getString("checksum")).isNotBlank();
             assertThat(doc.getString("description")).isNotBlank();
@@ -61,6 +62,13 @@ class SchemaMigrationIT extends BaseIntegrationTest {
                 .filter(index -> "email_1".equals(index.getName()))
                 .findFirst().orElseThrow();
         assertThat(emailUniqueIndex.isUnique()).isTrue();
+
+        List<IndexInfo> customDomainsIndexes = mongoTemplate.indexOps(CUSTOM_DOMAINS).getIndexInfo();
+        assertThat(indexNames(customDomainsIndexes)).contains("_id_", "host_1", "userId_1");
+        IndexInfo hostUniqueIndex = customDomainsIndexes.stream()
+                .filter(index -> "host_1".equals(index.getName()))
+                .findFirst().orElseThrow();
+        assertThat(hostUniqueIndex.isUnique()).isTrue();
     }
 
     @Test
@@ -71,11 +79,13 @@ class SchemaMigrationIT extends BaseIntegrationTest {
         migrator.migrate();
 
         List<Document> history = mongoTemplate.findAll(Document.class, MongoSchemaMigrator.HISTORY_COLLECTION);
-        assertThat(history).hasSize(7);
+        assertThat(history).hasSize(8);
         assertThat(indexNames(mongoTemplate.indexOps(SHORT_URLS).getIndexInfo()))
                 .contains("userId_1", "expiresAt_1");
         assertThat(indexNames(mongoTemplate.indexOps(CLICK_EVENTS).getIndexInfo()))
                 .contains("shortCode_1_timestamp_1", "timestamp_1");
+        assertThat(indexNames(mongoTemplate.indexOps(CUSTOM_DOMAINS).getIndexInfo()))
+                .contains("host_1", "userId_1");
     }
 
     private static List<String> indexNames(List<IndexInfo> indexInfo) {
