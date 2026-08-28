@@ -29,6 +29,7 @@ import ca.tyny.urlshortener.core.service.UpdateLinkUseCaseImpl;
 import ca.tyny.urlshortener.core.service.UserService;
 import ca.tyny.urlshortener.core.validation.ReservedWordsValidator;
 import ca.tyny.urlshortener.core.validation.UrlValidator;
+import ca.tyny.urlshortener.infra.adapter.input.rest.mapper.LinkMapper;
 import ca.tyny.urlshortener.infra.adapter.output.persistence.mapper.ShortUrlMapper;
 import ca.tyny.urlshortener.infra.adapter.output.validation.DefaultUrlValidator;
 import ca.tyny.urlshortener.infra.config.properties.RateLimiterProperties;
@@ -109,6 +110,11 @@ public class ServiceConfig {
     @Bean
     public UrlValidator urlValidator(UrlValidationProperties properties) {
         return new DefaultUrlValidator(properties);
+    }
+
+    @Bean
+    public LinkMapper linkMapper() {
+        return new LinkMapper();
     }
 
     @Bean
