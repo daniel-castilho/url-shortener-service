@@ -50,6 +50,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/{id}").permitAll() // Redirect
                         .requestMatchers(HttpMethod.POST, "/api/v1/urls").permitAll() // Create Short URL (Anonymous allowed)
 
+                        // Links as Resource — authenticated (owner guard at application layer)
+                        .requestMatchers("/api/v1/urls/**").authenticated()
+
                         // Actuator - tiered access
                         .requestMatchers("/actuator/health/liveness", "/actuator/health/readiness").permitAll()
                         .requestMatchers("/actuator/info").permitAll()
