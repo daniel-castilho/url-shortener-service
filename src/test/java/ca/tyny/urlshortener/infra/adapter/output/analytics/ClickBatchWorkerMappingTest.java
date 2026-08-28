@@ -22,6 +22,9 @@ class ClickBatchWorkerMappingTest {
         value.put("ts", "2026-08-26T12:00:00Z");
         value.put("ua", "UA/2.0");
         value.put("ip", "198.51.100.9");
+        value.put("ref", "https://ref.example.com/page");
+        value.put("dev", "desktop");
+        value.put("cc", "BR");
 
         ClickEventDocument doc = ClickBatchWorker.toDocument(value, CONSUMED_AT);
 
@@ -29,6 +32,9 @@ class ClickBatchWorkerMappingTest {
         assertThat(doc.getTimestamp()).isEqualTo(Instant.parse("2026-08-26T12:00:00Z"));
         assertThat(doc.getUserAgent()).isEqualTo("UA/2.0");
         assertThat(doc.getIp()).isEqualTo("198.51.100.9");
+        assertThat(doc.getReferrer()).isEqualTo("https://ref.example.com/page");
+        assertThat(doc.getDevice()).isEqualTo("desktop");
+        assertThat(doc.getCountry()).isEqualTo("BR");
     }
 
     @Test

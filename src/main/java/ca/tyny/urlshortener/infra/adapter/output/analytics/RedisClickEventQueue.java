@@ -37,6 +37,9 @@ public class RedisClickEventQueue implements AnalyticsPort {
     public static final String FIELD_TIMESTAMP = "ts";
     public static final String FIELD_USER_AGENT = "ua";
     public static final String FIELD_IP = "ip";
+    public static final String FIELD_REFERRER = "ref";
+    public static final String FIELD_DEVICE = "dev";
+    public static final String FIELD_COUNTRY = "cc";
 
     private final StringRedisTemplate redisTemplate;
     private final String streamKey;
@@ -104,10 +107,19 @@ public class RedisClickEventQueue implements AnalyticsPort {
                 ? event.timestamp().atZone(ZoneOffset.UTC).toInstant()
                 : Instant.now();
         Map<String, String> payload = new HashMap<>();
-        payload.put(FIELD_CODE, event.shortCode());
+        putIfNotNull(payload, FIELD_CODE, event.shortCode());
         payload.put(FIELD_TIMESTAMP, instant.toString());
-        payload.put(FIELD_USER_AGENT, event.userAgent());
-        payload.put(FIELD_IP, event.ip());
+        putIfNotNull(payload, FIELD_USER_AGENT, event.userAgent());
+        putIfNotNull(payload, FIELD_IP, event.ip());
+        putIfNotNull(payload, FIELD_REFERRER, event.referrer());
+        putIfNotNull(payload, FIELD_DEVICE, event.device());
+        putIfNotNull(payload, FIELD_COUNTRY, event.country());
         return payload;
+    }
+
+    private static void putIfNotNull(Map<String, String> payload, String key, String value) {
+        if (value != null) {
+            payload.put(key, value);
+        }
     }
 }

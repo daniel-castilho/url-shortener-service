@@ -7,6 +7,7 @@ import ca.tyny.urlshortener.core.ports.outgoing.AnalyticsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlRepositoryPort;
 import ca.tyny.urlshortener.infra.adapter.output.persistence.MongoClickEventRepository;
 import ca.tyny.urlshortener.infra.adapter.output.persistence.config.MongoCollections;
+import ca.tyny.urlshortener.infra.adapter.output.persistence.entity.ClickEventDocument;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,13 +46,15 @@ class ClickPipelineIT extends BaseIntegrationTest {
     void shouldPersistEventAndIncrementCount() {
         urlRepository.save(new ShortUrl("pipe001", "https://example.com/pipe", LocalDateTime.now()));
 
-        analyticsPort.track(new ClickEvent("pipe001", LocalDateTime.now(), "IT-UA", "203.0.113.10"));
+        analyticsPort.track(new ClickEvent("pipe001", LocalDateTime.now(), "IT-UA", "203.0.113.10",
+                "https://ref.example.com/campaign", null, null));
 
         awaitAssert(() -> {
-            long docs = mongoTemplate.count(
+            ClickEventDocument doc = mongoTemplate.findOne(
                     Query.query(Criteria.where("shortCode").is("pipe001")),
-                    MongoCollections.CLICK_EVENTS);
-            assertThat(docs).isEqualTo(1);
+                    ClickEventDocument.class);
+            assertThat(doc).isNotNull();
+            assertThat(doc.getReferrer()).isEqualTo("https://ref.example.com/campaign");
         });
         awaitAssert(() -> assertThat(urlRepository.findById("pipe001"))
                 .hasValueSatisfying(u -> assertThat(u.clickCount()).isEqualTo(1L)));

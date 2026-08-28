@@ -207,7 +207,10 @@ public class ClickBatchWorker {
         }
         return new ClickEventDocument(code, timestamp,
                 asString(value.get(RedisClickEventQueue.FIELD_USER_AGENT)),
-                asString(value.get(RedisClickEventQueue.FIELD_IP)));
+                asString(value.get(RedisClickEventQueue.FIELD_IP)),
+                asString(value.get(RedisClickEventQueue.FIELD_REFERRER)),
+                asString(value.get(RedisClickEventQueue.FIELD_DEVICE)),
+                asString(value.get(RedisClickEventQueue.FIELD_COUNTRY)));
     }
 
     private static String asString(Object o) {

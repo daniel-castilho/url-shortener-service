@@ -132,14 +132,17 @@ public class UrlController {
                                 return tooManyRequests(verdict);
                         }
 
-                        String host = ca.tyny.urlshortener.core.validation.Hostnames.fromHostHeader(
-                                        request.getHeader("Host"));
+String host = ca.tyny.urlshortener.core.validation.Hostnames.fromHostHeader(
+                        request.getHeader("Host"));
                         String originalUrl = getUrlUseCase.getOriginalUrl(host, id);
                         analyticsPort.track(new ca.tyny.urlshortener.core.model.ClickEvent(
                                         id,
                                         java.time.LocalDateTime.now(),
                                         request.getHeader("User-Agent"),
-                                        clientIp));
+                                        clientIp,
+                                        request.getHeader("Referer"),
+                                        null,
+                                        null));
 
                         metricsService.recordRedirect();
                         return ResponseEntity.status(HttpStatus.FOUND).location(java.net.URI.create(originalUrl))

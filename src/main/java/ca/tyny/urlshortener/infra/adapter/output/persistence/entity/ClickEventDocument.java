@@ -30,6 +30,12 @@ public class ClickEventDocument {
 
     private String ip;
 
+    private String referrer;
+
+    private String device;
+
+    private String country;
+
     /** When the worker actually persisted the event (UTC). */
     private Instant consumedAt;
 
@@ -37,10 +43,18 @@ public class ClickEventDocument {
     }
 
     public ClickEventDocument(String shortCode, Instant timestamp, String userAgent, String ip) {
+        this(shortCode, timestamp, userAgent, ip, null, null, null);
+    }
+
+    public ClickEventDocument(String shortCode, Instant timestamp, String userAgent, String ip,
+            String referrer, String device, String country) {
         this.shortCode = shortCode;
         this.timestamp = timestamp;
         this.userAgent = userAgent;
         this.ip = ip;
+        this.referrer = referrer;
+        this.device = device;
+        this.country = country;
     }
 
     public String getId() {
@@ -81,6 +95,30 @@ public class ClickEventDocument {
 
     public void setIp(String ip) {
         this.ip = ip;
+    }
+
+    public String getReferrer() {
+        return referrer;
+    }
+
+    public void setReferrer(String referrer) {
+        this.referrer = referrer;
+    }
+
+    public String getDevice() {
+        return device;
+    }
+
+    public void setDevice(String device) {
+        this.device = device;
+    }
+
+    public String getCountry() {
+        return country;
+    }
+
+    public void setCountry(String country) {
+        this.country = country;
     }
 
     public Instant getConsumedAt() {
