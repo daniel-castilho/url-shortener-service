@@ -7,6 +7,8 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-08-28
+
 ### Added
 
 - **Links as Resource (Phase B)** — authenticated, owner-scoped link management under `/api/v1/urls`:
@@ -25,6 +27,33 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 - **Security** — unauthenticated requests to protected endpoints now return `401` (explicit
   `authenticationEntryPoint`) instead of the framework default `403`.
+
+## [0.11.0] - 2026-08-27
+
+### Added
+
+- **Read Path Confidence (Phase A)** — the redirect read path now distinguishes cache hit, cache miss
+  and Bloom-negative via the `CacheLookup` domain type returned by `UrlCachePort.lookup()` (Policy B:
+  a bloom-negative is a lightweight cache-miss resolved by `findById`). `ReadPathIT` (5 tests) proves
+  the behaviour; corrected the "Bloom avoids the DB" claim in docs.
+
+## [0.10.0] - 2026-08-27
+
+### Changed
+
+- **Final polish & data integrity** — closed `AGENTS.md` debt item 10 (schema migrations fully
+  versioned/checksummed, `users.email` unique index live); the `410 Gone` OpenAPI for the redirect is
+  accurate; TTL/link-expiry logic lives in the application layer; stale "target/not yet applied"
+  phrasing cleaned from docs.
+
+## [0.9.0] - 2026-08-27
+
+### Added
+
+- **Operational excellence** — OpenTelemetry tracing (fail-open, tracked by `TracingFailOpenIT`),
+  structured JSON logging (`json` profile), SLOs + burn-rate alerts, k6 load baseline with real
+  numbers, TLS termination via reverse proxy (NGINX/Caddy), systemd deployment unit + graceful
+  shutdown, MongoDB backup/restore scripts, `click_events` retention purge.
 
 ## [0.8.0] - 2026-08-27
 
