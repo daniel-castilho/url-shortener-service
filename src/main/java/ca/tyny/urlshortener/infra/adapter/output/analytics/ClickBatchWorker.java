@@ -47,6 +47,7 @@ public class ClickBatchWorker {
     private final MongoClickEventRepository clickEventRepository;
     private final ca.tyny.urlshortener.core.ports.outgoing.UrlRepositoryPort urlRepository;
     private final GeoIpCountryResolver geoResolver;
+    private final boolean uniqueEnabled;
     private final String streamKey;
     private final String groupName;
     private final String consumerName;
@@ -64,11 +65,13 @@ public class ClickBatchWorker {
             @Value("${app.analytics.stream-key:urlshortener:clicks}") String streamKey,
             @Value("${app.analytics.group:click-worker}") String groupName,
             @Value("${app.analytics.consumer:worker-1}") String consumerName,
-            @Value("${app.analytics.batch-size:500}") int batchSize) {
+            @Value("${app.analytics.batch-size:500}") int batchSize,
+            @Value("${app.analytics.unique.enabled:true}") boolean uniqueEnabled) {
         this.redisTemplate = redisTemplate;
         this.clickEventRepository = clickEventRepository;
         this.urlRepository = urlRepository;
         this.geoResolver = geoResolver;
+        this.uniqueEnabled = uniqueEnabled;
         this.streamKey = streamKey;
         this.groupName = groupName;
         this.consumerName = consumerName;
@@ -172,6 +175,8 @@ public class ClickBatchWorker {
         Instant consumedAt = Instant.now();
         List<ClickEventDocument> docs = new ArrayList<>(records.size());
         Map<String, Long> clicksPerCode = new HashMap<>();
+        // Accumulate IPs per (shortCode, day) for HLL batching
+        Map<String, List<String>> hllElements = uniqueEnabled ? new HashMap<>() : null;
 
         for (MapRecord<String, Object, Object> record : records) {
             ClickEventDocument doc = toDocument(record.getValue(), consumedAt);
@@ -179,10 +184,27 @@ public class ClickBatchWorker {
             if (doc.getShortCode() != null && !doc.getShortCode().isBlank()) {
                 docs.add(doc);
                 clicksPerCode.merge(doc.getShortCode(), 1L, Long::sum);
+
+                if (uniqueEnabled && doc.getIp() != null) {
+                    String day = doc.getTimestamp().atZone(java.time.ZoneOffset.UTC).toLocalDate().toString();
+                    String hllKey = "hll:clicks:" + doc.getShortCode() + ":" + day;
+                    hllElements.computeIfAbsent(hllKey, k -> new ArrayList<>()).add(doc.getIp());
+                }
             }
         }
 
         clickEventRepository.insertAll(docs);
+
+        // Batch PFADD for unique visitors (non-blocking, fire-and-forget style)
+        if (uniqueEnabled && hllElements != null) {
+            hllElements.forEach((key, ips) -> {
+                try {
+                    redisTemplate.opsForHyperLogLog().add(key, ips.toArray(new String[0]));
+                } catch (Exception e) {
+                    log.debug("HLL PFADD failed for {}: {}", key, e.getMessage());
+                }
+            });
+        }
 
         // One atomic $inc per unique code with the exact count for the batch —
         // never read-modify-write, never one increment per event.

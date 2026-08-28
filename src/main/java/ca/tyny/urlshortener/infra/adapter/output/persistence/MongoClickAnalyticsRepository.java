@@ -8,6 +8,7 @@ import org.bson.Document;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
@@ -32,9 +33,11 @@ public class MongoClickAnalyticsRepository implements ClickAnalyticsPort {
     private static final int MAX_HOURLY_BUCKETS = 2000;
 
     private final MongoTemplate mongoTemplate;
+    private final StringRedisTemplate redisTemplate;
 
-    public MongoClickAnalyticsRepository(MongoTemplate mongoTemplate) {
+    public MongoClickAnalyticsRepository(MongoTemplate mongoTemplate, StringRedisTemplate redisTemplate) {
         this.mongoTemplate = mongoTemplate;
+        this.redisTemplate = redisTemplate;
     }
 
     @Override
@@ -98,5 +101,18 @@ public class MongoClickAnalyticsRepository implements ClickAnalyticsPort {
         return merged.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue,
                         (a, b) -> a, LinkedHashMap::new));
+    }
+
+    @Override
+    public Map<String, Long> uniquePerDay(String shortCode, LocalDate from, LocalDate to) {
+        Map<String, Long> unique = new LinkedHashMap<>();
+        LocalDate day = from;
+        while (!day.isAfter(to)) {
+            String hllKey = "hll:clicks:" + shortCode + ":" + day;
+            Long count = redisTemplate.opsForHyperLogLog().size(hllKey);
+            unique.put(day.toString(), count != null ? count : 0L);
+            day = day.plusDays(1);
+        }
+        return unique;
     }
 }

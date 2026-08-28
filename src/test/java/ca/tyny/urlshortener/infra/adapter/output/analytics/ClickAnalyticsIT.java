@@ -14,6 +14,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -35,6 +36,9 @@ class ClickAnalyticsIT extends BaseIntegrationTest {
 
     @Autowired
     private MongoTemplate mongoTemplate;
+
+    @Autowired
+    private StringRedisTemplate redisTemplate;
 
     private String ownerToken;
     private String otherToken;
@@ -127,6 +131,35 @@ class ClickAnalyticsIT extends BaseIntegrationTest {
         assertThat(breakdown.get("device")).containsEntry("tablet", 3);
         assertThat(breakdown.get("referrer")).containsEntry("https://ref_example_com", 3);
         assertThat(breakdown.get("referrer")).containsEntry("https://other_ref", 2);
+    }
+
+    @Test
+    @DisplayName("Owner reads daily series with unique visitor counts")
+    void ownerReadsDailySeriesWithUnique() {
+        LocalDate yesterday = LocalDate.now(ZoneOffset.UTC).minusDays(1);
+        LocalDate dayBefore = yesterday.minusDays(1);
+
+        // Populate HLL with 3 unique IPs for yesterday, 2 for day before
+        String hllKey1 = "hll:clicks:" + linkCode + ":" + yesterday;
+        String hllKey2 = "hll:clicks:" + linkCode + ":" + dayBefore;
+        redisTemplate.opsForHyperLogLog().add(hllKey1, "203.0.113.1", "203.0.113.2", "203.0.113.3");
+        redisTemplate.opsForHyperLogLog().add(hllKey2, "203.0.113.4", "203.0.113.5");
+
+        Map<String, Object> resp = given()
+                .header("Authorization", "Bearer " + ownerToken)
+                .param("unit", "day")
+                .param("from", dayBefore.toString())
+                .param("to", yesterday.toString())
+                .get("/api/v1/urls/" + linkCode + "/clicks")
+                .then()
+                .statusCode(200)
+                .extract().as(Map.class);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Long> unique = (Map<String, Long>) resp.get("uniquePerBucket");
+        assertThat(unique).isNotNull();
+        assertThat(((Number) unique.get(yesterday.toString())).longValue()).isEqualTo(3);
+        assertThat(((Number) unique.get(dayBefore.toString())).longValue()).isEqualTo(2);
     }
 
     @Test

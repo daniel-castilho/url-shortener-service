@@ -11,7 +11,8 @@ public record ClickAnalyticsResponse(
         Instant to,
         long totalClicks,
         List<ClickSeriesPoint> series,
-        Map<String, Map<String, Long>> breakdown) {
+        Map<String, Map<String, Long>> breakdown,
+        Map<String, Long> uniquePerBucket) {
 
     public record ClickSeriesPoint(Instant time, long clicks) {
     }

@@ -34,4 +34,11 @@ public interface ClickAnalyticsPort {
      * summed across days from the rollup. Keyed by device | country | referrer.
      */
     Map<String, Map<String, Long>> breakdown(String shortCode, LocalDate from, LocalDate to);
+
+    /**
+     * Approximate unique visitor counts per UTC day for {@code [from, to]}
+     * inclusive, from Redis HyperLogLog (one HLL per {@code (shortCode, day)}).
+     * Returns a map keyed by UTC day string (yyyy-MM-dd) to unique count.
+     */
+    Map<String, Long> uniquePerDay(String shortCode, LocalDate from, LocalDate to);
 }

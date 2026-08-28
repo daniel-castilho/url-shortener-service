@@ -48,12 +48,16 @@ public class GetClickAnalyticsUseCaseImpl implements GetClickAnalyticsUseCase {
         Map<String, Map<String, Long>> breakdown =
                 clickAnalyticsPort.breakdown(id, effectiveFrom, effectiveTo);
 
+        Map<String, Long> uniquePerBucket = (unit == AnalyticsUnit.DAY)
+                ? clickAnalyticsPort.uniquePerDay(id, effectiveFrom, effectiveTo)
+                : null;
+
         long total = series.stream().mapToLong(ClicksSeries.Bucket::clicks).sum();
         Instant startExclusive = effectiveFrom.atStartOfDay(ZoneOffset.UTC).toInstant();
         Instant toExclusive = effectiveTo.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
 
         return new ClicksSeries(id, unit.name().toLowerCase(), startExclusive, toExclusive,
-                total, series, breakdown);
+                total, series, breakdown, uniquePerBucket);
     }
 
     private List<ClicksSeries.Bucket> hourlyBounded(String shortCode, LocalDate from, LocalDate to) {

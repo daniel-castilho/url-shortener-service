@@ -20,7 +20,8 @@ public record ClicksSeries(
         Instant to,
         long totalClicks,
         List<Bucket> series,
-        Map<String, Map<String, Long>> breakdown) {
+        Map<String, Map<String, Long>> breakdown,
+        Map<String, Long> uniquePerBucket) {
 
     public record Bucket(Instant time, long clicks) {
     }

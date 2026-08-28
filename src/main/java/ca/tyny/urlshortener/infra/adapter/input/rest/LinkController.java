@@ -239,6 +239,7 @@ public class LinkController {
                 series.series().stream()
                         .map(b -> new ClickAnalyticsResponse.ClickSeriesPoint(b.time(), b.clicks()))
                         .toList(),
-                series.breakdown());
+                series.breakdown(),
+                series.uniquePerBucket());
     }
 }

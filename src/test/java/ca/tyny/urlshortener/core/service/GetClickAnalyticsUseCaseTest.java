@@ -100,6 +100,44 @@ class GetClickAnalyticsUseCaseTest {
     }
 
     @Test
+    @DisplayName("Includes unique counts for day unit")
+    void includesUniqueCountsForDay() {
+        when(getLinkUseCase.get(anyString(), anyString())).thenReturn(null);
+        List<ClicksSeries.Bucket> daily = List.of(
+                new ClicksSeries.Bucket(
+                        LocalDate.now(ZoneOffset.UTC).minusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant(), 5L));
+        when(clickAnalyticsPort.daily(anyString(), any(), any()))
+                .thenReturn(daily);
+        when(clickAnalyticsPort.breakdown(anyString(), any(), any()))
+                .thenReturn(Map.of());
+        when(clickAnalyticsPort.uniquePerDay(anyString(), any(), any()))
+                .thenReturn(Map.of("2026-08-27", 42L));
+
+        useCase = new GetClickAnalyticsUseCaseImpl(getLinkUseCase, clickAnalyticsPort);
+        ClicksSeries result = useCase.get("user1", "abc123", AnalyticsUnit.DAY, null, null);
+
+        assertThat(result.uniquePerBucket()).isNotNull();
+        assertThat(result.uniquePerBucket().get("2026-08-27")).isEqualTo(42L);
+    }
+
+    @Test
+    @DisplayName("Unique counts are null for hour unit")
+    void uniqueCountsNullForHour() {
+        when(getLinkUseCase.get(anyString(), anyString())).thenReturn(null);
+        List<ClicksSeries.Bucket> hourly = List.of(
+                new ClicksSeries.Bucket(Instant.now(), 2L));
+        when(clickAnalyticsPort.hourly(anyString(), any(), any()))
+                .thenReturn(hourly);
+        when(clickAnalyticsPort.breakdown(anyString(), any(), any()))
+                .thenReturn(Map.of());
+
+        useCase = new GetClickAnalyticsUseCaseImpl(getLinkUseCase, clickAnalyticsPort);
+        ClicksSeries result = useCase.get("user1", "abc123", AnalyticsUnit.HOUR, null, null);
+
+        assertThat(result.uniquePerBucket()).isNull();
+    }
+
+    @Test
     @DisplayName("Throws when hourly range exceeds 30 days")
     void rejectsWideHourlyRange() {
         when(getLinkUseCase.get(anyString(), anyString())).thenReturn(null);
