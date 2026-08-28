@@ -6,19 +6,30 @@ import ca.tyny.urlshortener.core.idgeneration.RandomUrlIdStrategy;
 import ca.tyny.urlshortener.core.idgeneration.UrlIdGenerator;
 import ca.tyny.urlshortener.core.idgeneration.UrlIdGenerationStrategy;
 import ca.tyny.urlshortener.core.idgeneration.VanityUrlIdStrategy;
+import ca.tyny.urlshortener.core.ports.incoming.ArchiveLinkUseCase;
+import ca.tyny.urlshortener.core.ports.incoming.GetLinkUseCase;
+import ca.tyny.urlshortener.core.ports.incoming.ListUserLinksUseCase;
+import ca.tyny.urlshortener.core.ports.incoming.UpdateLinkUseCase;
 import ca.tyny.urlshortener.core.ports.outgoing.AuthenticationPort;
 import ca.tyny.urlshortener.core.ports.outgoing.IdGeneratorPort;
+import ca.tyny.urlshortener.core.ports.outgoing.LinkMutationPort;
+import ca.tyny.urlshortener.core.ports.outgoing.LinkQueryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.PasswordEncoderPort;
 import ca.tyny.urlshortener.core.ports.outgoing.TokenPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
+import ca.tyny.urlshortener.core.service.ArchiveLinkUseCaseImpl;
+import ca.tyny.urlshortener.core.service.GetLinkUseCaseImpl;
+import ca.tyny.urlshortener.core.service.ListUserLinksUseCaseImpl;
 import ca.tyny.urlshortener.core.service.QuotaService;
 import ca.tyny.urlshortener.core.service.UrlShortenerService;
+import ca.tyny.urlshortener.core.service.UpdateLinkUseCaseImpl;
 import ca.tyny.urlshortener.core.service.UserService;
 import ca.tyny.urlshortener.core.validation.ReservedWordsValidator;
 import ca.tyny.urlshortener.core.validation.UrlValidator;
+import ca.tyny.urlshortener.infra.adapter.output.persistence.mapper.ShortUrlMapper;
 import ca.tyny.urlshortener.infra.adapter.output.validation.DefaultUrlValidator;
 import ca.tyny.urlshortener.infra.config.properties.RateLimiterProperties;
 import ca.tyny.urlshortener.infra.config.properties.ShortenerProperties;
@@ -98,5 +109,29 @@ public class ServiceConfig {
     @Bean
     public UrlValidator urlValidator(UrlValidationProperties properties) {
         return new DefaultUrlValidator(properties);
+    }
+
+    @Bean
+    public ListUserLinksUseCase listUserLinksUseCase(LinkQueryPort linkQueryPort) {
+        return new ListUserLinksUseCaseImpl(linkQueryPort);
+    }
+
+    @Bean
+    public GetLinkUseCase getLinkUseCase(LinkQueryPort linkQueryPort) {
+        return new GetLinkUseCaseImpl(linkQueryPort);
+    }
+
+    @Bean
+    public UpdateLinkUseCase updateLinkUseCase(LinkQueryPort linkQueryPort,
+            LinkMutationPort linkMutationPort,
+            UrlValidator urlValidator,
+            ShortenerProperties properties) {
+        return new UpdateLinkUseCaseImpl(linkQueryPort, linkMutationPort, urlValidator, properties.maxTtlSeconds());
+    }
+
+    @Bean
+    public ArchiveLinkUseCase archiveLinkUseCase(LinkQueryPort linkQueryPort,
+            LinkMutationPort linkMutationPort) {
+        return new ArchiveLinkUseCaseImpl(linkQueryPort, linkMutationPort);
     }
 }

@@ -70,6 +70,13 @@ public record ShortUrl(
     }
 
     /**
+     * Copy of this short URL with an updated original URL.
+     */
+    public ShortUrl withOriginalUrl(String newOriginalUrl) {
+        return new ShortUrl(id, newOriginalUrl, createdAt, userId, isCustomAlias, clickCount, expiresAt, title, tags, utm, deletedAt);
+    }
+
+    /**
      * Copy of this short URL marked as archived (soft-deleted).
      */
     public ShortUrl archived() {

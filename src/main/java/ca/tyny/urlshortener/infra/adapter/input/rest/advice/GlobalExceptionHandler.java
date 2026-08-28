@@ -1,8 +1,11 @@
 package ca.tyny.urlshortener.infra.adapter.input.rest.advice;
 
+import ca.tyny.urlshortener.core.exception.AliasAlreadyExistsException;
 import ca.tyny.urlshortener.core.exception.CodeGenerationException;
+import ca.tyny.urlshortener.core.exception.ForbiddenException;
 import ca.tyny.urlshortener.core.exception.InvalidDestinationException;
 import ca.tyny.urlshortener.core.exception.InvalidExpiryException;
+import ca.tyny.urlshortener.core.exception.QuotaExceededException;
 import ca.tyny.urlshortener.core.exception.UrlExpiredException;
 import ca.tyny.urlshortener.core.exception.UrlNotFoundException;
 import org.slf4j.Logger;
@@ -89,6 +92,19 @@ public class GlobalExceptionHandler {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
         }
 
+        @ExceptionHandler(ForbiddenException.class)
+        public ResponseEntity<ErrorResponse> handleForbidden(ForbiddenException ex) {
+                log.warn("Forbidden: {}", ex.getMessage());
+
+                ErrorResponse error = new ErrorResponse(
+                                HttpStatus.FORBIDDEN.value(),
+                                "Forbidden",
+                                ex.getMessage(),
+                                LocalDateTime.now());
+
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+        }
+
         @ExceptionHandler(CodeGenerationException.class)
         public ResponseEntity<ErrorResponse> handleCodeGeneration(CodeGenerationException ex) {
                 log.error("Code generation failed after {} attempts", ex.getAttempts());
@@ -102,9 +118,8 @@ public class GlobalExceptionHandler {
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
         }
 
-        @ExceptionHandler(ca.tyny.urlshortener.core.exception.QuotaExceededException.class)
-        public ResponseEntity<ErrorResponse> handleQuotaExceeded(
-                        ca.tyny.urlshortener.core.exception.QuotaExceededException ex) {
+        @ExceptionHandler(QuotaExceededException.class)
+        public ResponseEntity<ErrorResponse> handleQuotaExceeded(QuotaExceededException ex) {
                 log.warn("Quota exceeded: {}", ex.getMessage());
 
                 ErrorResponse error = new ErrorResponse(
@@ -116,9 +131,8 @@ public class GlobalExceptionHandler {
                 return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).body(error);
         }
 
-        @ExceptionHandler(ca.tyny.urlshortener.core.exception.AliasAlreadyExistsException.class)
-        public ResponseEntity<ErrorResponse> handleAliasAlreadyExists(
-                        ca.tyny.urlshortener.core.exception.AliasAlreadyExistsException ex) {
+        @ExceptionHandler(AliasAlreadyExistsException.class)
+        public ResponseEntity<ErrorResponse> handleAliasAlreadyExists(AliasAlreadyExistsException ex) {
                 log.warn("Alias already exists: {}", ex.getMessage());
 
                 ErrorResponse error = new ErrorResponse(
