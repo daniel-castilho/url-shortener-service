@@ -168,6 +168,11 @@ public class MongoUrlRepository implements UrlRepositoryPort, LinkQueryPort, Lin
     @CircuitBreaker(name = "databaseCb")
     public PageResult<ShortUrl> findByUserId(String userId, int limit, Cursor cursor) {
         try {
+            // Cap limit at 100 (PageRequest.MAX_LIMIT) for defense in depth
+            if (limit > 100) {
+                limit = 100;
+            }
+
             Query query = Query.query(Criteria.where("userId").is(userId))
                     .with(Sort.by(Sort.Direction.DESC, "createdAt", "_id"));
 
@@ -175,11 +180,15 @@ public class MongoUrlRepository implements UrlRepositoryPort, LinkQueryPort, Lin
             if (cursor != null) {
                 long createdAtMillis = cursor.createdAtEpochMillis();
                 String cursorId = cursor.id();
+                // Convert epoch millis to LocalDateTime in UTC for comparison with stored LocalDateTime
+                java.time.LocalDateTime cursorCreatedAt = java.time.Instant.ofEpochMilli(createdAtMillis)
+                        .atZone(java.time.ZoneOffset.UTC)
+                        .toLocalDateTime();
                 query.addCriteria(new Criteria().orOperator(
-                        Criteria.where("createdAt").lt(java.time.Instant.ofEpochMilli(createdAtMillis)),
+                        Criteria.where("createdAt").lt(cursorCreatedAt),
                         new Criteria().andOperator(
-                                Criteria.where("createdAt").is(java.time.Instant.ofEpochMilli(createdAtMillis)),
-                                Criteria.where("_id").lt(cursor.id())
+                                Criteria.where("createdAt").is(cursorCreatedAt),
+                                Criteria.where("_id").lt(cursorId)
                         )
                 ));
             }
@@ -201,6 +210,9 @@ public class MongoUrlRepository implements UrlRepositoryPort, LinkQueryPort, Lin
                     : null;
 
             return PageResult.of(items, nextCursor);
+        } catch (IllegalArgumentException e) {
+            // Malformed cursor - let it propagate for 400 handling
+            throw e;
         } catch (Exception e) {
             logger.error("Error finding links by userId: {}", userId, e);
             throw new RepositoryException("Failed to find links by userId", e);

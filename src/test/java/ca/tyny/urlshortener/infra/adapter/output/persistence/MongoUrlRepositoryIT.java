@@ -1,6 +1,8 @@
 package ca.tyny.urlshortener.infra.adapter.output.persistence;
 
 import ca.tyny.urlshortener.config.BaseIntegrationTest;
+import ca.tyny.urlshortener.core.model.Cursor;
+import ca.tyny.urlshortener.core.model.PageResult;
 import ca.tyny.urlshortener.core.model.ShortUrl;
 import ca.tyny.urlshortener.core.ports.outgoing.RateLimiterPort;
 import org.junit.jupiter.api.BeforeEach;
@@ -9,10 +11,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @DisplayName("MongoDB URL Repository Integration Tests")
 class MongoUrlRepositoryIT extends BaseIntegrationTest {
@@ -25,6 +30,7 @@ class MongoUrlRepositoryIT extends BaseIntegrationTest {
 
     private static final String TEST_ID = "test123";
     private static final String TEST_URL = "https://www.example.com/test";
+    private static final String USER_ID = "user123";
 
     @BeforeEach
     void setUp() {
@@ -129,5 +135,113 @@ class MongoUrlRepositoryIT extends BaseIntegrationTest {
         repository.incrementClickCount("missing999");
 
         assertThat(repository.findById("missing999")).isEmpty();
+    }
+
+    // ========== LinkQueryPort: findByUserId with cursor pagination ==========
+
+    @Test
+    @DisplayName("findByUserId - returns only own links, newest first")
+    void findByUserId_returnsOnlyOwnLinks() {
+        Instant base = Instant.now();
+        ShortUrl u1 = new ShortUrl("a1", "https://a1.com", LocalDateTime.ofInstant(base.minusSeconds(2), java.time.ZoneOffset.UTC), USER_ID);
+        ShortUrl u2 = new ShortUrl("a2", "https://a2.com", LocalDateTime.ofInstant(base.minusSeconds(1), java.time.ZoneOffset.UTC), USER_ID);
+        ShortUrl u3 = new ShortUrl("b1", "https://b1.com", LocalDateTime.ofInstant(base, java.time.ZoneOffset.UTC), "other-user");
+        repository.save(u1);
+        repository.save(u2);
+        repository.save(u3);
+
+        PageResult<ShortUrl> page = repository.findByUserId(USER_ID, 10, null);
+
+        assertThat(page.items()).hasSize(2);
+        assertThat(page.items().get(0).id()).isEqualTo("a2"); // newest first
+        assertThat(page.items().get(1).id()).isEqualTo("a1");
+        assertThat(page.hasMore()).isFalse();
+    }
+
+    @Test
+    @DisplayName("findByUserId - cursor pagination advances correctly")
+    void findByUserId_cursorPagination() {
+        // Use UTC-based timestamps to match cursor encoding/decoding
+        Instant base = Instant.now();
+        ShortUrl u1 = new ShortUrl("a1", "https://a1.com", LocalDateTime.ofInstant(base.minusSeconds(2), java.time.ZoneOffset.UTC), USER_ID);
+        ShortUrl u2 = new ShortUrl("a2", "https://a2.com", LocalDateTime.ofInstant(base.minusSeconds(1), java.time.ZoneOffset.UTC), USER_ID);
+        ShortUrl u3 = new ShortUrl("a3", "https://a3.com", LocalDateTime.ofInstant(base, java.time.ZoneOffset.UTC), USER_ID);
+        repository.save(u1);
+        repository.save(u2);
+        repository.save(u3);
+
+        PageResult<ShortUrl> page1 = repository.findByUserId(USER_ID, 2, null);
+        assertThat(page1.items()).hasSize(2);
+        assertThat(page1.items().get(0).id()).isEqualTo("a3");
+        assertThat(page1.items().get(1).id()).isEqualTo("a2");
+        assertThat(page1.hasMore()).isTrue();
+        assertThat(page1.nextCursor()).isNotNull();
+
+        PageResult<ShortUrl> page2 = repository.findByUserId(USER_ID, 2, page1.nextCursor());
+        assertThat(page2.items()).hasSize(1);
+        assertThat(page2.items().get(0).id()).isEqualTo("a1");
+        assertThat(page2.hasMore()).isFalse();
+    }
+
+    @Test
+    @DisplayName("findByUserId - limit capped at MAX_LIMIT (100)")
+    void findByUserId_limitCapped() {
+        for (int i = 0; i < 150; i++) {
+            repository.save(new ShortUrl("id" + i, "https://" + i + ".com", LocalDateTime.now(), USER_ID));
+        }
+
+        // Repository should cap limit at 100 (defensive, matches PageRequest.MAX_LIMIT)
+        PageResult<ShortUrl> page = repository.findByUserId(USER_ID, 1000, null);
+
+        assertThat(page.items()).hasSize(100);
+    }
+
+    @Test
+    @DisplayName("findByUserId - malformed cursor throws IllegalArgumentException")
+    void findByUserId_malformedCursorThrows() {
+        assertThatThrownBy(() -> repository.findByUserId(USER_ID, 10, new Cursor("not-valid-base64!")))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // ========== LinkMutationPort: update ==========
+
+    @Test
+    @DisplayName("update - keeps _id, persists new fields")
+    void update_keepsIdPersistsFields() {
+        ShortUrl original = new ShortUrl("keep123", "https://original.com", LocalDateTime.now(), USER_ID);
+        repository.save(original);
+
+        ShortUrl updated = new ShortUrl("keep123", "https://updated.com", LocalDateTime.now(), USER_ID)
+                .withTitle("New Title")
+                .withTags(List.of("tag1", "tag2"))
+                .withExpiresAt(Instant.now().plusSeconds(3600));
+        repository.update(updated);
+
+        Optional<ShortUrl> retrieved = repository.findById("keep123");
+        assertThat(retrieved).isPresent();
+        assertThat(retrieved.get().originalUrl()).isEqualTo("https://updated.com");
+        assertThat(retrieved.get().title()).isEqualTo("New Title");
+        assertThat(retrieved.get().tags()).containsExactly("tag1", "tag2");
+        assertThat(retrieved.get().expiresAt()).isNotNull();
+    }
+
+    // ========== LinkMutationPort: archive ==========
+
+    @Test
+    @DisplayName("archive - sets deletedAt; repeated call updates again (idempotency is at use case)")
+    void archive_setsDeletedAt() {
+        ShortUrl shortUrl = new ShortUrl("arch123", "https://archive.com", LocalDateTime.now(), USER_ID);
+        repository.save(shortUrl);
+
+        repository.archive("arch123");
+
+        Optional<ShortUrl> retrieved = repository.findById("arch123");
+        assertThat(retrieved).isPresent();
+        assertThat(retrieved.get().deletedAt()).isNotNull();
+
+        // Repo does not enforce idempotency; use case does. Second call updates timestamp.
+        repository.archive("arch123");
+        Optional<ShortUrl> retrieved2 = repository.findById("arch123");
+        assertThat(retrieved2.get().deletedAt()).isNotNull();
     }
 }
