@@ -1,5 +1,6 @@
 package ca.tyny.urlshortener.infra.adapter.output.redis;
 
+import ca.tyny.urlshortener.core.model.CacheLookup;
 import ca.tyny.urlshortener.core.model.CachedUrlValue;
 import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
@@ -62,18 +63,18 @@ public class RedisUrlCache implements UrlCachePort {
     }
 
     @Override
-    public CachedUrlValue get(String id) {
+    public CacheLookup lookup(String id) {
         // 1. Check Local Cache (Hot Keys)
         CachedUrlValue localValue = localCache.getIfPresent(id);
         if (localValue != null) {
-            return localValue;
+            return CacheLookup.hit(localValue);
         }
 
         // 2. Check Bloom Filter (Protection against Cache Penetration)
         try {
             if (!bloomFilter.contains(id)) {
                 metrics.recordBloomFilterRejection();
-                return null; // Definitely doesn't exist
+                return CacheLookup.bloomNegative();
             }
         } catch (org.redisson.client.RedisException e) {
             log.warn("Bloom Filter error during contains check. Skipping filter.", e);
@@ -84,19 +85,19 @@ public class RedisUrlCache implements UrlCachePort {
         String redisValue = redisTemplate.opsForValue().get("url:" + id);
 
         if (redisValue == null) {
-            return null;
+            return CacheLookup.miss();
         }
 
         CachedUrlValue decoded = decode(redisValue);
         if (decoded == null) {
             log.warn("Discarding malformed cache entry for id={}", id);
-            return null;
+            return CacheLookup.miss();
         }
 
         // Populate Local Cache if found
         localCache.put(id, decoded);
 
-        return decoded;
+        return CacheLookup.hit(decoded);
     }
 
     @Override

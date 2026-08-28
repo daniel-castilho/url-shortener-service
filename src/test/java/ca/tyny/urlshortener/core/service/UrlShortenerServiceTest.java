@@ -4,8 +4,10 @@ import ca.tyny.urlshortener.core.exception.CodeGenerationException;
 import ca.tyny.urlshortener.core.exception.InvalidDestinationException;
 import ca.tyny.urlshortener.core.exception.ShortCodeCollisionException;
 import ca.tyny.urlshortener.core.exception.UrlExpiredException;
+import ca.tyny.urlshortener.core.exception.UrlNotFoundException;
 import ca.tyny.urlshortener.core.idgeneration.Base62CodeGenerator;
 import ca.tyny.urlshortener.core.idgeneration.UrlIdGenerator;
+import ca.tyny.urlshortener.core.model.CacheLookup;
 import ca.tyny.urlshortener.core.model.CachedUrlValue;
 import ca.tyny.urlshortener.core.model.ShortUrl;
 import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
@@ -28,6 +30,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -139,18 +142,18 @@ class UrlShortenerServiceTest {
         verify(urlRepository, times(UrlShortenerService.MAX_COLLISION_RETRIES + 1)).save(any(ShortUrl.class));
     }
 
-    @Test
+@Test
     @DisplayName("Should get original URL from cache (Cache Hit)")
     void shouldGetOriginalUrlFromCache() {
         // Given
-        when(urlCache.get(TEST_ID)).thenReturn(new CachedUrlValue(TEST_URL, null));
+        when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.hit(new CachedUrlValue(TEST_URL, null)));
 
         // When
         String result = service.getOriginalUrl(TEST_ID);
 
         // Then
         assertThat(result).isEqualTo(TEST_URL);
-        verify(urlCache).get(TEST_ID);
+        verify(urlCache).lookup(TEST_ID);
         verify(urlRepository, never()).findById(any());
     }
 
@@ -158,7 +161,7 @@ class UrlShortenerServiceTest {
     @DisplayName("Should get original URL from DB and populate cache (Cache Miss)")
     void shouldGetOriginalUrlFromDbAndPopulateCache() {
         // Given
-        when(urlCache.get(TEST_ID)).thenReturn(null);
+        when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.miss());
         ShortUrl shortUrl = new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now());
         when(urlRepository.findById(TEST_ID)).thenReturn(Optional.of(shortUrl));
 
@@ -167,7 +170,7 @@ class UrlShortenerServiceTest {
 
         // Then
         assertThat(result).isEqualTo(TEST_URL);
-        verify(urlCache).get(TEST_ID);
+        verify(urlCache).lookup(TEST_ID);
         verify(urlRepository).findById(TEST_ID);
         verify(urlCache).put(TEST_ID, new CachedUrlValue(TEST_URL, null));
     }
@@ -176,7 +179,7 @@ class UrlShortenerServiceTest {
     @DisplayName("Should throw UrlExpiredException and not populate cache when short URL is expired")
     void shouldThrowUrlExpiredWhenShortUrlExpired() {
         // Given
-        when(urlCache.get(TEST_ID)).thenReturn(null);
+        when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.miss());
         ShortUrl expired = new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now())
                 .withExpiresAt(Instant.now().minusSeconds(60));
         when(urlRepository.findById(TEST_ID)).thenReturn(Optional.of(expired));
@@ -196,7 +199,7 @@ class UrlShortenerServiceTest {
     @DisplayName("Should serve a short URL that has not expired")
     void shouldServeNonExpiredShortUrl() {
         // Given
-        when(urlCache.get(TEST_ID)).thenReturn(null);
+        when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.miss());
         ShortUrl shortUrl = new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now())
                 .withExpiresAt(Instant.now().plusSeconds(3600));
         when(urlRepository.findById(TEST_ID)).thenReturn(Optional.of(shortUrl));
@@ -204,7 +207,7 @@ class UrlShortenerServiceTest {
         // When
         String result = service.getOriginalUrl(TEST_ID);
 
-// Then
+        // Then
         assertThat(result).isEqualTo(TEST_URL);
         verify(urlRepository).findById(TEST_ID);
         verify(urlCache).put(TEST_ID, new CachedUrlValue(TEST_URL, shortUrl.expiresAt()));
@@ -221,7 +224,7 @@ class UrlShortenerServiceTest {
     @Test
     @DisplayName("Should record url retrieval duration metric on cache hit")
     void shouldRecordUrlRetrievalMetricOnHit() {
-        when(urlCache.get(TEST_ID)).thenReturn(new CachedUrlValue(TEST_URL, null));
+        when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.hit(new CachedUrlValue(TEST_URL, null)));
 
         service.getOriginalUrl(TEST_ID);
 
@@ -232,7 +235,7 @@ class UrlShortenerServiceTest {
     @DisplayName("Should serve a cached value that has not expired")
     void shouldServeNonExpiredCachedValue() {
         // Given
-        when(urlCache.get(TEST_ID)).thenReturn(new CachedUrlValue(TEST_URL, Instant.now().plusSeconds(3600)));
+        when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.hit(new CachedUrlValue(TEST_URL, Instant.now().plusSeconds(3600))));
 
         // When
         String result = service.getOriginalUrl(TEST_ID);
@@ -246,7 +249,7 @@ class UrlShortenerServiceTest {
     @DisplayName("Should throw UrlExpiredException for an expired cached value")
     void shouldThrowUrlExpiredForExpiredCachedValue() {
         // Given
-        when(urlCache.get(TEST_ID)).thenReturn(new CachedUrlValue(TEST_URL, Instant.now().minusSeconds(60)));
+        when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.hit(new CachedUrlValue(TEST_URL, Instant.now().minusSeconds(60))));
 
         // When
         assertThatThrownBy(() -> service.getOriginalUrl(TEST_ID))
@@ -260,7 +263,7 @@ class UrlShortenerServiceTest {
     @Test
     @DisplayName("Should record url retrieval duration metric on cache miss")
     void shouldRecordUrlRetrievalMetricOnMiss() {
-        when(urlCache.get(TEST_ID)).thenReturn(null);
+        when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.miss());
         ShortUrl shortUrl = new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now());
         when(urlRepository.findById(TEST_ID)).thenReturn(Optional.of(shortUrl));
 

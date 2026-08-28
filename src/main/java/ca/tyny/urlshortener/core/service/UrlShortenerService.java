@@ -7,6 +7,7 @@ import ca.tyny.urlshortener.core.exception.UrlExpiredException;
 import ca.tyny.urlshortener.core.exception.UrlNotFoundException;
 import ca.tyny.urlshortener.core.idgeneration.Base62CodeGenerator;
 import ca.tyny.urlshortener.core.idgeneration.UrlIdGenerator;
+import ca.tyny.urlshortener.core.model.CacheLookup;
 import ca.tyny.urlshortener.core.model.CachedUrlValue;
 import ca.tyny.urlshortener.core.model.ShortUrl;
 import ca.tyny.urlshortener.core.model.Url;
@@ -134,19 +135,25 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
 
         long startNs = System.nanoTime();
 
-        CachedUrlValue cachedUrl = urlCache.get(id);
-        if (cachedUrl != null) {
+        CacheLookup lookup = urlCache.lookup(id);
+        if (lookup.isHit()) {
             log.info(LOG_CACHE_HIT, id);
             metrics.recordCacheHit();
             metrics.recordUrlRetrieval(Duration.ofNanos(System.nanoTime() - startNs));
-            if (cachedUrl.isExpired(Instant.now())) {
+            if (lookup.value().isExpired(Instant.now())) {
                 metrics.recordUrlExpired();
                 throw new UrlExpiredException(id);
             }
-            return cachedUrl.originalUrl();
+            return lookup.value().originalUrl();
         }
 
-        log.info(LOG_CACHE_MISS, id);
+        // Policy B: BLOOM_NEGATIVE is treated as a lightweight cache-miss and resolved by findById.
+        // The Bloom filter short-circuits only the Redis get, not the MongoDB lookup.
+        if (lookup.absence() == CacheLookup.Absence.BLOOM_NEGATIVE) {
+            log.debug("Bloom filter negative for id={}, falling back to DB (Policy B)", id);
+        } else {
+            log.info(LOG_CACHE_MISS, id);
+        }
         metrics.recordCacheMiss();
 
         ShortUrl shortUrl = urlRepository.findById(id)

@@ -1,7 +1,9 @@
 package ca.tyny.urlshortener.infra.adapter.output.redis;
 
+import ca.tyny.urlshortener.core.model.CacheLookup;
 import ca.tyny.urlshortener.core.model.CachedUrlValue;
 import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
+import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.benmanes.caffeine.cache.Cache;
 import org.junit.jupiter.api.BeforeEach;
@@ -62,16 +64,17 @@ class RedisUrlCacheTest {
     }
 
     @Test
-    @DisplayName("Should return null when Bloom Filter says ID doesn't exist")
-    void shouldReturnNullWhenBloomFilterSaysNotExists() {
+    @DisplayName("Should return bloom negative when Bloom Filter says ID doesn't exist")
+    void shouldReturnBloomNegativeWhenBloomFilterSaysNotExists() {
         // Given
         when(bloomFilter.contains(TEST_ID)).thenReturn(false);
 
         // When
-        CachedUrlValue result = cache.get(TEST_ID);
+        CacheLookup result = cache.lookup(TEST_ID);
 
         // Then
-        assertThat(result).isNull();
+        assertThat(result.absence()).isEqualTo(CacheLookup.Absence.BLOOM_NEGATIVE);
+        assertThat(result.value()).isNull();
         verify(bloomFilter).contains(TEST_ID);
         verify(redisTemplate, never()).opsForValue();
     }
@@ -90,12 +93,13 @@ class RedisUrlCacheTest {
         when(valueOperations.get("url:" + TEST_ID)).thenReturn(encoded);
 
         // When
-        CachedUrlValue result = cache.get(TEST_ID);
+        CacheLookup result = cache.lookup(TEST_ID);
 
         // Then
-        assertThat(result).isNotNull();
-        assertThat(result.originalUrl()).isEqualTo(TEST_URL);
-        assertThat(result.expiresAt()).isNull();
+        assertThat(result.isHit()).isTrue();
+        assertThat(result.value().originalUrl()).isEqualTo(TEST_URL);
+        assertThat(result.value().expiresAt()).isNull();
+        assertThat(result.absence()).isEqualTo(CacheLookup.Absence.NONE);
         verify(bloomFilter).contains(TEST_ID);
         verify(valueOperations).get("url:" + TEST_ID);
     }
@@ -115,11 +119,13 @@ class RedisUrlCacheTest {
         when(valueOperations.get("url:" + TEST_ID)).thenReturn(encoded);
 
         // When
-        CachedUrlValue result = cache.get(TEST_ID);
+        CacheLookup result = cache.lookup(TEST_ID);
 
         // Then
-        assertThat(result.originalUrl()).isEqualTo(TEST_URL);
-        assertThat(result.expiresAt().getEpochSecond()).isEqualTo(epoch);
+        assertThat(result.isHit()).isTrue();
+        assertThat(result.value().originalUrl()).isEqualTo(TEST_URL);
+        assertThat(result.value().expiresAt().getEpochSecond()).isEqualTo(epoch);
+        assertThat(result.absence()).isEqualTo(CacheLookup.Absence.NONE);
     }
 
     @Test
