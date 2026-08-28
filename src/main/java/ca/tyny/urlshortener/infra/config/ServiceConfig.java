@@ -42,6 +42,8 @@ import ca.tyny.urlshortener.infra.config.properties.ShortenerProperties;
 import ca.tyny.urlshortener.infra.config.properties.UrlValidationProperties;
 import ca.tyny.urlshortener.infra.config.properties.SecurityProperties;
 import ca.tyny.urlshortener.infra.config.properties.DomainProperties;
+import ca.tyny.urlshortener.infra.config.properties.AnalyticsProperties;
+import ca.tyny.urlshortener.infra.adapter.output.analytics.GeoIpCountryResolver;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -55,9 +57,18 @@ import java.util.List;
         ca.tyny.urlshortener.infra.config.properties.UrlValidationProperties.class,
         ca.tyny.urlshortener.infra.config.properties.SecurityProperties.class,
         ca.tyny.urlshortener.infra.config.properties.ShortenerProperties.class,
-        ca.tyny.urlshortener.infra.config.properties.DomainProperties.class
+        ca.tyny.urlshortener.infra.config.properties.DomainProperties.class,
+        ca.tyny.urlshortener.infra.config.properties.AnalyticsProperties.class
 })
 public class ServiceConfig {
+
+    @Bean
+    public GeoIpCountryResolver geoIpCountryResolver(AnalyticsProperties properties) {
+        if (properties.getGeo().isEnabled()) {
+            return GeoIpCountryResolver.fromFile(properties.getGeo().getMaxmindDbPath());
+        }
+        return GeoIpCountryResolver.disabled();
+    }
 
     @Bean
     public Base62CodeGenerator base62CodeGenerator(ShortenerProperties properties) {

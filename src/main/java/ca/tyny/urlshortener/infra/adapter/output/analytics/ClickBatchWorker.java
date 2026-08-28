@@ -46,6 +46,7 @@ public class ClickBatchWorker {
     private final StringRedisTemplate redisTemplate;
     private final MongoClickEventRepository clickEventRepository;
     private final ca.tyny.urlshortener.core.ports.outgoing.UrlRepositoryPort urlRepository;
+    private final GeoIpCountryResolver geoResolver;
     private final String streamKey;
     private final String groupName;
     private final String consumerName;
@@ -58,6 +59,7 @@ public class ClickBatchWorker {
     public ClickBatchWorker(StringRedisTemplate redisTemplate,
             MongoClickEventRepository clickEventRepository,
             ca.tyny.urlshortener.core.ports.outgoing.UrlRepositoryPort urlRepository,
+            GeoIpCountryResolver geoResolver,
             MeterRegistry meterRegistry,
             @Value("${app.analytics.stream-key:urlshortener:clicks}") String streamKey,
             @Value("${app.analytics.group:click-worker}") String groupName,
@@ -66,6 +68,7 @@ public class ClickBatchWorker {
         this.redisTemplate = redisTemplate;
         this.clickEventRepository = clickEventRepository;
         this.urlRepository = urlRepository;
+        this.geoResolver = geoResolver;
         this.streamKey = streamKey;
         this.groupName = groupName;
         this.consumerName = consumerName;
@@ -172,6 +175,7 @@ public class ClickBatchWorker {
 
         for (MapRecord<String, Object, Object> record : records) {
             ClickEventDocument doc = toDocument(record.getValue(), consumedAt);
+            enrich(doc, geoResolver);
             if (doc.getShortCode() != null && !doc.getShortCode().isBlank()) {
                 docs.add(doc);
                 clicksPerCode.merge(doc.getShortCode(), 1L, Long::sum);
@@ -215,5 +219,23 @@ public class ClickBatchWorker {
 
     private static String asString(Object o) {
         return o != null ? o.toString() : null;
+    }
+
+    /**
+     * Worker-side enrichment: derives {@code device} from the User-Agent and,
+     * when geo is enabled, resolves {@code country} via GeoIP. Best-effort:
+     * existing values are kept and any failure leaves the field null — the
+     * batch must never fail because enrichment did.
+     */
+    static void enrich(ClickEventDocument doc, GeoIpCountryResolver geoResolver) {
+        if (doc == null) {
+            return;
+        }
+        if (doc.getDevice() == null) {
+            doc.setDevice(UserAgentParser.device(doc.getUserAgent()));
+        }
+        if (doc.getCountry() == null) {
+            doc.setCountry(geoResolver.countryForIp(doc.getIp()));
+        }
     }
 }

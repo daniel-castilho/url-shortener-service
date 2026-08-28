@@ -80,6 +80,24 @@ class ClickPipelineIT extends BaseIntegrationTest {
     }
 
     @Test
+    @DisplayName("Should derive device from the User-Agent in the worker (end to end)")
+    void shouldDeriveDeviceEndToEnd() {
+        urlRepository.save(new ShortUrl("pipe003", "https://example.com/device", LocalDateTime.now()));
+
+        analyticsPort.track(new ClickEvent("pipe003", LocalDateTime.now(),
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile/15E148 Safari/604.1",
+                "203.0.113.10", null, null, null));
+
+        awaitAssert(() -> {
+            ClickEventDocument doc = mongoTemplate.findOne(
+                    Query.query(Criteria.where("shortCode").is("pipe003")),
+                    ClickEventDocument.class);
+            assertThat(doc).isNotNull();
+            assertThat(doc.getDevice()).isEqualTo("mobile");
+        });
+    }
+
+    @Test
     @DisplayName("Should not persist events without a short code")
     void shouldSkipBlankCodeEvents() {
         analyticsPort.track(new ClickEvent("", LocalDateTime.now(), "UA", "203.0.113.11"));

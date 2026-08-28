@@ -60,6 +60,13 @@ app:
     group: ${APP_ANALYTICS_GROUP:click-worker}
     consumer: ${APP_ANALYTICS_CONSUMER:worker-1}
     batch-size: ${APP_ANALYTICS_BATCH_SIZE:500}
+    # Country enrichment (GeoIP2) is opt-in; requires a MaxMind database file.
+    unique:
+      # Redis HyperLogLog per (shortCode, day) for unique-visitor counts
+      enabled: ${APP_ANALYTICS_UNIQUE_ENABLED:true}
+    geo:
+      enabled: ${APP_ANALYTICS_GEO_ENABLED:false}
+      maxmind-db-path: ${APP_ANALYTICS_GEO_MAXMIND_DB_PATH:/etc/url-shortener/GeoLite2-Country.mmdb}
 
   domain:
     # Host the service is served on; cannot be claimed as a custom domain,

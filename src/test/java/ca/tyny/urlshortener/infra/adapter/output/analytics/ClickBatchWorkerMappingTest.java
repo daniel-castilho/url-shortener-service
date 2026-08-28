@@ -9,6 +9,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class ClickBatchWorkerMappingTest {
 
@@ -63,5 +67,35 @@ class ClickBatchWorkerMappingTest {
         assertThat(doc.getShortCode()).isEqualTo("abc123");
         assertThat(doc.getUserAgent()).isNull();
         assertThat(doc.getIp()).isNull();
+    }
+
+    @Test
+    @DisplayName("Enrichment derives device from the User-Agent and country via GeoIP; best-effort")
+    void enrichDerivesDeviceAndCountry() {
+        GeoIpCountryResolver geo = mock(GeoIpCountryResolver.class);
+        when(geo.countryForIp("198.51.100.9")).thenReturn("DE");
+        ClickEventDocument doc = new ClickEventDocument("abc123", CONSUMED_AT,
+                "Mozilla/5.0 (Linux; Android 14; Pixel 8) Mobile Safari/537.36", "198.51.100.9",
+                null, null, null);
+
+        ClickBatchWorker.enrich(doc, geo);
+
+        assertThat(doc.getDevice()).isEqualTo("mobile");
+        assertThat(doc.getCountry()).isEqualTo("DE");
+        verify(geo).countryForIp("198.51.100.9");
+    }
+
+    @Test
+    @DisplayName("Enrichment keeps captured values and never throws for failing geo lookups")
+    void enrichKeepsValuesAndIsSafe() {
+        GeoIpCountryResolver geo = mock(GeoIpCountryResolver.class);
+        ClickEventDocument doc = new ClickEventDocument("abc123", CONSUMED_AT,
+                "SomeBot/1.0", null, "https://ref.example.com", "tablet", "BR");
+
+        ClickBatchWorker.enrich(doc, geo);
+
+        assertThat(doc.getDevice()).isEqualTo("tablet");
+        assertThat(doc.getCountry()).isEqualTo("BR");
+        assertThat(doc.getReferrer()).isEqualTo("https://ref.example.com");
     }
 }

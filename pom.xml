@@ -89,6 +89,13 @@
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>2.3.0</version>
         </dependency>
+
+        <!-- GeoIP (country enrichment for click analytics; opt-in via app.analytics.geo.enabled) -->
+        <dependency>
+            <groupId>com.maxmind.geoip2</groupId>
+            <artifactId>geoip2</artifactId>
+            <version>5.2.0</version>
+        </dependency>
         
         <!-- Bean Validation -->
         <dependency>
