@@ -8,4 +8,6 @@ public interface UrlCachePort {
     CacheLookup lookup(String id);
 
     void put(String id, CachedUrlValue value);
+
+    void evict(String id);
 }

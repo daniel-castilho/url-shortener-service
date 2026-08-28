@@ -159,6 +159,11 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
         ShortUrl shortUrl = urlRepository.findById(id)
                 .orElseThrow(() -> new UrlNotFoundException(id));
 
+        if (shortUrl.isArchived()) {
+            metrics.recordUrlExpired(); // reuse expired metric for archived
+            throw new UrlNotFoundException(id);
+        }
+
         if (shortUrl.isExpired(Instant.now())) {
             metrics.recordUrlExpired();
             throw new UrlExpiredException(id);

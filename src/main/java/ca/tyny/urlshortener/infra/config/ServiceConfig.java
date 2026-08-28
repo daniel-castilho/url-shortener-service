@@ -130,14 +130,16 @@ public class ServiceConfig {
     @Bean
     public UpdateLinkUseCase updateLinkUseCase(LinkQueryPort linkQueryPort,
             LinkMutationPort linkMutationPort,
+            UrlCachePort urlCachePort,
             UrlValidator urlValidator,
             ShortenerProperties properties) {
-        return new UpdateLinkUseCaseImpl(linkQueryPort, linkMutationPort, urlValidator, properties.maxTtlSeconds());
+        return new UpdateLinkUseCaseImpl(linkQueryPort, linkMutationPort, urlCachePort, urlValidator, properties.maxTtlSeconds());
     }
 
     @Bean
     public ArchiveLinkUseCase archiveLinkUseCase(LinkQueryPort linkQueryPort,
-            LinkMutationPort linkMutationPort) {
-        return new ArchiveLinkUseCaseImpl(linkQueryPort, linkMutationPort);
+            LinkMutationPort linkMutationPort,
+            UrlCachePort urlCachePort) {
+        return new ArchiveLinkUseCaseImpl(linkQueryPort, linkMutationPort, urlCachePort);
     }
 }

@@ -6,15 +6,18 @@ import ca.tyny.urlshortener.core.model.ShortUrl;
 import ca.tyny.urlshortener.core.ports.incoming.ArchiveLinkUseCase;
 import ca.tyny.urlshortener.core.ports.outgoing.LinkMutationPort;
 import ca.tyny.urlshortener.core.ports.outgoing.LinkQueryPort;
+import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
 
 public class ArchiveLinkUseCaseImpl implements ArchiveLinkUseCase {
 
     private final LinkQueryPort linkQueryPort;
     private final LinkMutationPort linkMutationPort;
+    private final UrlCachePort urlCachePort;
 
-    public ArchiveLinkUseCaseImpl(LinkQueryPort linkQueryPort, LinkMutationPort linkMutationPort) {
+    public ArchiveLinkUseCaseImpl(LinkQueryPort linkQueryPort, LinkMutationPort linkMutationPort, UrlCachePort urlCachePort) {
         this.linkQueryPort = linkQueryPort;
         this.linkMutationPort = linkMutationPort;
+        this.urlCachePort = urlCachePort;
     }
 
     @Override
@@ -31,5 +34,6 @@ public class ArchiveLinkUseCaseImpl implements ArchiveLinkUseCase {
         }
 
         linkMutationPort.archive(id);
+        urlCachePort.evict(id);
     }
 }

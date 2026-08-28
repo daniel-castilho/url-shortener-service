@@ -16,6 +16,7 @@ import ca.tyny.urlshortener.core.ports.incoming.ListUserLinksUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.UpdateLinkUseCase;
 import ca.tyny.urlshortener.core.ports.outgoing.LinkMutationPort;
 import ca.tyny.urlshortener.core.ports.outgoing.LinkQueryPort;
+import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
 import ca.tyny.urlshortener.core.validation.UrlValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -45,6 +46,9 @@ class LinkUseCasesTest {
     private LinkMutationPort linkMutationPort;
 
     @Mock
+    private UrlCachePort urlCachePort;
+
+    @Mock
     private UrlValidator urlValidator;
 
     private ListUserLinksUseCase listUserLinksUseCase;
@@ -61,8 +65,8 @@ class LinkUseCasesTest {
     void setUp() {
         listUserLinksUseCase = new ListUserLinksUseCaseImpl(linkQueryPort);
         getLinkUseCase = new GetLinkUseCaseImpl(linkQueryPort);
-        updateLinkUseCase = new UpdateLinkUseCaseImpl(linkQueryPort, linkMutationPort, mock(UrlValidator.class), 31536000L);
-        archiveLinkUseCase = new ArchiveLinkUseCaseImpl(linkQueryPort, linkMutationPort);
+        updateLinkUseCase = new UpdateLinkUseCaseImpl(linkQueryPort, linkMutationPort, urlCachePort, mock(UrlValidator.class), 31536000L);
+        archiveLinkUseCase = new ArchiveLinkUseCaseImpl(linkQueryPort, linkMutationPort, urlCachePort);
     }
 
     private ShortUrl createShortUrl() {
@@ -135,7 +139,7 @@ class LinkUseCasesTest {
 
         // We need to mock the mutation port too
         UpdateLinkUseCaseImpl impl = new UpdateLinkUseCaseImpl(
-                linkQueryPort, mock(LinkMutationPort.class), mock(UrlValidator.class), 31536000L);
+                linkQueryPort, mock(LinkMutationPort.class), mock(UrlCachePort.class), mock(UrlValidator.class), 31536000L);
 
         UpdateLinkCommand cmd = new UpdateLinkCommand("https://new-example.com", null, null, null, null);
 

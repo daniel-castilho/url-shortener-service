@@ -8,6 +8,7 @@ import ca.tyny.urlshortener.core.model.ShortUrl;
 import ca.tyny.urlshortener.core.ports.incoming.UpdateLinkUseCase;
 import ca.tyny.urlshortener.core.ports.outgoing.LinkMutationPort;
 import ca.tyny.urlshortener.core.ports.outgoing.LinkQueryPort;
+import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
 import ca.tyny.urlshortener.core.validation.UrlValidator;
 
 import java.time.Instant;
@@ -18,15 +19,18 @@ public class UpdateLinkUseCaseImpl implements UpdateLinkUseCase {
 
     private final LinkQueryPort linkQueryPort;
     private final LinkMutationPort linkMutationPort;
+    private final UrlCachePort urlCachePort;
     private final UrlValidator urlValidator;
     private final long maxTtlSeconds;
 
     public UpdateLinkUseCaseImpl(LinkQueryPort linkQueryPort,
                                  LinkMutationPort linkMutationPort,
+                                 UrlCachePort urlCachePort,
                                  UrlValidator urlValidator,
                                  long maxTtlSeconds) {
         this.linkQueryPort = linkQueryPort;
         this.linkMutationPort = linkMutationPort;
+        this.urlCachePort = urlCachePort;
         this.urlValidator = urlValidator;
         this.maxTtlSeconds = maxTtlSeconds;
     }
@@ -76,6 +80,7 @@ public class UpdateLinkUseCaseImpl implements UpdateLinkUseCase {
                 .withExpiresAt(expiresAt);
 
         linkMutationPort.update(updated);
+        urlCachePort.evict(id);
         return updated;
     }
 }

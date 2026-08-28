@@ -180,4 +180,14 @@ public class RedisUrlCache implements UrlCachePort {
             log.error("Failed to reset Bloom Filter", e);
         }
     }
+
+    @Override
+    public void evict(String id) {
+        // Delete from Redis
+        redisTemplate.delete("url:" + id);
+        // Invalidate local Caffeine cache
+        localCache.invalidate(id);
+        // Note: Bloom filter entry is kept (harmless false positive -> extra DB hit)
+        log.debug("Evicted cache for id={}", id);
+    }
 }
