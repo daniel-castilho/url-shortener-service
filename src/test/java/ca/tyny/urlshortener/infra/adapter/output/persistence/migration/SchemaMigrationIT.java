@@ -34,8 +34,8 @@ class SchemaMigrationIT extends BaseIntegrationTest {
         migrator.migrate();
 
         List<Document> history = mongoTemplate.findAll(Document.class, MongoSchemaMigrator.HISTORY_COLLECTION);
-        assertThat(history).hasSize(6);
-        assertThat(history.stream().map(doc -> doc.getInteger("version"))).containsExactly(1, 2, 3, 4, 5, 6);
+        assertThat(history).hasSize(7);
+        assertThat(history.stream().map(doc -> doc.getInteger("version"))).containsExactly(1, 2, 3, 4, 5, 6, 7);
         assertThat(history).allSatisfy(doc -> {
             assertThat(doc.getString("checksum")).isNotBlank();
             assertThat(doc.getString("description")).isNotBlank();
@@ -46,6 +46,7 @@ class SchemaMigrationIT extends BaseIntegrationTest {
         assertThat(indexNames(shortUrlsIndexes))
                 .contains("_id_", "userId_1", "expiresAt_1")
                 .doesNotContain("originalUrl_1");
+        assertThat(indexNames(shortUrlsIndexes)).contains("userId_1_createdAt_-1"); // V7 compound index
         IndexInfo ttlIndex = shortUrlsIndexes.stream()
                 .filter(index -> "expiresAt_1".equals(index.getName()))
                 .findFirst().orElseThrow();
@@ -70,7 +71,7 @@ class SchemaMigrationIT extends BaseIntegrationTest {
         migrator.migrate();
 
         List<Document> history = mongoTemplate.findAll(Document.class, MongoSchemaMigrator.HISTORY_COLLECTION);
-        assertThat(history).hasSize(6);
+        assertThat(history).hasSize(7);
         assertThat(indexNames(mongoTemplate.indexOps(SHORT_URLS).getIndexInfo()))
                 .contains("userId_1", "expiresAt_1");
         assertThat(indexNames(mongoTemplate.indexOps(CLICK_EVENTS).getIndexInfo()))
