@@ -7,6 +7,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * Persistence entity mapping a short URL to MongoDB.
@@ -62,44 +63,57 @@ public class ShortUrlEntity {
      */
     private Instant expiresAt;
 
+    /**
+     * Optional display title for the short link.
+     */
+    private String title;
+
+    /**
+     * Optional tags for categorization (max 20, each 1-50 chars, [A-Za-z0-9_-], deduped).
+     */
+    private List<String> tags;
+
+    /**
+     * UTM parameters as an embedded sub-document.
+     */
+    private UtmParamsEntity utm;
+
+    /**
+     * Instant at which this link was archived (soft-deleted).
+     * {@code null} = active; present = archived (soft-deleted); redirect resolves to 404.
+     */
+    private Instant deletedAt;
+
     public ShortUrlEntity() {
     }
 
     public ShortUrlEntity(String id, String originalUrl, String urlHash, LocalDateTime createdAt, String userId,
             boolean isCustomAlias) {
-        this(id, originalUrl, urlHash, createdAt, userId, isCustomAlias, 0, null);
+        this(id, originalUrl, urlHash, createdAt, userId, isCustomAlias, 0, null, null, null, null, null);
     }
 
     /**
-     * Constructor with all fields except the expiry.
-     *
-     * @param id            unique identifier for the short URL
-     * @param originalUrl   original URL to be stored
-     * @param urlHash       SHA-256 hash of the original URL
-     * @param createdAt     creation timestamp
-     * @param userId        ID of the user who created the short URL
-     * @param isCustomAlias whether this is a user-supplied vanity alias
-     * @param clickCount    running click count (atomic $inc target)
+     * Constructor with all fields except the optional metadata.
      */
     public ShortUrlEntity(String id, String originalUrl, String urlHash, LocalDateTime createdAt, String userId,
             boolean isCustomAlias, long clickCount) {
-        this(id, originalUrl, urlHash, createdAt, userId, isCustomAlias, clickCount, null);
+        this(id, originalUrl, urlHash, createdAt, userId, isCustomAlias, clickCount, null, null, null, null, null);
     }
 
     /**
-     * Constructor with all fields.
-     *
-     * @param id            unique identifier for the short URL
-     * @param originalUrl   original URL to be stored
-     * @param urlHash       SHA-256 hash of the original URL
-     * @param createdAt     creation timestamp
-     * @param userId        ID of the user who created the short URL
-     * @param isCustomAlias whether this is a user-supplied vanity alias
-     * @param clickCount    running click count (atomic $inc target)
-     * @param expiresAt     instant at which the link expires (UTC); {@code null} = never expires
+     * Constructor with all fields including expiry.
      */
     public ShortUrlEntity(String id, String originalUrl, String urlHash, LocalDateTime createdAt, String userId,
             boolean isCustomAlias, long clickCount, Instant expiresAt) {
+        this(id, originalUrl, urlHash, createdAt, userId, isCustomAlias, clickCount, expiresAt, null, null, null, null);
+    }
+
+    /**
+     * Constructor with all fields including optional metadata.
+     */
+    public ShortUrlEntity(String id, String originalUrl, String urlHash, LocalDateTime createdAt, String userId,
+            boolean isCustomAlias, long clickCount, Instant expiresAt, String title, List<String> tags,
+            UtmParamsEntity utm, Instant deletedAt) {
         this.id = id;
         this.originalUrl = originalUrl;
         this.urlHash = urlHash;
@@ -108,6 +122,10 @@ public class ShortUrlEntity {
         this.isCustomAlias = isCustomAlias;
         this.clickCount = clickCount;
         this.expiresAt = expiresAt;
+        this.title = title;
+        this.tags = tags;
+        this.utm = utm;
+        this.deletedAt = deletedAt;
     }
 
     public String getId() {
@@ -172,5 +190,37 @@ public class ShortUrlEntity {
 
     public void setExpiresAt(Instant expiresAt) {
         this.expiresAt = expiresAt;
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
+    }
+
+    public List<String> getTags() {
+        return tags;
+    }
+
+    public void setTags(List<String> tags) {
+        this.tags = tags;
+    }
+
+    public UtmParamsEntity getUtm() {
+        return utm;
+    }
+
+    public void setUtm(UtmParamsEntity utm) {
+        this.utm = utm;
+    }
+
+    public Instant getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(Instant deletedAt) {
+        this.deletedAt = deletedAt;
     }
 }

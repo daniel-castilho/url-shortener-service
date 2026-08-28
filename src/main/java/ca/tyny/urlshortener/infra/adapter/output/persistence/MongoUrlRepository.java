@@ -2,8 +2,15 @@ package ca.tyny.urlshortener.infra.adapter.output.persistence;
 
 import ca.tyny.urlshortener.core.exception.AliasAlreadyExistsException;
 import ca.tyny.urlshortener.core.exception.ShortCodeCollisionException;
+import ca.tyny.urlshortener.core.model.Cursor;
+import ca.tyny.urlshortener.core.model.PageResult;
 import ca.tyny.urlshortener.core.model.ShortUrl;
+import ca.tyny.urlshortener.core.ports.outgoing.LinkMutationPort;
+import ca.tyny.urlshortener.core.ports.outgoing.LinkQueryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlRepositoryPort;
+import ca.tyny.urlshortener.core.exception.AliasAlreadyExistsException;
+import ca.tyny.urlshortener.core.exception.ShortCodeCollisionException;
+import ca.tyny.urlshortener.core.model.ShortUrl;
 import ca.tyny.urlshortener.infra.adapter.output.persistence.entity.ShortUrlEntity;
 import ca.tyny.urlshortener.infra.adapter.output.persistence.exception.RepositoryException;
 import ca.tyny.urlshortener.infra.adapter.output.persistence.mapper.ShortUrlMapper;
@@ -11,13 +18,18 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import org.springframework.dao.DuplicateKeyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
- * MongoDB persistence adapter implementing UrlRepositoryPort.
+ * MongoDB persistence adapter implementing all URL-related ports.
  *
  * Responsibilities:
  * - Persist and retrieve shortened URLs from MongoDB
@@ -25,14 +37,19 @@ import java.util.Optional;
  *   (ShortUrlEntity)
  * - Encapsulate MongoDB-specific exceptions
  *
+ * Implements three ports:
+ * - {@link UrlRepositoryPort}: used by the shortener/redirect write path
+ * - {@link LinkQueryPort}: query operations for the links-as-resource API
+ * - {@link LinkMutationPort}: mutation operations for the links-as-resource API
+ *
  * Patterns applied:
- * - Repository Pattern: implements UrlRepositoryPort
- * - Adapter Pattern: adapts MongoTemplate to the port
+ * - Repository Pattern: implements UrlRepositoryPort, LinkQueryPort, LinkMutationPort
+ * - Adapter Pattern: adapts MongoTemplate to the ports
  * - Circuit Breaker: resilience to database failures
  * - Mapper Pattern: converts domain ↔ entity
  */
 @Repository
-public class MongoUrlRepository implements UrlRepositoryPort {
+public class MongoUrlRepository implements UrlRepositoryPort, LinkQueryPort, LinkMutationPort {
 
     private static final Logger logger = LoggerFactory.getLogger(MongoUrlRepository.class);
 
@@ -147,6 +164,78 @@ public class MongoUrlRepository implements UrlRepositoryPort {
         } catch (Exception e) {
             logger.error("Error incrementing click count in MongoDB: {}", id, e);
             throw new RepositoryException("Failed to increment click count", e);
+        }
+    }
+
+    @Override
+    @CircuitBreaker(name = "databaseCb")
+    public PageResult<ShortUrl> findByUserId(String userId, int limit, Cursor cursor) {
+        try {
+            Query query = Query.query(Criteria.where("userId").is(userId))
+                    .with(Sort.by(Sort.Direction.DESC, "createdAt", "_id"));
+
+            // Apply cursor if present
+            if (cursor != null) {
+                long createdAtMillis = cursor.createdAtEpochMillis();
+                String cursorId = cursor.id();
+                query.addCriteria(new Criteria().orOperator(
+                        Criteria.where("createdAt").lt(java.time.Instant.ofEpochMilli(createdAtMillis)),
+                        new Criteria().andOperator(
+                                Criteria.where("createdAt").is(java.time.Instant.ofEpochMilli(createdAtMillis)),
+                                Criteria.where("_id").lt(cursor.id())
+                        )
+                ));
+            }
+
+            query.limit(limit + 1); // fetch one extra to detect hasMore
+
+            List<ShortUrlEntity> entities = mongoTemplate.find(query, ShortUrlEntity.class);
+            boolean hasMore = entities.size() > limit;
+            if (hasMore) {
+                entities = entities.subList(0, limit);
+            }
+
+            List<ShortUrl> items = entities.stream()
+                    .map(mapper::toDomain)
+                    .toList();
+
+            Cursor nextCursor = hasMore && !items.isEmpty()
+                    ? Cursor.of(items.getLast().createdAt().toInstant(java.time.ZoneOffset.UTC).toEpochMilli(), items.getLast().id())
+                    : null;
+
+            return PageResult.of(items, nextCursor);
+        } catch (Exception e) {
+            logger.error("Error finding links by userId: {}", userId, e);
+            throw new RepositoryException("Failed to find links by userId", e);
+        }
+    }
+
+    // ========== LinkMutationPort implementation ==========
+
+    @Override
+    @CircuitBreaker(name = "databaseCb")
+    public void update(ShortUrl shortUrl) {
+        try {
+            ShortUrlEntity entity = mapper.toPersistence(shortUrl);
+            mongoTemplate.save(entity);
+            logger.debug("Short URL updated successfully: {}", shortUrl.id());
+        } catch (Exception e) {
+            logger.error("Error updating short URL: {}", shortUrl.id(), e);
+            throw new RepositoryException("Failed to update short URL", e);
+        }
+    }
+
+    @Override
+    @CircuitBreaker(name = "databaseCb")
+    public void archive(String id) {
+        try {
+            Update update = new Update().set("deletedAt", java.time.Instant.now());
+            Query query = Query.query(Criteria.where("_id").is(id));
+            mongoTemplate.updateFirst(query, update, ShortUrlEntity.class);
+            logger.debug("Short URL archived: {}", id);
+        } catch (Exception e) {
+            logger.error("Error archiving short URL: {}", id, e);
+            throw new RepositoryException("Failed to archive short URL", e);
         }
     }
 }
