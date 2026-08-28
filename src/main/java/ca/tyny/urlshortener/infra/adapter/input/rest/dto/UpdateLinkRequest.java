@@ -17,6 +17,7 @@ public class UpdateLinkRequest {
     private List<@Size(min = 1, max = 50) @Pattern(regexp = "[a-z0-9_-]+") String> tags;
     private UtmParamsRequest utm;
     private Instant expiresAt;
+    private String domain;
 
     @JsonIgnore
     private final Map<String, Object> suppliedFields = new LinkedHashMap<>();
@@ -43,6 +44,8 @@ public class UpdateLinkRequest {
     public void setUtm(UtmParamsRequest utm) { this.utm = utm; suppliedFields.put("utm", utm); }
     public Instant getExpiresAt() { return expiresAt; }
     public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; suppliedFields.put("expiresAt", expiresAt); }
+    public String getDomain() { return domain; }
+    public void setDomain(String domain) { this.domain = domain; suppliedFields.put("domain", domain); }
 
     public static class UtmParamsRequest {
         private String source;

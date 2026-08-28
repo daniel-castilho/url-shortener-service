@@ -58,7 +58,8 @@ class UrlControllerRateLimitingTest {
                 .thenReturn("127.0.0.1");
         org.mockito.Mockito.when(shortenerProperties.maxTtlSeconds()).thenReturn(31_536_000L);
         when(shortenUrlUseCase.shorten(anyString(), org.mockito.ArgumentMatchers.isNull(),
-                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull()))
+                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(),
+                org.mockito.ArgumentMatchers.isNull()))
                 .thenReturn(new ca.tyny.urlshortener.core.model.ShortUrl("abc123", "https://example.com",
                         java.time.LocalDateTime.now(), null));
     }

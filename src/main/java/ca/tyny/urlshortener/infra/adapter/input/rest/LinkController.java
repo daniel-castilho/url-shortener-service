@@ -191,6 +191,8 @@ public class LinkController {
                 utm,
                 req.isFieldSupplied("utm"),
                 expiresAt,
-                req.isFieldSupplied("expiresAt"));
+                req.isFieldSupplied("expiresAt"),
+                req.isFieldSupplied("domain") ? req.getDomain() : null,
+                req.isFieldSupplied("domain"));
     }
 }

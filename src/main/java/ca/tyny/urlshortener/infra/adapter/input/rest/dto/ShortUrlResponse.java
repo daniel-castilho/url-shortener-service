@@ -16,7 +16,8 @@ public record ShortUrlResponse(
         String title,
         List<String> tags,
         UtmParamsResponse utm,
-        Instant deletedAt) {
+        Instant deletedAt,
+        String domain) {
 
     public record UtmParamsResponse(
             String source,

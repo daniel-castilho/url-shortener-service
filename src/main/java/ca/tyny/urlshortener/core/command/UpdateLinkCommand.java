@@ -7,8 +7,8 @@ import java.util.List;
 /**
  * Command for partially updating a short link.
  * All fields are optional; only supplied fields are updated.
- * {@code utmSupplied}/{@code expiresAtSupplied} distinguish "supplied with null (clear)"
- * from "not supplied (keep)" for those group/single-value fields.
+ * {@code utmSupplied}/{@code expiresAtSupplied}/{@code domainSupplied} distinguish
+ * "supplied with null (clear)" from "not supplied (keep)" for those group/single-value fields.
  */
 public record UpdateLinkCommand(
         String originalUrl,
@@ -17,5 +17,7 @@ public record UpdateLinkCommand(
         UtmParams utm,
         boolean utmSupplied,
         Instant expiresAt,
-        boolean expiresAtSupplied
+        boolean expiresAtSupplied,
+        String domain,
+        boolean domainSupplied
 ) {}

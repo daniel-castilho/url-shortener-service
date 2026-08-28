@@ -1,7 +1,10 @@
 package ca.tyny.urlshortener.core.service;
 
 import ca.tyny.urlshortener.core.exception.CodeGenerationException;
+import ca.tyny.urlshortener.core.exception.DomainNotVerifiedException;
+import ca.tyny.urlshortener.core.exception.ForbiddenException;
 import ca.tyny.urlshortener.core.exception.InvalidDestinationException;
+import ca.tyny.urlshortener.core.exception.InvalidDomainException;
 import ca.tyny.urlshortener.core.exception.ShortCodeCollisionException;
 import ca.tyny.urlshortener.core.exception.UrlExpiredException;
 import ca.tyny.urlshortener.core.exception.UrlNotFoundException;
@@ -9,6 +12,8 @@ import ca.tyny.urlshortener.core.idgeneration.Base62CodeGenerator;
 import ca.tyny.urlshortener.core.idgeneration.UrlIdGenerator;
 import ca.tyny.urlshortener.core.model.CacheLookup;
 import ca.tyny.urlshortener.core.model.CachedUrlValue;
+import ca.tyny.urlshortener.core.model.CustomDomain;
+import ca.tyny.urlshortener.core.model.DomainStatus;
 import ca.tyny.urlshortener.core.model.ShortUrl;
 import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
@@ -65,6 +70,9 @@ class UrlShortenerServiceTest {
     @Mock
     private ca.tyny.urlshortener.core.ports.outgoing.CustomDomainRegistryPort customDomainRegistry;
 
+    @Mock
+    private ca.tyny.urlshortener.core.ports.outgoing.CustomDomainRepositoryPort customDomainRepository;
+
     private Base62CodeGenerator base62CodeGenerator;
 
     private UrlShortenerService service;
@@ -80,7 +88,7 @@ class UrlShortenerServiceTest {
         lenient().when(customDomainRegistry.isActiveHost(anyString())).thenReturn(false);
         service = new UrlShortenerService(urlRepository, urlCache, metrics, urlIdGenerator,
                 base62CodeGenerator, quotaService, userRepository, reservedWordsValidator, urlValidator,
-                customDomainRegistry, DEFAULT_HOST);
+                customDomainRegistry, customDomainRepository, DEFAULT_HOST);
     }
 
     @Test
@@ -382,5 +390,87 @@ class UrlShortenerServiceTest {
         when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.hit(new CachedUrlValue(TEST_URL, null)));
 
         assertThat(service.getOriginalUrl("localhost:8080", TEST_ID)).isEqualTo(TEST_URL);
+    }
+
+    @Test
+    @DisplayName("Shorten binds a link to the caller's own active verified domain")
+    void shortenBindsToOwnedActiveDomain() {
+        String userId = "user123";
+        when(customDomainRepository.findByHost("links.example.com"))
+                .thenReturn(Optional.of(new CustomDomain("links.example.com", userId, DomainStatus.ACTIVE,
+                        "url-shortener-verify=deadbeef", Instant.now())));
+
+        ShortUrl result = service.shorten(TEST_URL, null, userId, null, "Links.Example.COM.");
+
+        assertThat(result.domain()).isEqualTo("links.example.com");
+        verify(urlRepository).save(argThat(saved -> "links.example.com".equals(saved.domain())));
+    }
+
+    @Test
+    @DisplayName("Shorten with a custom alias binds the vanity link to the domain too")
+    void shortenWithAliasBindsDomain() {
+        String userId = "user123";
+        when(urlIdGenerator.generateId("my-alias", userId)).thenReturn("my-alias");
+        when(customDomainRepository.findByHost("links.example.com"))
+                .thenReturn(Optional.of(new CustomDomain("links.example.com", userId, DomainStatus.ACTIVE,
+                        "url-shortener-verify=deadbeef", Instant.now())));
+
+        ShortUrl result = service.shorten(TEST_URL, "my-alias", userId, null, "links.example.com");
+
+        assertThat(result.id()).isEqualTo("my-alias");
+        assertThat(result.domain()).isEqualTo("links.example.com");
+    }
+
+    @Test
+    @DisplayName("Shorten rejects a domain owned by another user with 403")
+    void shortenRejectsDomainOwnedByAnotherUser() {
+        when(customDomainRepository.findByHost("links.example.com"))
+                .thenReturn(Optional.of(new CustomDomain("links.example.com", "other-user", DomainStatus.ACTIVE,
+                        "url-shortener-verify=deadbeef", Instant.now())));
+
+        assertThatThrownBy(() -> service.shorten(TEST_URL, null, "user123", null, "links.example.com"))
+                .isInstanceOf(ForbiddenException.class);
+        verify(urlRepository, never()).save(any(ShortUrl.class));
+    }
+
+    @Test
+    @DisplayName("Shorten rejects an unclaimed domain with 400")
+    void shortenRejectsUnclaimedDomain() {
+        when(customDomainRepository.findByHost("unclaimed.example.com")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.shorten(TEST_URL, null, "user123", null, "unclaimed.example.com"))
+                .isInstanceOf(InvalidDomainException.class);
+        verify(urlRepository, never()).save(any(ShortUrl.class));
+    }
+
+    @Test
+    @DisplayName("Shorten rejects a not-yet-verified domain with 400")
+    void shortenRejectsUnverifiedDomain() {
+        String userId = "user123";
+        when(customDomainRepository.findByHost("links.example.com"))
+                .thenReturn(Optional.of(new CustomDomain("links.example.com", userId, DomainStatus.PENDING,
+                        "url-shortener-verify=deadbeef", Instant.now())));
+
+        assertThatThrownBy(() -> service.shorten(TEST_URL, null, userId, null, "links.example.com"))
+                .isInstanceOf(DomainNotVerifiedException.class);
+        verify(urlRepository, never()).save(any(ShortUrl.class));
+    }
+
+    @Test
+    @DisplayName("Shorten requires authentication to bind a custom domain")
+    void shortenRequiresAuthForDomain() {
+        assertThatThrownBy(() -> service.shorten(TEST_URL, null, null, null, "links.example.com"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Authentication required");
+        verify(customDomainRepository, never()).findByHost(anyString());
+    }
+
+    @Test
+    @DisplayName("Blank domain keeps the link on the default host")
+    void shortenWithBlankDomainStaysDefaultHost() {
+        ShortUrl result = service.shorten(TEST_URL, null, "user123", null, "  ");
+
+        assertThat(result.domain()).isNull();
+        verify(customDomainRepository, never()).findByHost(anyString());
     }
 }

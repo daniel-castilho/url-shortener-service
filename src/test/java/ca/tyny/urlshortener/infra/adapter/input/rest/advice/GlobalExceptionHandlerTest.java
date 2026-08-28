@@ -19,6 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import ca.tyny.urlshortener.config.WithMockSecurity;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -165,7 +166,7 @@ when(getUrlUseCase.getOriginalUrl(org.mockito.ArgumentMatchers.isNull(), org.moc
                 // Given
                 when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
                 ShortenRequest request = new ShortenRequest("https://example.com", null);
-                when(shortenUrlUseCase.shorten(any(), isNull(), isNull(), isNull()))
+                when(shortenUrlUseCase.shorten(any(), isNull(), isNull(), isNull(), isNull()))
                                 .thenThrow(new IllegalArgumentException("Invalid input"));
 
                 // When/Then
@@ -179,12 +180,31 @@ when(getUrlUseCase.getOriginalUrl(org.mockito.ArgumentMatchers.isNull(), org.moc
         }
 
         @Test
+        @DisplayName("Should return 400 for DomainNotVerifiedException")
+        void shouldReturn400ForDomainNotVerified() throws Exception {
+                // Given
+                when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
+                ShortenRequest request = new ShortenRequest("https://example.com", null);
+                when(shortenUrlUseCase.shorten(any(), isNull(), isNull(), isNull(), eq("links.example.com")))
+                                .thenThrow(new ca.tyny.urlshortener.core.exception.DomainNotVerifiedException("links.example.com"));
+                String body = "{\"originalUrl\":\"https://example.com\",\"domain\":\"links.example.com\"}";
+
+                // When/Then
+                mockMvc.perform(post("/api/v1/urls")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(body))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value(400))
+                                .andExpect(jsonPath("$.error").value("Domain Not Verified"));
+        }
+
+        @Test
         @DisplayName("Should return 500 for unexpected exceptions")
         void shouldReturn500ForUnexpectedException() throws Exception {
                 // Given
                 when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
                 ShortenRequest request = new ShortenRequest("https://example.com", null);
-                when(shortenUrlUseCase.shorten(any(), isNull(), isNull(), isNull()))
+                when(shortenUrlUseCase.shorten(any(), isNull(), isNull(), isNull(), isNull()))
                                 .thenThrow(new RuntimeException("Unexpected error"));
 
                 // When/Then

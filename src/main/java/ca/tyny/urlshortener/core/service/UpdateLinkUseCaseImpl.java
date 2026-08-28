@@ -9,7 +9,9 @@ import ca.tyny.urlshortener.core.model.UtmParams;
 import ca.tyny.urlshortener.core.ports.incoming.UpdateLinkUseCase;
 import ca.tyny.urlshortener.core.ports.outgoing.LinkMutationPort;
 import ca.tyny.urlshortener.core.ports.outgoing.LinkQueryPort;
+import ca.tyny.urlshortener.core.ports.outgoing.CustomDomainRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
+import ca.tyny.urlshortener.core.validation.DomainBindingValidator;
 import ca.tyny.urlshortener.core.validation.UrlValidator;
 
 import java.time.Instant;
@@ -20,6 +22,7 @@ public class UpdateLinkUseCaseImpl implements UpdateLinkUseCase {
 
     private final LinkQueryPort linkQueryPort;
     private final LinkMutationPort linkMutationPort;
+    private final CustomDomainRepositoryPort customDomainRepository;
     private final UrlCachePort urlCachePort;
     private final UrlValidator urlValidator;
     private final long maxTtlSeconds;
@@ -29,10 +32,20 @@ public class UpdateLinkUseCaseImpl implements UpdateLinkUseCase {
                                  UrlCachePort urlCachePort,
                                  UrlValidator urlValidator,
                                  long maxTtlSeconds) {
+        this(linkQueryPort, linkMutationPort, urlCachePort, urlValidator, null, maxTtlSeconds);
+    }
+
+    public UpdateLinkUseCaseImpl(LinkQueryPort linkQueryPort,
+                                 LinkMutationPort linkMutationPort,
+                                 UrlCachePort urlCachePort,
+                                 UrlValidator urlValidator,
+                                 CustomDomainRepositoryPort customDomainRepository,
+                                 long maxTtlSeconds) {
         this.linkQueryPort = linkQueryPort;
         this.linkMutationPort = linkMutationPort;
         this.urlCachePort = urlCachePort;
         this.urlValidator = urlValidator;
+        this.customDomainRepository = customDomainRepository;
         this.maxTtlSeconds = maxTtlSeconds;
     }
 
@@ -76,12 +89,17 @@ public class UpdateLinkUseCaseImpl implements UpdateLinkUseCase {
         Instant expiresAt = command.expiresAtSupplied() ? command.expiresAt() : shortUrl.expiresAt();
         UtmParams utm = command.utmSupplied() ? command.utm() : shortUrl.utm();
 
+        String newDomain = command.domainSupplied()
+                ? DomainBindingValidator.bindableDomain(customDomainRepository, userId, command.domain())
+                : shortUrl.domain();
+
         ShortUrl updated = shortUrl
                 .withOriginalUrl(command.originalUrl() != null ? command.originalUrl() : shortUrl.originalUrl())
                 .withTitle(newTitle)
                 .withTags(tags != null ? tags : shortUrl.tags())
                 .withUtm(utm)
-                .withExpiresAt(expiresAt);
+                .withExpiresAt(expiresAt)
+                .withDomain(newDomain);
 
         linkMutationPort.update(updated);
         urlCachePort.evict(id);

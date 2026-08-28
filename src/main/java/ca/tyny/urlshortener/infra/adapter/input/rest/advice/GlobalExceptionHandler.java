@@ -3,6 +3,7 @@ package ca.tyny.urlshortener.infra.adapter.input.rest.advice;
 import ca.tyny.urlshortener.core.exception.AliasAlreadyExistsException;
 import ca.tyny.urlshortener.core.exception.CodeGenerationException;
 import ca.tyny.urlshortener.core.exception.DomainAlreadyExistsException;
+import ca.tyny.urlshortener.core.exception.DomainNotVerifiedException;
 import ca.tyny.urlshortener.core.exception.DomainNotFoundException;
 import ca.tyny.urlshortener.core.exception.ForbiddenException;
 import ca.tyny.urlshortener.core.exception.InvalidDestinationException;
@@ -180,6 +181,19 @@ public class GlobalExceptionHandler {
                 ErrorResponse error = new ErrorResponse(
                                 HttpStatus.BAD_REQUEST.value(),
                                 "Invalid Domain",
+                                ex.getMessage(),
+                                LocalDateTime.now());
+
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+        }
+
+        @ExceptionHandler(DomainNotVerifiedException.class)
+        public ResponseEntity<ErrorResponse> handleDomainNotVerified(DomainNotVerifiedException ex) {
+                log.warn("Domain not verified: {}", ex.getMessage());
+
+                ErrorResponse error = new ErrorResponse(
+                                HttpStatus.BAD_REQUEST.value(),
+                                "Domain Not Verified",
                                 ex.getMessage(),
                                 LocalDateTime.now());
 

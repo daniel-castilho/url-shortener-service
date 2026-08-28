@@ -75,10 +75,11 @@ public class ServiceConfig {
             ReservedWordsValidator reservedWordsValidator,
             UrlValidator urlValidator,
             CustomDomainRegistryPort customDomainRegistry,
+            CustomDomainRepositoryPort customDomainRepository,
             DomainProperties domainProperties) {
         return new UrlShortenerService(urlRepository, urlCache, metrics, urlIdGenerator,
                 base62CodeGenerator, quotaService, userRepository, reservedWordsValidator, urlValidator,
-                customDomainRegistry, domainProperties.defaultHost());
+                customDomainRegistry, customDomainRepository, domainProperties.defaultHost());
     }
 
     @Bean
@@ -142,8 +143,10 @@ public class ServiceConfig {
             LinkMutationPort linkMutationPort,
             UrlCachePort urlCachePort,
             UrlValidator urlValidator,
+            CustomDomainRepositoryPort customDomainRepository,
             ShortenerProperties properties) {
-        return new UpdateLinkUseCaseImpl(linkQueryPort, linkMutationPort, urlCachePort, urlValidator, properties.maxTtlSeconds());
+        return new UpdateLinkUseCaseImpl(linkQueryPort, linkMutationPort, urlCachePort, urlValidator,
+                customDomainRepository, properties.maxTtlSeconds());
     }
 
     @Bean

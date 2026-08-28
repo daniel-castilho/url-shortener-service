@@ -1,11 +1,14 @@
 package ca.tyny.urlshortener.core.service;
 
 import ca.tyny.urlshortener.core.command.UpdateLinkCommand;
+import ca.tyny.urlshortener.core.exception.DomainNotVerifiedException;
 import ca.tyny.urlshortener.core.exception.ForbiddenException;
 import ca.tyny.urlshortener.core.exception.InvalidExpiryException;
 import ca.tyny.urlshortener.core.exception.UrlNotFoundException;
 import ca.tyny.urlshortener.core.model.CacheLookup;
 import ca.tyny.urlshortener.core.model.Cursor;
+import ca.tyny.urlshortener.core.model.CustomDomain;
+import ca.tyny.urlshortener.core.model.DomainStatus;
 import ca.tyny.urlshortener.core.model.PageRequest;
 import ca.tyny.urlshortener.core.model.PageResult;
 import ca.tyny.urlshortener.core.model.ShortUrl;
@@ -14,6 +17,7 @@ import ca.tyny.urlshortener.core.ports.incoming.ArchiveLinkUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.GetLinkUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.ListUserLinksUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.UpdateLinkUseCase;
+import ca.tyny.urlshortener.core.ports.outgoing.CustomDomainRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.LinkMutationPort;
 import ca.tyny.urlshortener.core.ports.outgoing.LinkQueryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
@@ -51,6 +55,9 @@ class LinkUseCasesTest {
     @Mock
     private UrlValidator urlValidator;
 
+    @Mock
+    private CustomDomainRepositoryPort customDomainRepository;
+
     private ListUserLinksUseCase listUserLinksUseCase;
     private GetLinkUseCase getLinkUseCase;
     private UpdateLinkUseCase updateLinkUseCase;
@@ -65,7 +72,8 @@ class LinkUseCasesTest {
     void setUp() {
         listUserLinksUseCase = new ListUserLinksUseCaseImpl(linkQueryPort);
         getLinkUseCase = new GetLinkUseCaseImpl(linkQueryPort);
-        updateLinkUseCase = new UpdateLinkUseCaseImpl(linkQueryPort, linkMutationPort, urlCachePort, mock(UrlValidator.class), 31536000L);
+        updateLinkUseCase = new UpdateLinkUseCaseImpl(linkQueryPort, linkMutationPort, urlCachePort,
+                mock(UrlValidator.class), customDomainRepository, 31536000L);
         archiveLinkUseCase = new ArchiveLinkUseCaseImpl(linkQueryPort, linkMutationPort, urlCachePort);
     }
 
@@ -141,7 +149,7 @@ class LinkUseCasesTest {
         UpdateLinkUseCaseImpl impl = new UpdateLinkUseCaseImpl(
                 linkQueryPort, mock(LinkMutationPort.class), mock(UrlCachePort.class), mock(UrlValidator.class), 31536000L);
 
-        UpdateLinkCommand cmd = new UpdateLinkCommand("https://new-example.com", null, null, null, false, null, false);
+        UpdateLinkCommand cmd = new UpdateLinkCommand("https://new-example.com", null, null, null, false, null, false, null, false);
 
         ca.tyny.urlshortener.core.model.ShortUrl updated = impl.update(USER_ID, LINK_ID, cmd);
 
@@ -154,8 +162,80 @@ class LinkUseCasesTest {
     void updateLinkThrows403ForNonOwner() {
         when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.of(createShortUrl()));
 
-        assertThatThrownBy(() -> updateLinkUseCase.update("other-user", LINK_ID, new UpdateLinkCommand(null, null, null, null, false, null, false)))
+        assertThatThrownBy(() -> updateLinkUseCase.update("other-user", LINK_ID, new UpdateLinkCommand(null, null, null, null, false, null, false, null, false)))
                 .isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    @DisplayName("UpdateLinkUseCase - sets a custom domain on a link")
+    void updateLinkSetsDomain() {
+        when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.of(createShortUrl()));
+        when(customDomainRepository.findByHost("links.example.com"))
+                .thenReturn(Optional.of(new CustomDomain("links.example.com", USER_ID, DomainStatus.ACTIVE,
+                        "url-shortener-verify=deadbeef", Instant.now())));
+
+        ShortUrl updated = updateLinkUseCase.update(USER_ID, LINK_ID,
+                new UpdateLinkCommand(null, null, null, null, false, null, false,
+                        "links.example.com", true));
+
+        assertThat(updated.domain()).isEqualTo("links.example.com");
+        verify(linkMutationPort).update(argThat(saved -> "links.example.com".equals(saved.domain())));
+        verify(urlCachePort).evict(LINK_ID);
+    }
+
+    @Test
+    @DisplayName("UpdateLinkUseCase - clears the domain binding with an explicit null")
+    void updateLinkClearsDomain() {
+        ShortUrl bound = createShortUrl().withDomain("links.example.com");
+        when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.of(bound));
+
+        ShortUrl updated = updateLinkUseCase.update(USER_ID, LINK_ID,
+                new UpdateLinkCommand(null, null, null, null, false, null, false, null, true));
+
+        assertThat(updated.domain()).isNull();
+        verify(linkMutationPort).update(argThat(saved -> saved.domain() == null));
+    }
+
+    @Test
+    @DisplayName("UpdateLinkUseCase - rejects a domain owned by someone else with 403")
+    void updateLinkRejectsForeignDomain() {
+        when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.of(createShortUrl()));
+        when(customDomainRepository.findByHost("links.example.com"))
+                .thenReturn(Optional.of(new CustomDomain("links.example.com", "other-user", DomainStatus.ACTIVE,
+                        "url-shortener-verify=deadbeef", Instant.now())));
+
+        assertThatThrownBy(() -> updateLinkUseCase.update(USER_ID, LINK_ID,
+                new UpdateLinkCommand(null, null, null, null, false, null, false,
+                        "links.example.com", true)))
+                .isInstanceOf(ForbiddenException.class);
+        verify(linkMutationPort, never()).update(any());
+    }
+
+    @Test
+    @DisplayName("UpdateLinkUseCase - rejects a not-yet-verified domain with 400")
+    void updateLinkRejectsUnverifiedDomain() {
+        when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.of(createShortUrl()));
+        when(customDomainRepository.findByHost("links.example.com"))
+                .thenReturn(Optional.of(new CustomDomain("links.example.com", USER_ID, DomainStatus.PENDING,
+                        "url-shortener-verify=deadbeef", Instant.now())));
+
+        assertThatThrownBy(() -> updateLinkUseCase.update(USER_ID, LINK_ID,
+                new UpdateLinkCommand(null, null, null, null, false, null, false,
+                        "links.example.com", true)))
+                .isInstanceOf(DomainNotVerifiedException.class);
+        verify(linkMutationPort, never()).update(any());
+    }
+
+    @Test
+    @DisplayName("UpdateLinkUseCase - keeps the existing domain when not supplied")
+    void updateLinkKeepsDomainWhenNotSupplied() {
+        ShortUrl bound = createShortUrl().withDomain("links.example.com");
+        when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.of(bound));
+
+        ShortUrl updated = updateLinkUseCase.update(USER_ID, LINK_ID,
+                new UpdateLinkCommand(null, null, null, null, false, null, false, null, false));
+
+        assertThat(updated.domain()).isEqualTo("links.example.com");
     }
 
     @Test
@@ -163,7 +243,7 @@ class LinkUseCasesTest {
     void updateLinkThrows404WhenNotFound() {
         when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> updateLinkUseCase.update(USER_ID, LINK_ID, new UpdateLinkCommand(null, null, null, null, false, null, false)))
+        assertThatThrownBy(() -> updateLinkUseCase.update(USER_ID, LINK_ID, new UpdateLinkCommand(null, null, null, null, false, null, false, null, false)))
                 .isInstanceOf(UrlNotFoundException.class);
     }
 
@@ -172,7 +252,7 @@ class LinkUseCasesTest {
     void updateLinkThrowsOnArchived() {
         when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.of(createArchivedShortUrl()));
 
-        assertThatThrownBy(() -> updateLinkUseCase.update(USER_ID, LINK_ID, new UpdateLinkCommand("https://new.com", null, null, null, false, null, false)))
+        assertThatThrownBy(() -> updateLinkUseCase.update(USER_ID, LINK_ID, new UpdateLinkCommand("https://new.com", null, null, null, false, null, false, null, false)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("archived");
     }

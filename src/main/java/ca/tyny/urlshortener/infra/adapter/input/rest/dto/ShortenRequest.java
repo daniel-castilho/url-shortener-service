@@ -9,9 +9,15 @@ public record ShortenRequest(
 
                 @Pattern(regexp = "^[a-zA-Z0-9-_]*$", message = "Custom alias must contain only letters, numbers, hyphens and underscores") String customAlias,
 
-                @Positive(message = "ttlSeconds must be a positive number of seconds") Long ttlSeconds) {
+                @Positive(message = "ttlSeconds must be a positive number of seconds") Long ttlSeconds,
+
+                @Pattern(regexp = "^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$", message = "Domain must be a valid hostname") String domain) {
+
+        public ShortenRequest(String originalUrl, String customAlias, Long ttlSeconds) {
+                this(originalUrl, customAlias, ttlSeconds, null);
+        }
 
         public ShortenRequest(String originalUrl, String customAlias) {
-                this(originalUrl, customAlias, null);
+                this(originalUrl, customAlias, null, null);
         }
 }

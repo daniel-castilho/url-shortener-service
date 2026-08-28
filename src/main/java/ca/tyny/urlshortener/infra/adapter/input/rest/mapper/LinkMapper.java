@@ -38,7 +38,8 @@ public class LinkMapper {
                 domain.title(),
                 domain.tags(),
                 utmResponse,
-                domain.deletedAt());
+                domain.deletedAt(),
+                domain.domain());
     }
 
     public List<ShortUrlResponse> toResponseList(List<ShortUrl> domains, String baseUrl) {

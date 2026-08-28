@@ -99,7 +99,7 @@ public class UrlController {
 
                         Instant expiresAt = ExpiryResolver.resolveExpiresAt(request.ttlSeconds(), shortenerProperties.maxTtlSeconds());
                         ShortUrl shortUrl = shortenUrlUseCase.shorten(request.originalUrl(), request.customAlias(),
-                                        userId, expiresAt);
+                                        userId, expiresAt, request.domain());
                         String baseUrl = org.springframework.web.servlet.support.ServletUriComponentsBuilder
                                         .fromCurrentContextPath().build().toUriString();
 

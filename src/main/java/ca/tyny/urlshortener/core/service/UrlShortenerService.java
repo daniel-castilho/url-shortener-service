@@ -14,10 +14,12 @@ import ca.tyny.urlshortener.core.model.Url;
 import ca.tyny.urlshortener.core.ports.incoming.GetUrlUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.ShortenUrlUseCase;
 import ca.tyny.urlshortener.core.ports.outgoing.CustomDomainRegistryPort;
+import ca.tyny.urlshortener.core.ports.outgoing.CustomDomainRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
+import ca.tyny.urlshortener.core.validation.DomainBindingValidator;
 import ca.tyny.urlshortener.core.validation.Hostnames;
 import ca.tyny.urlshortener.core.validation.ReservedWordsValidator;
 import ca.tyny.urlshortener.core.validation.UrlValidator;
@@ -47,6 +49,7 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
     private final ReservedWordsValidator reservedWordsValidator;
     private final UrlValidator urlValidator;
     private final CustomDomainRegistryPort customDomainRegistry;
+    private final CustomDomainRepositoryPort customDomainRepository;
     private final String defaultHost;
 
     public UrlShortenerService(UrlRepositoryPort urlRepository,
@@ -59,7 +62,7 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
             ReservedWordsValidator reservedWordsValidator,
             UrlValidator urlValidator) {
         this(urlRepository, urlCache, metrics, urlIdGenerator, base62CodeGenerator, quotaService,
-                userRepository, reservedWordsValidator, urlValidator, null, null);
+                userRepository, reservedWordsValidator, urlValidator, null, null, null);
     }
 
     public UrlShortenerService(UrlRepositoryPort urlRepository,
@@ -73,6 +76,22 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
             UrlValidator urlValidator,
             CustomDomainRegistryPort customDomainRegistry,
             String defaultHost) {
+        this(urlRepository, urlCache, metrics, urlIdGenerator, base62CodeGenerator, quotaService,
+                userRepository, reservedWordsValidator, urlValidator, customDomainRegistry, null, defaultHost);
+    }
+
+    public UrlShortenerService(UrlRepositoryPort urlRepository,
+            UrlCachePort urlCache,
+            MetricsPort metrics,
+            UrlIdGenerator urlIdGenerator,
+            Base62CodeGenerator base62CodeGenerator,
+            QuotaService quotaService,
+            UserRepositoryPort userRepository,
+            ReservedWordsValidator reservedWordsValidator,
+            UrlValidator urlValidator,
+            CustomDomainRegistryPort customDomainRegistry,
+            CustomDomainRepositoryPort customDomainRepository,
+            String defaultHost) {
         this.urlRepository = urlRepository;
         this.urlCache = urlCache;
         this.metrics = metrics;
@@ -83,11 +102,13 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
         this.reservedWordsValidator = reservedWordsValidator;
         this.urlValidator = urlValidator;
         this.customDomainRegistry = customDomainRegistry;
+        this.customDomainRepository = customDomainRepository;
         this.defaultHost = defaultHost;
     }
 
     @Override
-    public ShortUrl shorten(String originalUrl, String customAlias, String userId, Instant expiresAt) {
+    public ShortUrl shorten(String originalUrl, String customAlias, String userId, Instant expiresAt,
+            String domain) {
         Objects.requireNonNull(originalUrl, "URL cannot be null");
         urlValidator.validate(originalUrl);
 
@@ -107,14 +128,20 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
             }
         }
 
+        if (domain != null && !domain.isBlank() && customDomainRepository == null) {
+            throw new IllegalArgumentException("Custom domains are not available");
+        }
+        String boundDomain = DomainBindingValidator.bindableDomain(customDomainRepository, userId, domain);
+
         ShortUrl shortUrl;
         if (isCustomAlias) {
             String id = urlIdGenerator.generateId(customAlias, userId);
             shortUrl = new ShortUrl(id, validatedUrl.value(), LocalDateTime.now(), userId, true)
-                    .withExpiresAt(expiresAt);
+                    .withExpiresAt(expiresAt)
+                    .withDomain(boundDomain);
             urlRepository.save(shortUrl);
         } else {
-            shortUrl = saveWithCollisionRetry(validatedUrl.value(), userId, expiresAt);
+            shortUrl = saveWithCollisionRetry(validatedUrl.value(), userId, expiresAt, boundDomain);
         }
 
         if (userId != null && customAlias != null && !customAlias.isBlank()) {
@@ -126,13 +153,15 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
         return shortUrl;
     }
 
-    private ShortUrl saveWithCollisionRetry(String originalUrl, String userId, Instant expiresAt) {
+    private ShortUrl saveWithCollisionRetry(String originalUrl, String userId, Instant expiresAt,
+            String domain) {
         for (int attempt = 0; attempt <= MAX_COLLISION_RETRIES; attempt++) {
             long startNs = System.nanoTime();
             String id = base62CodeGenerator.generate();
             metrics.recordIdGeneration(Duration.ofNanos(System.nanoTime() - startNs));
             ShortUrl candidate = new ShortUrl(id, originalUrl, LocalDateTime.now(), userId, false)
-                    .withExpiresAt(expiresAt);
+                    .withExpiresAt(expiresAt)
+                    .withDomain(domain);
             try {
                 urlRepository.save(candidate);
                 return candidate;
