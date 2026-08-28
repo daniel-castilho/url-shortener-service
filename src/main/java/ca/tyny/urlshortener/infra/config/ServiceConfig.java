@@ -8,10 +8,12 @@ import ca.tyny.urlshortener.core.idgeneration.UrlIdGenerationStrategy;
 import ca.tyny.urlshortener.core.idgeneration.VanityUrlIdStrategy;
 import ca.tyny.urlshortener.core.ports.incoming.ArchiveLinkUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.CustomDomainUseCase;
+import ca.tyny.urlshortener.core.ports.incoming.GetClickAnalyticsUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.GetLinkUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.ListUserLinksUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.UpdateLinkUseCase;
 import ca.tyny.urlshortener.core.ports.outgoing.AuthenticationPort;
+import ca.tyny.urlshortener.core.ports.outgoing.ClickAnalyticsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.CustomDomainRegistryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.CustomDomainRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.IdGeneratorPort;
@@ -26,6 +28,7 @@ import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.VerificationTokenPort;
 import ca.tyny.urlshortener.core.service.ArchiveLinkUseCaseImpl;
 import ca.tyny.urlshortener.core.service.CustomDomainService;
+import ca.tyny.urlshortener.core.service.GetClickAnalyticsUseCaseImpl;
 import ca.tyny.urlshortener.core.service.GetLinkUseCaseImpl;
 import ca.tyny.urlshortener.core.service.ListUserLinksUseCaseImpl;
 import ca.tyny.urlshortener.core.service.QuotaService;
@@ -147,6 +150,12 @@ public class ServiceConfig {
     @Bean
     public GetLinkUseCase getLinkUseCase(LinkQueryPort linkQueryPort) {
         return new GetLinkUseCaseImpl(linkQueryPort);
+    }
+
+    @Bean
+    public GetClickAnalyticsUseCase getClickAnalyticsUseCase(GetLinkUseCase getLinkUseCase,
+            ClickAnalyticsPort clickAnalyticsPort) {
+        return new GetClickAnalyticsUseCaseImpl(getLinkUseCase, clickAnalyticsPort);
     }
 
     @Bean

@@ -127,8 +127,11 @@ public class ClickDailyRollupJob {
                 new Document("$group", new Document("_id", "$_id.code")
                         .append("clicks", new Document("$sum", "$count"))
                         .append("pairs", new Document("$push",
-                                new Document("k", new Document("$ifNull",
-                                        List.of("$_id.value", NO_VALUE)))
+                                new Document("k", new Document("$replaceAll",
+                                        new Document("input", new Document("$ifNull",
+                                                List.of("$_id.value", NO_VALUE)))
+                                        .append("find", ".")
+                                        .append("replacement", "_")))
                                         .append("v", "$count")))),
                 new Document("$project", new Document("_id", 0)
                         .append("code", "$_id")

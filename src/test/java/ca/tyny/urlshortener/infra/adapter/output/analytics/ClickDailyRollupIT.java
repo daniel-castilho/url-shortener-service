@@ -57,7 +57,7 @@ class ClickDailyRollupIT extends BaseIntegrationTest {
         assertThat(row.getBreakdown().get("country"))
                 .containsEntry("BR", 1L).containsEntry("US", 1L).containsEntry("(none)", 1L);
         assertThat(row.getBreakdown().get("referrer"))
-                .containsEntry("https://ref.example.com", 2L).containsEntry("(none)", 1L);
+                .containsEntry("https://ref_example_com", 2L).containsEntry("(none)", 1L);
     }
 
     @Test

@@ -4,12 +4,16 @@ import ca.tyny.urlshortener.core.model.Cursor;
 import ca.tyny.urlshortener.core.model.PageRequest;
 import ca.tyny.urlshortener.core.model.PageResult;
 import ca.tyny.urlshortener.core.model.ShortUrl;
+import ca.tyny.urlshortener.core.model.ClicksSeries;
+import ca.tyny.urlshortener.core.model.AnalyticsUnit;
 import ca.tyny.urlshortener.core.ports.incoming.ArchiveLinkUseCase;
+import ca.tyny.urlshortener.core.ports.incoming.GetClickAnalyticsUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.GetLinkUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.ListUserLinksUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.UpdateLinkUseCase;
 import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
 import ca.tyny.urlshortener.core.model.User;
+import ca.tyny.urlshortener.infra.adapter.input.rest.dto.ClickAnalyticsResponse;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.LinkListResponse;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.ShortUrlResponse;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.UpdateLinkRequest;
@@ -29,7 +33,12 @@ import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import org.springframework.format.annotation.DateTimeFormat;
+
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -49,6 +58,7 @@ public class LinkController {
 
     private final ListUserLinksUseCase listUserLinksUseCase;
     private final GetLinkUseCase getLinkUseCase;
+    private final GetClickAnalyticsUseCase getClickAnalyticsUseCase;
     private final UpdateLinkUseCase updateLinkUseCase;
     private final ArchiveLinkUseCase archiveLinkUseCase;
     private final LinkMapper linkMapper;
@@ -57,6 +67,7 @@ public class LinkController {
 
     public LinkController(ListUserLinksUseCase listUserLinksUseCase,
                           GetLinkUseCase getLinkUseCase,
+                          GetClickAnalyticsUseCase getClickAnalyticsUseCase,
                           UpdateLinkUseCase updateLinkUseCase,
                           ArchiveLinkUseCase archiveLinkUseCase,
                           LinkMapper linkMapper,
@@ -64,6 +75,7 @@ public class LinkController {
                           ShortenerProperties shortenerProperties) {
         this.listUserLinksUseCase = listUserLinksUseCase;
         this.getLinkUseCase = getLinkUseCase;
+        this.getClickAnalyticsUseCase = getClickAnalyticsUseCase;
         this.updateLinkUseCase = updateLinkUseCase;
         this.archiveLinkUseCase = archiveLinkUseCase;
         this.linkMapper = linkMapper;
@@ -136,6 +148,27 @@ public class LinkController {
         return ResponseEntity.ok(linkMapper.toResponse(updated, baseUrl));
     }
 
+    @GetMapping("/{id}/clicks")
+    @Operation(summary = "Get link click analytics", description = "Returns the click time series (unit=day from the daily rollup, or a bounded hourly series) plus a device/geo/referrer breakdown. Owner only.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Click time series + breakdown"),
+            @ApiResponse(responseCode = "400", description = "Invalid unit or range"),
+            @ApiResponse(responseCode = "401", description = "Unauthenticated"),
+            @ApiResponse(responseCode = "403", description = "Not the owner"),
+            @ApiResponse(responseCode = "404", description = "Link not found")
+    })
+    public ResponseEntity<ClickAnalyticsResponse> getClicks(
+            @Parameter(description = "Short URL code", required = true, example = "abc123") @PathVariable String id,
+            @Parameter(description = "Granularity: day (rollup) or hour (bounded raw series, max 30 days)", example = "day") @RequestParam(defaultValue = "day") String unit,
+            @Parameter(description = "Range start (UTC date, yyyy-MM-dd); defaults to 29 days before 'to'") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "Range end (UTC date, yyyy-MM-dd); defaults to today") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+
+        String userId = getCurrentUserId();
+        ClicksSeries series = getClickAnalyticsUseCase.get(
+                userId, id, AnalyticsUnit.fromParam(unit), from, to);
+        return ResponseEntity.ok(toResponse(series));
+    }
+
     @DeleteMapping("/{id}")
     @Operation(summary = "Archive a link", description = "Soft-deletes the link (sets deletedAt). The redirect will return 404. Idempotent. Owner only.")
     @ApiResponses(value = {
@@ -194,5 +227,18 @@ public class LinkController {
                 req.isFieldSupplied("expiresAt"),
                 req.isFieldSupplied("domain") ? req.getDomain() : null,
                 req.isFieldSupplied("domain"));
+    }
+
+    private ClickAnalyticsResponse toResponse(ClicksSeries series) {
+        return new ClickAnalyticsResponse(
+                series.shortCode(),
+                series.unit(),
+                series.from(),
+                series.to(),
+                series.totalClicks(),
+                series.series().stream()
+                        .map(b -> new ClickAnalyticsResponse.ClickSeriesPoint(b.time(), b.clicks()))
+                        .toList(),
+                series.breakdown());
     }
 }
