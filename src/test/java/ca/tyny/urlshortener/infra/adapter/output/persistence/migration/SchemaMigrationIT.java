@@ -21,6 +21,7 @@ class SchemaMigrationIT extends BaseIntegrationTest {
     private static final String CLICK_EVENTS = "click_events";
     private static final String USERS = "users";
     private static final String CUSTOM_DOMAINS = "custom_domains";
+    private static final String CLICK_DAILY = "click_daily";
 
     @Autowired
     private MongoTemplate mongoTemplate;
@@ -35,8 +36,9 @@ class SchemaMigrationIT extends BaseIntegrationTest {
         migrator.migrate();
 
         List<Document> history = mongoTemplate.findAll(Document.class, MongoSchemaMigrator.HISTORY_COLLECTION);
-        assertThat(history).hasSize(8);
-        assertThat(history.stream().map(doc -> doc.getInteger("version"))).containsExactly(1, 2, 3, 4, 5, 6, 7, 8);
+        assertThat(history).hasSize(9);
+        assertThat(history.stream().map(doc -> doc.getInteger("version")))
+                .containsExactly(1, 2, 3, 4, 5, 6, 7, 8, 9);
         assertThat(history).allSatisfy(doc -> {
             assertThat(doc.getString("checksum")).isNotBlank();
             assertThat(doc.getString("description")).isNotBlank();
@@ -69,6 +71,13 @@ class SchemaMigrationIT extends BaseIntegrationTest {
                 .filter(index -> "host_1".equals(index.getName()))
                 .findFirst().orElseThrow();
         assertThat(hostUniqueIndex.isUnique()).isTrue();
+
+        List<String> clickDailyIndexes = indexNames(mongoTemplate.indexOps(CLICK_DAILY).getIndexInfo());
+        assertThat(clickDailyIndexes).contains("_id_", "shortCode_1_day_1");
+        IndexInfo dailyUniqueIndex = mongoTemplate.indexOps(CLICK_DAILY).getIndexInfo().stream()
+                .filter(index -> "shortCode_1_day_1".equals(index.getName()))
+                .findFirst().orElseThrow();
+        assertThat(dailyUniqueIndex.isUnique()).isTrue();
     }
 
     @Test
@@ -79,13 +88,15 @@ class SchemaMigrationIT extends BaseIntegrationTest {
         migrator.migrate();
 
         List<Document> history = mongoTemplate.findAll(Document.class, MongoSchemaMigrator.HISTORY_COLLECTION);
-        assertThat(history).hasSize(8);
+        assertThat(history).hasSize(9);
         assertThat(indexNames(mongoTemplate.indexOps(SHORT_URLS).getIndexInfo()))
                 .contains("userId_1", "expiresAt_1");
         assertThat(indexNames(mongoTemplate.indexOps(CLICK_EVENTS).getIndexInfo()))
                 .contains("shortCode_1_timestamp_1", "timestamp_1");
         assertThat(indexNames(mongoTemplate.indexOps(CUSTOM_DOMAINS).getIndexInfo()))
                 .contains("host_1", "userId_1");
+        assertThat(indexNames(mongoTemplate.indexOps(CLICK_DAILY).getIndexInfo()))
+                .contains("shortCode_1_day_1");
     }
 
     private static List<String> indexNames(List<IndexInfo> indexInfo) {

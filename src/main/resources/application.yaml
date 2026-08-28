@@ -67,6 +67,9 @@ app:
     geo:
       enabled: ${APP_ANALYTICS_GEO_ENABLED:false}
       maxmind-db-path: ${APP_ANALYTICS_GEO_MAXMIND_DB_PATH:/etc/url-shortener/GeoLite2-Country.mmdb}
+    # click_daily rollup (aggregates the previous N closed UTC days)
+    rollup-cron: ${APP_ANALYTICS_ROLLUP_CRON:0 10 1 * * *}
+    rollup-days: ${APP_ANALYTICS_ROLLUP_DAYS:1}
 
   domain:
     # Host the service is served on; cannot be claimed as a custom domain,

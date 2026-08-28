@@ -30,6 +30,12 @@ public class MongoCollections {
      */
     public static final String CUSTOM_DOMAINS = "custom_domains";
 
+    /**
+     * Collection storing per-day click rollups (shortCode, day, clicks, breakdown),
+     * populated by the scheduled {@code click_daily} aggregation job.
+     */
+    public static final String CLICK_DAILY = "click_daily";
+
     private MongoCollections() {
         throw new AssertionError("Utility class should not be instantiated");
     }
