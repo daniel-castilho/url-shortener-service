@@ -118,6 +118,60 @@ sync whenever the data model changes.
   (`V1`–`V5` migrations: baseline, drop `originalUrl_1` unique, `userId`, `click_events` indexes,
   `expiresAt` TTL).
 
+- **Verification:** `LinkResourceIT` (25 cases) covers list pagination/scope/401, get owner/403/404,
+  PATCH partial/clear/400s, DELETE archive + idempotency + redirect-404, and the 403 matrix;
+  `MongoUrlRepositoryIT` covers `findByUserId` (own-only, cursor, limit cap) and archive/update at the
+  adapter level.
+
+## Branded Domains (Phase C)
+
+- **Custom domain ownership:** a `custom_domains` collection (`V8` migration) stores `host` (unique),
+  `userId` (owner), `status` (`PENDING_DNS` → `ACTIVE` → `INACTIVE`), `verificationToken`, and timestamps.
+  A scheduled **DNS health job** (`app.domain.dns-verify-enabled`, cron) re-verifies `PENDING_DNS`
+  domains; on success, status becomes `ACTIVE`. On failure after a grace window, `INACTIVE`.
+- **Strict mirror redirect (LOCKED):** a link with a custom domain resolves **only** when the incoming
+  `Host` header matches that domain exactly. A domain-less link resolves **only** under the default
+  host. An unknown/foreign host → `404` **before any DB lookup**. The cache key remains the code;
+  the cached value carries the owning `domain` so the redirect path can enforce the mirror without
+  a second lookup.
+- **Shortening under a domain:** `POST /api/v1/urls` and `PATCH /api/v1/urls/{id}` accept an
+  optional `domain`. Rules:
+  - Blank/null → domain-less link.
+  - Anonymous users cannot set a domain (`400`).
+  - Domain must be `ACTIVE` and owned by the user (`403` for foreign, `400` for non-verified).
+- **Indexes:** `custom_domains` has a unique index on `host` and a non-unique index on `userId`.
+- **Verification:** `DomainIT` (claim/verify/list), `DomainBindingIT` (shorten/PATCH under domain,
+  owner guard), `DomainRedirectIT` (strict mirror: domain-bound resolves only under its host,
+  domain-less only under default host, foreign host → 404 pre-lookup).
+
+## Rich Click Analytics (Phase C)
+
+- **Extended event schema (`ClickEvent`):** added nullable `referrer`, `device`, `country`.
+  Enrichment is **worker-side only** (never in the redirect path):
+  - `device`: coarse `mobile` / `desktop` / `tablet` / `bot` from `User-Agent` (`UserAgentParser`).
+  - `country`: ISO-3166 alpha-2 via **MaxMind GeoIP2** (opt-in via `app.analytics.geo.enabled`,
+    default `false`, DB path via `app.analytics.geo.maxmind-db-path`). Private/internal IPs skip
+    lookup; all failures are swallowed (`fail-open`).
+  - `referrer`: captured from the `Referer` header at redirect time.
+- **Durable queue = Redis Streams** (`urlshortener:clicks`) with consumer group; the worker
+  (`ClickBatchWorker`) bulk-inserts `ClickEventDocument` to `click_events`, increments
+  `short_urls.clickCount` atomically (`$inc` per unique code), and PFADDs the IP to a
+  **HyperLogLog per (shortCode, day)** (`hll:clicks:{code}:{yyyy-MM-dd}`) — unique visitors
+  on by default (`app.analytics.unique.enabled=true`).
+- **Daily rollup (`click_daily`, migration V9):** scheduled job (default 01:10 UTC) aggregates the
+  previous N UTC days (configurable `app.analytics.rollup-days`, default 1) from `click_events` by
+  `(shortCode, day)`. Produces `clicks`, `breakdown` maps (device/country/referrer → value counts),
+  and `uniqueDays` (=1 per row). Idempotent: upsert on unique `(shortCode, day)` index; re-runs
+  produce identical values. Bounded: per-day group cap (50k) + wall-clock limit (2h).
+- **Query endpoint:** `GET /api/v1/urls/{id}/clicks?unit=day|hour&from=&to=` (owner-guarded: 401/403/404).
+  - `unit=day`: reads `click_daily` (fast, pre-aggregated). Returns series + optional breakdown +
+    unique counts per day (from HLL).
+  - `unit=hour`: derives hourly series from raw `click_events` (bounded to 30 days max range).
+    No breakdown/HLL for hourly (raw aggregation).
+  - Hourly range wider than 30 days → `400`.
+- **Metrics:** `analytics.rollup.groups.upserted.total`, `analytics.rollup.days.total`,
+  `analytics.rollup.errors.total`; HLL keys auto-expire by Redis eviction policy (not explicit TTL).
+
 ## Registry of indexes (applied)
 
 | Collection     | Index                      | Type      | Purpose                                            |
@@ -129,17 +183,21 @@ sync whenever the data model changes.
 | `short_urls`   | `urlHash`                   | non-unique | Optional URL aggregate queries (future)            |
 | `click_events` | `shortCode` + `timestamp`   | non-unique | Aggregate/retention queries (applied)              |
 | `click_events` | `timestamp`                 | non-unique | Retention purge (applied)                          |
+| `click_daily`  | `(shortCode, day)`          | unique     | One rollup row per (code, UTC day) (V9)           |
 | `users`        | `_id`                       | unique    | User identity                                     |
 | `users`        | `email`                     | unique    | Email uniqueness (registration guard)              |
 | `users`        | `plan`                      | non-unique | Plan-based queries                                 |
 | `users`        | `createdAt`                 | non-unique | Time-based queries                                 |
+| `custom_domains` | `host`                    | unique    | One claim per hostname (V8)                        |
+| `custom_domains` | `userId`                  | non-unique | Owner-scoped domain listing (V8)                   |
 
 - Indexes are managed via the **in-code versioned migration runner** (`MongoSchemaMigrator`, history
   in `schema_migrations`; not `auto-index-creation`), so removal of the `originalUrl` unique index and
   addition of the TTL index are deterministic and auditable. Migrations: `V1Baseline` (create
   `short_urls`/`click_events`), `V2DropOriginalUrlUniqueIndex`, `V3EnsureUserIdIndex`,
   `V4EnsureClickEventsIndexes`, `V5AddExpiresAtTtlIndex`, `V6EnsureUserIndexes`,
-  `V7EnsureUserLinksIndex` (`(userId, createdAt)` for cursor-paginated listing)
+  `V7EnsureUserLinksIndex` (`(userId, createdAt)` for cursor-paginated listing), `V8EnsureCustomDomainsCollection`
+  (`host` unique + `userId`), `V9EnsureClickDailyCollection` ((`shortCode, day`) unique)
   (`src/main/java/ca/tyny/urlshortener/infra/adapter/output/persistence/migration`).
   `AGENTS.md` debt item 10 resolved.
 
