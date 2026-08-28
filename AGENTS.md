@@ -305,6 +305,14 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     `scripts/verify-graceful-shutdown.sh`; `server.shutdown: graceful` + `spring.lifecycle.timeout-per-shutdown-phase: 30s`;
     load baseline (`scripts/performance-baseline.sh`) with real k6 numbers published. — `resolved`
 
+19. **Read-path residue (P0-3)** — the Bloom filter did not actually avoid MongoDB; non-existent codes
+    hit the DB unconditionally. **Resolved via Policy B:** introduced `CacheLookup` domain type with
+    explicit `Absence { NONE, MISS, BLOOM_NEGATIVE }` signal; `UrlCachePort.lookup()` returns this;
+    `RedisUrlCache` maps bloom-negative → `BLOOM_NEGATIVE`; `UrlShortenerService` treats bloom-negative
+    as lightweight cache-miss per Policy B (resolved by `findById`). Added `ReadPathIT` with 5 tests
+    verifying the behaviour. Corrected "bloom avoids DB" claim in docs. `ReadPathIT` + k6 baseline
+    published. — `resolved`
+
 ---
 
 ## 🔍 Operational Discipline & Debugging Guidelines

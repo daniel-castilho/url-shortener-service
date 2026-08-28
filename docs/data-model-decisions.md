@@ -166,3 +166,26 @@ sync whenever the data model changes.
   3. Later epics: `expiresAt` TTL, `click_events`, atomic `clickCount`.
 - Rollback of additive columns/indexes is reverse-adoption order; dropping a new index/collection
   never corrupts existing domain data keyed by `_id`.
+
+## Read path — absent vs miss (Phase A)
+
+- **Problem:** The read path (`UrlShortenerService.getOriginalUrl`) previously called `urlRepository.findById`
+  unconditionally on cache miss — even when the Redisson Bloom filter said the code almost certainly did
+  not exist. Non-existent codes still hit MongoDB, contradicting the "Bloom filter avoids the DB" claim.
+- **Solution:** Introduce an explicit **absent-vs-miss** signal across the cache port:
+  - `CacheLookup(CachedUrlValue value, Absence absence)` with `Absence { NONE, MISS, BLOOM_NEGATIVE }`.
+  - `UrlCachePort.lookup(id)` returns this domain type; `RedisUrlCache` maps:
+    - local cache hit → `hit(value)`
+    - bloom-negative → `bloomNegative()`
+    - Redis hit → `hit(value)`
+    - Redis miss → `miss()`
+- **Policy B (LOCKED):** A bloom-negative is treated as a **lightweight cache-miss** and resolved by
+  `findById`. The Bloom filter short-circuits **only the Redis `get`**, **not** the MongoDB lookup.
+  The "Bloom filter avoids the DB" claim is corrected to reflect reality.
+- **Seeding:** Under Policy B, seeding the Bloom filter on startup is **not required** because
+  correctness is preserved by `findById`. Seeding is only needed if a future decision moves to Policy A.
+- **Verification:** `ReadPathIT` proves the behaviour: bloom-negative codes resolve via `findById`
+  (Policy B), cache hits work, cache misses fall through to DB, and the port returns explicit
+  absence signals.
+- **Metrics:** `bloomfilter.rejections.total` tracks bloom negatives; `cache.hits.total` / `cache.misses.total`
+  track hit/miss rates.

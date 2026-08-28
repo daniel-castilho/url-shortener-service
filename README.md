@@ -43,7 +43,9 @@ technologies used by the `infra` layer.
 - **Data:** Spring Data MongoDB (`auto-index-creation: false`; schema managed by versioned in-code
   migrations via `MongoSchemaMigrator`) and Spring Data Redis.
 - **Cache:** **Caffeine** local (L1, 100 items / 5s TTL) → **Redis** (L2, 24h TTL + jitter) →
-  MongoDB. A **Redisson Bloom Filter** short-circuits lookups for codes that certainly do not exist.
+  MongoDB. A **Redisson Bloom Filter** short-circuits the Redis `get` for codes that certainly do not
+  exist; a bloom-negative is treated as a lightweight cache-miss and resolved by `findById` (Policy B).
+  The Bloom filter short-circuits **only the Redis `get`**, not the MongoDB lookup.
 - **ID generation (locked identity model):** cryptographically random **Base62** codes
   (`SecureRandom`, alphabet `0-9A-Za-z`, default length **7** via `app.shortener.code-length`).
   Collisions retry on the unique `_id`. **No Hashids, no Redis counter, no sequential codes.**
@@ -284,9 +286,8 @@ Deliberately not implemented yet — candidate backlog, in priority order:
   default 90 days, in bounded batches); load baseline script (`scripts/performance-baseline.sh`)
   with k6 thresholds-as-code; graceful shutdown verification (`scripts/verify-graceful-shutdown.sh`).
 - **CI** — `ci.yml` runs `mvn verify` with Testcontainers on push/PR; `load-test.yml` runs k6 on manual
-  dispatch.
-- **CI** — `ci.yml` runs `mvn verify` with Testcontainers on push/PR; `load-test.yml` runs k6 on manual
-  dispatch.
+  dispatch. **k6 redirect gate** (p95 < 200ms, error < 0.1%) is the baseline for promotion to a
+  blocking gate after 2–3 calibration runs.
 
 ## Documentation
 

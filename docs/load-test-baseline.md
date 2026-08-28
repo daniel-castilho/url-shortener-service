@@ -30,7 +30,7 @@ k6 run load-tests/mixed.js
 - MongoDB: 6.0 (Docker), single-node
 - Redis: 7-alpine (Docker), single-node
 - k6 version: v0.58.0
-- App version: `v0.8.0`
+- App version: `v0.10.0`
 - Date: 2026-08-27
 
 Compare against the previous baseline; regressions > 10% at the same load

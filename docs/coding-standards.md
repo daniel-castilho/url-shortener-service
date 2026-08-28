@@ -225,6 +225,15 @@ variants**. Prefer the pattern that matches existing code; if none fits, ask the
 - **Metric tag rules.** Use **low-cardinality tags only** (e.g., `pipeline`, `scope`, `status`).
   Never tag with user ID, IP, raw short code, or any high-cardinality value. Fixed tag conventions
   are defined in `MicrometerMetricsAdapter` and `MetricsService`.
+- **Read-path rules (Phase A).** The redirect read path distinguishes **cache hit**, **cache miss**,
+  and **Bloom-negative** via the `CacheLookup` domain type returned by `UrlCachePort.lookup()`.
+  - **Policy B (LOCKED):** A bloom-negative is treated as a lightweight cache-miss and resolved by
+    `findById`. The Bloom filter short-circuits **only the Redis `get`**, **not** the MongoDB lookup.
+    The "Bloom filter avoids the DB" claim is corrected to reflect reality.
+  - **Seeding not required** under Policy B; correctness is preserved by `findById`.
+  - A bloom-negative is logged at debug level and counted via `bloomfilter.rejections.total`.
+  - Never make an unconditional DB lookup for a bloom-rejected code without the explicit policy
+    signal — the `CacheLookup.Absence` enum makes the intent explicit.
 - **Bean scoping.** Default singleton; services are stateless — no per-request mutable fields.
   The analytics event queue is durable (Redis Stream), not in-memory.
 - **DTOs for every external input/output.** Never expose domain entities through the API.
