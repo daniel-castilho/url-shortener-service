@@ -90,10 +90,12 @@ public class ServiceConfig {
             UrlValidator urlValidator,
             CustomDomainRegistryPort customDomainRegistry,
             CustomDomainRepositoryPort customDomainRepository,
-            DomainProperties domainProperties) {
+            DomainProperties domainProperties,
+            ShortenerProperties shortenerProperties) {
         return new UrlShortenerService(urlRepository, urlCache, metrics, urlIdGenerator,
                 base62CodeGenerator, quotaService, userRepository, reservedWordsValidator, urlValidator,
-                customDomainRegistry, customDomainRepository, domainProperties.defaultHost());
+                customDomainRegistry, customDomainRepository, domainProperties.defaultHost(),
+                shortenerProperties.maxTtlSeconds());
     }
 
     @Bean

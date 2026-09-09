@@ -2,6 +2,7 @@ package ca.tyny.urlshortener.core.service;
 
 import ca.tyny.urlshortener.core.exception.CodeGenerationException;
 import ca.tyny.urlshortener.core.exception.InvalidDestinationException;
+import ca.tyny.urlshortener.core.exception.InvalidExpiryException;
 import ca.tyny.urlshortener.core.exception.ShortCodeCollisionException;
 import ca.tyny.urlshortener.core.exception.UrlExpiredException;
 import ca.tyny.urlshortener.core.exception.UrlNotFoundException;
@@ -51,6 +52,7 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
     private final CustomDomainRegistryPort customDomainRegistry;
     private final CustomDomainRepositoryPort customDomainRepository;
     private final String defaultHost;
+    private final Long maxTtlSeconds;
 
     public UrlShortenerService(UrlRepositoryPort urlRepository,
             UrlCachePort urlCache,
@@ -62,7 +64,7 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
             ReservedWordsValidator reservedWordsValidator,
             UrlValidator urlValidator) {
         this(urlRepository, urlCache, metrics, urlIdGenerator, base62CodeGenerator, quotaService,
-                userRepository, reservedWordsValidator, urlValidator, null, null, null);
+                userRepository, reservedWordsValidator, urlValidator, null, null, null, null);
     }
 
     public UrlShortenerService(UrlRepositoryPort urlRepository,
@@ -77,7 +79,7 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
             CustomDomainRegistryPort customDomainRegistry,
             String defaultHost) {
         this(urlRepository, urlCache, metrics, urlIdGenerator, base62CodeGenerator, quotaService,
-                userRepository, reservedWordsValidator, urlValidator, customDomainRegistry, null, defaultHost);
+                userRepository, reservedWordsValidator, urlValidator, customDomainRegistry, null, defaultHost, null);
     }
 
     public UrlShortenerService(UrlRepositoryPort urlRepository,
@@ -92,6 +94,23 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
             CustomDomainRegistryPort customDomainRegistry,
             CustomDomainRepositoryPort customDomainRepository,
             String defaultHost) {
+        this(urlRepository, urlCache, metrics, urlIdGenerator, base62CodeGenerator, quotaService,
+                userRepository, reservedWordsValidator, urlValidator, customDomainRegistry, customDomainRepository, defaultHost, null);
+    }
+
+    public UrlShortenerService(UrlRepositoryPort urlRepository,
+            UrlCachePort urlCache,
+            MetricsPort metrics,
+            UrlIdGenerator urlIdGenerator,
+            Base62CodeGenerator base62CodeGenerator,
+            QuotaService quotaService,
+            UserRepositoryPort userRepository,
+            ReservedWordsValidator reservedWordsValidator,
+            UrlValidator urlValidator,
+            CustomDomainRegistryPort customDomainRegistry,
+            CustomDomainRepositoryPort customDomainRepository,
+            String defaultHost,
+            Long maxTtlSeconds) {
         this.urlRepository = urlRepository;
         this.urlCache = urlCache;
         this.metrics = metrics;
@@ -104,6 +123,7 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
         this.customDomainRegistry = customDomainRegistry;
         this.customDomainRepository = customDomainRepository;
         this.defaultHost = defaultHost;
+        this.maxTtlSeconds = maxTtlSeconds;
     }
 
     @Override
@@ -151,6 +171,21 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
         metrics.recordUrlShortened();
 
         return shortUrl;
+    }
+
+    @Override
+    public ShortUrl shorten(String originalUrl, String customAlias, String userId, Long ttlSeconds,
+            String domain) {
+        Instant expiresAt;
+        if (ttlSeconds == null) {
+            expiresAt = null;
+        } else {
+            if (maxTtlSeconds == null) {
+                throw new InvalidExpiryException("ttlSeconds supplied but no TTL cap is configured");
+            }
+            expiresAt = ExpiryResolver.resolveExpiresAt(ttlSeconds, maxTtlSeconds);
+        }
+        return shorten(originalUrl, customAlias, userId, expiresAt, domain);
     }
 
     private ShortUrl saveWithCollisionRetry(String originalUrl, String userId, Instant expiresAt,

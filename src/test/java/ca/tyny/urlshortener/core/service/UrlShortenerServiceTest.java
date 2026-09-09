@@ -400,7 +400,7 @@ class UrlShortenerServiceTest {
                 .thenReturn(Optional.of(new CustomDomain("links.example.com", userId, DomainStatus.ACTIVE,
                         "url-shortener-verify=deadbeef", Instant.now())));
 
-        ShortUrl result = service.shorten(TEST_URL, null, userId, null, "Links.Example.COM.");
+        ShortUrl result = service.shorten(TEST_URL, null, userId, (Instant) null, "Links.Example.COM.");
 
         assertThat(result.domain()).isEqualTo("links.example.com");
         verify(urlRepository).save(argThat(saved -> "links.example.com".equals(saved.domain())));
@@ -415,7 +415,7 @@ class UrlShortenerServiceTest {
                 .thenReturn(Optional.of(new CustomDomain("links.example.com", userId, DomainStatus.ACTIVE,
                         "url-shortener-verify=deadbeef", Instant.now())));
 
-        ShortUrl result = service.shorten(TEST_URL, "my-alias", userId, null, "links.example.com");
+        ShortUrl result = service.shorten(TEST_URL, "my-alias", userId, (Instant) null, "links.example.com");
 
         assertThat(result.id()).isEqualTo("my-alias");
         assertThat(result.domain()).isEqualTo("links.example.com");
@@ -428,7 +428,7 @@ class UrlShortenerServiceTest {
                 .thenReturn(Optional.of(new CustomDomain("links.example.com", "other-user", DomainStatus.ACTIVE,
                         "url-shortener-verify=deadbeef", Instant.now())));
 
-        assertThatThrownBy(() -> service.shorten(TEST_URL, null, "user123", null, "links.example.com"))
+        assertThatThrownBy(() -> service.shorten(TEST_URL, null, "user123", (Instant) null, "links.example.com"))
                 .isInstanceOf(ForbiddenException.class);
         verify(urlRepository, never()).save(any(ShortUrl.class));
     }
@@ -438,7 +438,7 @@ class UrlShortenerServiceTest {
     void shortenRejectsUnclaimedDomain() {
         when(customDomainRepository.findByHost("unclaimed.example.com")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.shorten(TEST_URL, null, "user123", null, "unclaimed.example.com"))
+        assertThatThrownBy(() -> service.shorten(TEST_URL, null, "user123", (Instant) null, "unclaimed.example.com"))
                 .isInstanceOf(InvalidDomainException.class);
         verify(urlRepository, never()).save(any(ShortUrl.class));
     }
@@ -451,7 +451,7 @@ class UrlShortenerServiceTest {
                 .thenReturn(Optional.of(new CustomDomain("links.example.com", userId, DomainStatus.PENDING,
                         "url-shortener-verify=deadbeef", Instant.now())));
 
-        assertThatThrownBy(() -> service.shorten(TEST_URL, null, userId, null, "links.example.com"))
+        assertThatThrownBy(() -> service.shorten(TEST_URL, null, userId, (Long) null, "links.example.com"))
                 .isInstanceOf(DomainNotVerifiedException.class);
         verify(urlRepository, never()).save(any(ShortUrl.class));
     }
@@ -459,7 +459,7 @@ class UrlShortenerServiceTest {
     @Test
     @DisplayName("Shorten requires authentication to bind a custom domain")
     void shortenRequiresAuthForDomain() {
-        assertThatThrownBy(() -> service.shorten(TEST_URL, null, null, null, "links.example.com"))
+        assertThatThrownBy(() -> service.shorten(TEST_URL, null, null, (Long) null, "links.example.com"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Authentication required");
         verify(customDomainRepository, never()).findByHost(anyString());
@@ -468,7 +468,7 @@ class UrlShortenerServiceTest {
     @Test
     @DisplayName("Blank domain keeps the link on the default host")
     void shortenWithBlankDomainStaysDefaultHost() {
-        ShortUrl result = service.shorten(TEST_URL, null, "user123", null, "  ");
+        ShortUrl result = service.shorten(TEST_URL, null, "user123", (Long) null, "  ");
 
         assertThat(result.domain()).isNull();
         verify(customDomainRepository, never()).findByHost(anyString());

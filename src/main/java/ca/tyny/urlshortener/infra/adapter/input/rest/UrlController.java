@@ -7,10 +7,8 @@ import ca.tyny.urlshortener.core.ports.incoming.ShortenUrlUseCase;
 import ca.tyny.urlshortener.core.ports.outgoing.AnalyticsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.RateLimiterPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
-import ca.tyny.urlshortener.core.service.ExpiryResolver;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.ShortenRequest;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.ShortenResponse;
-import ca.tyny.urlshortener.infra.config.properties.ShortenerProperties;
 import ca.tyny.urlshortener.infra.observability.MetricsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -45,7 +43,6 @@ public class UrlController {
         private final MetricsService metricsService;
         private final UserRepositoryPort userRepository;
         private final ClientAddressResolver clientAddressResolver;
-        private final ShortenerProperties shortenerProperties;
 
         public UrlController(ShortenUrlUseCase shortenUrlUseCase,
                         GetUrlUseCase getUrlUseCase,
@@ -54,8 +51,7 @@ public class UrlController {
                         HttpServletRequest request,
                         MetricsService metricsService,
                         UserRepositoryPort userRepository,
-                        ClientAddressResolver clientAddressResolver,
-                        ShortenerProperties shortenerProperties) {
+                        ClientAddressResolver clientAddressResolver) {
                 this.shortenUrlUseCase = shortenUrlUseCase;
                 this.getUrlUseCase = getUrlUseCase;
                 this.analyticsPort = analyticsPort;
@@ -64,7 +60,6 @@ public class UrlController {
                 this.metricsService = metricsService;
                 this.userRepository = userRepository;
                 this.clientAddressResolver = clientAddressResolver;
-                this.shortenerProperties = shortenerProperties;
         }
 
         @PostMapping("/api/v1/urls")
@@ -97,9 +92,8 @@ public class UrlController {
                                                 .orElse(null);
                         }
 
-                        Instant expiresAt = ExpiryResolver.resolveExpiresAt(request.ttlSeconds(), shortenerProperties.maxTtlSeconds());
                         ShortUrl shortUrl = shortenUrlUseCase.shorten(request.originalUrl(), request.customAlias(),
-                                        userId, expiresAt, request.domain());
+                                        userId, request.ttlSeconds(), request.domain());
                         String baseUrl = org.springframework.web.servlet.support.ServletUriComponentsBuilder
                                         .fromCurrentContextPath().build().toUriString();
 

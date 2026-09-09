@@ -160,13 +160,13 @@ when(getUrlUseCase.getOriginalUrl(org.mockito.ArgumentMatchers.isNull(), org.moc
                                 .andExpect(jsonPath("$.validationErrors.originalUrl").exists());
         }
 
-        @Test
+@Test
         @DisplayName("Should return 400 for IllegalArgumentException")
         void shouldReturn400ForIllegalArgument() throws Exception {
                 // Given
                 when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
                 ShortenRequest request = new ShortenRequest("https://example.com", null);
-                when(shortenUrlUseCase.shorten(any(), isNull(), isNull(), isNull(), isNull()))
+                when(shortenUrlUseCase.shorten(any(), isNull(), isNull(), (Long) isNull(), isNull()))
                                 .thenThrow(new IllegalArgumentException("Invalid input"));
 
                 // When/Then
@@ -185,9 +185,9 @@ when(getUrlUseCase.getOriginalUrl(org.mockito.ArgumentMatchers.isNull(), org.moc
                 // Given
                 when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
                 ShortenRequest request = new ShortenRequest("https://example.com", null);
-                when(shortenUrlUseCase.shorten(any(), isNull(), isNull(), isNull(), eq("links.example.com")))
+                when(shortenUrlUseCase.shorten(any(), isNull(), isNull(), (Long) isNull(), eq("links.example.com")))
                                 .thenThrow(new ca.tyny.urlshortener.core.exception.DomainNotVerifiedException("links.example.com"));
-                String body = "{\"originalUrl\":\"https://example.com\",\"domain\":\"links.example.com\"}";
+        String body = "{\"originalUrl\":\"https://example.com\",\"domain\":\"links.example.com\"}";
 
                 // When/Then
                 mockMvc.perform(post("/api/v1/urls")
@@ -204,7 +204,7 @@ when(getUrlUseCase.getOriginalUrl(org.mockito.ArgumentMatchers.isNull(), org.moc
                 // Given
                 when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
                 ShortenRequest request = new ShortenRequest("https://example.com", null);
-                when(shortenUrlUseCase.shorten(any(), isNull(), isNull(), isNull(), isNull()))
+                when(shortenUrlUseCase.shorten(any(), isNull(), isNull(), (Long) isNull(), isNull()))
                                 .thenThrow(new RuntimeException("Unexpected error"));
 
                 // When/Then

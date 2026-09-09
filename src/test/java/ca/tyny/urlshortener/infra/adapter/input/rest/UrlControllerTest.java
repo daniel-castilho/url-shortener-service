@@ -20,12 +20,14 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.LocalDateTime;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -91,7 +93,7 @@ class UrlControllerTest {
         ShortUrl shortUrl = new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now());
 
         // Expect shorten called with null customAlias, null userId (anonymous) and no expiry
-        when(shortenUrlUseCase.shorten(eq(TEST_URL), isNull(), isNull(), isNull(), isNull())).thenReturn(shortUrl);
+        when(shortenUrlUseCase.shorten(eq(TEST_URL), isNull(), isNull(), (Long) isNull(), isNull())).thenReturn(shortUrl);
 
         // When/Then
         mockMvc.perform(post("/api/v1/urls")
@@ -101,7 +103,7 @@ class UrlControllerTest {
                 .andExpect(jsonPath("$.id").value(TEST_ID))
                 .andExpect(jsonPath("$.shortUrl").value("http://localhost/" + TEST_ID));
 
-        verify(shortenUrlUseCase).shorten(eq(TEST_URL), isNull(), isNull(), isNull(), isNull());
+        verify(shortenUrlUseCase).shorten(eq(TEST_URL), isNull(), isNull(), (Long) isNull(), isNull());
     }
 
     @Test
@@ -114,7 +116,7 @@ class UrlControllerTest {
 
         // Note: In this test with TestSecurityConfig, user is anonymous, so userId is
         // null.
-        when(shortenUrlUseCase.shorten(eq(TEST_URL), eq(customAlias), isNull(), isNull(), isNull())).thenReturn(shortUrl);
+        when(shortenUrlUseCase.shorten(eq(TEST_URL), eq(customAlias), isNull(), (Long) isNull(), isNull())).thenReturn(shortUrl);
 
         // When/Then
         mockMvc.perform(post("/api/v1/urls")
@@ -123,7 +125,7 @@ class UrlControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(customAlias));
 
-        verify(shortenUrlUseCase).shorten(eq(TEST_URL), eq(customAlias), isNull(), isNull(), isNull());
+        verify(shortenUrlUseCase).shorten(eq(TEST_URL), eq(customAlias), isNull(), (Long) isNull(), isNull());
     }
 
     @Test
@@ -186,16 +188,16 @@ class UrlControllerTest {
                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isTooManyRequests());
 
-        verify(shortenUrlUseCase, never()).shorten(anyString(), any(), any(), any(), any());
+        verify(shortenUrlUseCase, never()).shorten(anyString(), any(), any(), (Long) any(), any());
     }
 
-    @Test
+@Test
     @DisplayName("POST /api/v1/urls should return 409 when alias already exists")
     void shouldReturn409WhenAliasAlreadyExists() throws Exception {
         // Given
         String customAlias = "existing-alias";
         ShortenRequest request = new ShortenRequest(TEST_URL, customAlias);
-        when(shortenUrlUseCase.shorten(eq(TEST_URL), eq(customAlias), isNull(), isNull(), isNull()))
+        when(shortenUrlUseCase.shorten(eq(TEST_URL), eq(customAlias), isNull(), (Long) isNull(), isNull()))
                 .thenThrow(new ca.tyny.urlshortener.core.exception.AliasAlreadyExistsException(customAlias));
 
         // When/Then
@@ -211,7 +213,7 @@ class UrlControllerTest {
     void shouldPassResolvedExpiryForValidTtl() throws Exception {
         // Given
         ShortUrl shortUrl = new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now());
-        when(shortenUrlUseCase.shorten(eq(TEST_URL), isNull(), isNull(), any(), isNull()))
+        when(shortenUrlUseCase.shorten(eq(TEST_URL), isNull(), isNull(), anyLong(), isNull()))
                 .thenReturn(shortUrl);
         String body = "{\"originalUrl\":\"" + TEST_URL + "\",\"ttlSeconds\":60}";
 
@@ -221,10 +223,10 @@ class UrlControllerTest {
                 .content(body))
                 .andExpect(status().isOk());
 
-        org.mockito.ArgumentCaptor<java.time.Instant> expiresAt =
-                org.mockito.ArgumentCaptor.forClass(java.time.Instant.class);
-        verify(shortenUrlUseCase).shorten(eq(TEST_URL), isNull(), isNull(), expiresAt.capture(), isNull());
-        assertThatWithinRoughly(expiresAt.getValue(), java.time.Instant.now().plusSeconds(60), 30);
+        org.mockito.ArgumentCaptor<Long> ttlSeconds =
+                org.mockito.ArgumentCaptor.forClass(Long.class);
+        verify(shortenUrlUseCase).shorten(eq(TEST_URL), isNull(), isNull(), ttlSeconds.capture(), isNull());
+        assertThat(ttlSeconds.getValue()).isEqualTo(60L);
     }
 
     @Test
@@ -232,13 +234,16 @@ class UrlControllerTest {
     void shouldRejectTtlOverCap() throws Exception {
         String body = "{\"originalUrl\":\"" + TEST_URL + "\",\"ttlSeconds\":" + (MAX_TTL_SECONDS + 1) + "}";
 
+        when(shortenUrlUseCase.shorten(eq(TEST_URL), isNull(), isNull(), anyLong(), isNull()))
+                .thenThrow(new ca.tyny.urlshortener.core.exception.InvalidExpiryException("over cap"));
+
         mockMvc.perform(post("/api/v1/urls")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("Invalid Expiry"));
 
-        verify(shortenUrlUseCase, never()).shorten(anyString(), any(), any(), any(), any());
+        verify(shortenUrlUseCase).shorten(eq(TEST_URL), isNull(), isNull(), anyLong(), isNull());
     }
 
     @Test
@@ -246,7 +251,7 @@ class UrlControllerTest {
     void shouldPassDomainToUseCase() throws Exception {
         // Given
         ShortUrl shortUrl = new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now());
-        when(shortenUrlUseCase.shorten(eq(TEST_URL), isNull(), isNull(), isNull(), eq("links.example.com")))
+        when(shortenUrlUseCase.shorten(eq(TEST_URL), isNull(), isNull(), (Long) isNull(), eq("links.example.com")))
                 .thenReturn(shortUrl);
         String body = "{\"originalUrl\":\"" + TEST_URL + "\",\"domain\":\"links.example.com\"}";
 
@@ -257,7 +262,7 @@ class UrlControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(TEST_ID));
 
-        verify(shortenUrlUseCase).shorten(eq(TEST_URL), isNull(), isNull(), isNull(), eq("links.example.com"));
+        verify(shortenUrlUseCase).shorten(eq(TEST_URL), isNull(), isNull(), (Long) isNull(), eq("links.example.com"));
     }
 
     @Test
@@ -271,7 +276,7 @@ class UrlControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value("Validation Failed"));
 
-        verify(shortenUrlUseCase, never()).shorten(anyString(), any(), any(), any(), any());
+        verify(shortenUrlUseCase, never()).shorten(anyString(), any(), any(), (Long) any(), any());
     }
 
     private static void assertThatWithinRoughly(java.time.Instant actual, java.time.Instant expected,
