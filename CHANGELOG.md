@@ -7,6 +7,29 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ## [Unreleased]
 
+### Fixed
+
+- **IT suite: mongod dying mid-suite (exit 14, "Prematurely reached end of stream")** — root cause:
+  `@DirtiesContext(AFTER_EACH_TEST_METHOD)` re-created the whole ApplicationContext per test method
+  (114 contexts for 114 tests), each opening its own Mongo connection pool. The shared singleton
+  mongod accumulated connections/threads/file descriptors until it hit the EMFILE limit ("Too many
+  open files") during a schema-migration index build; WiredTiger treats that as a library panic and
+  `abort()`s mongod (exit 14), and every test after that point failed. Fix (dargent singleton-container
+  pattern, `docs/lessons.md` #7): drop `@DirtiesContext` — isolation is guaranteed by the
+  `@BeforeEach/@AfterEach` cleanup (drop DB, Redis flushAll, Bloom filter reset, **plus L1 Caffeine
+  invalidateAll**, newly added) — cap the test mongod `wiredTigerCacheSizeGB=0.25`, and raise the
+  container `nofile` ulimit to 65536. Full suite now deterministic: 265 unit + 114 IT, 0 errors.
+- **TTL validation moved to the application layer** — the controller no longer resolves
+  `ttlSeconds` into an `expiresAt` instant; `ShortenUrlUseCase` gains a `Long ttlSeconds` overload
+  and `UrlShortenerService` resolves it via `ExpiryResolver` with the cap passed as a primitive
+  (fixes a latent `core → infra` boundary violation: `UrlShortenerService` was importing
+  `infra.config.properties.ShortenerProperties`; also converts a missing-cap NPE into
+  `InvalidExpiryException`).
+
+### Changed
+
+- Bumped Lombok to 1.18.46 (JDK 25 compatibility; required for local builds on Corretto 25).
+
 ## [0.12.0] - 2026-08-28
 
 ### Added

@@ -185,6 +185,10 @@ public class RedisUrlCache implements UrlCachePort {
         }
     }
 
+    public void invalidateAllLocal() {
+        this.localCache.invalidateAll();
+    }
+
     @Override
     public void evict(String id) {
         // Delete from Redis
