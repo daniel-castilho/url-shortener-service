@@ -4,6 +4,7 @@
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.5.7-6DB33F?style=for-the-badge&logo=spring&logoColor=white)
 ![Maven](https://img.shields.io/badge/Maven-3.8+-C71A36?style=for-the-badge&logo=apache-maven&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 URL Shortener Service is a high-performance link-shortening API built with **Java 21**, **Spring Boot 3.5.7**
 and a **Hexagonal Architecture (Ports & Adapters)**. Its business core (`core` package) is free of
@@ -23,6 +24,8 @@ technologies used by the `infra` layer.
 - [Current State](#current-state)
 - [Roadmap](#roadmap)
 - [Documentation](#documentation)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Tech Stack
 
@@ -194,6 +197,9 @@ Custom business metrics exposed via Micrometer include `urls.shortened.total`, `
 
 ## Current State
 
+**Latest tagged release: `v0.12.0`** (Links as Resource, 2026-08-28) · see
+[CHANGELOG.md](CHANGELOG.md) for the full version history.
+
 Implemented on `main`:
 
 - **URL shortening & redirection** — `POST /api/v1/urls` creates a short code; `GET /{id}` performs a
@@ -262,50 +268,21 @@ Implemented on `main`:
 
 ## Roadmap
 
-Deliberately not implemented yet — candidate backlog, in priority order:
+Deliberately not implemented yet (candidate backlog, in priority order):
 
-- **Links as Resource (Phase B) — landed.** `/api/v1/urls` list/get/patch/delete (owner-scoped,
-  cursor pagination, soft delete, PATCH supplied-field semantics). See Current State and
-  `tasks/links-as-resource-*.md`.
-- **Real analytics persistence — landed.** Click events persist to `click_events` via a durable
-  Redis Stream + batched worker; `clickCount` is updated atomically (`$inc`), quota counters too.
-- **Rate limiting on the redirect path — landed.** `GET /{id}` now has per-IP token-bucket over Redis (Rule 5): independent REDIRECT scope with capacity 120/min (configurable), Redis TIME-driven atomic Lua script, trusted-proxy CIDR IP resolution, fail-open policy, 429 with `Retry-After` + `RateLimit-*` headers. Scope isolation: exhausting redirect budget never affects shorten. ITs prove anti-enumeration (unknown-code probes throttled), exact capacity under burst, and scope isolation.
-- **TTL / link expiration — landed.** `ttlSeconds` input → `expiresAt`; `410 Gone` for expired at
-  redirect; expiry-aware cache (never serve an expired link); MongoDB TTL index via the versioned
-  migration `V5`. See Current State.
-- **Land the locked identity model in code** — stories I1–I6: random Base62 + collision retry, drop
-  the unique index on `originalUrl`, isolate generated codes from vanity aliases (debt items 3, 4, 7).
-  The **contract** is documented in this README and `docs/data-model-decisions.md`.
-  **Status: landed** in this codebase.
-- **Framework-free `core` — landed.** Spring/Lombok annotations removed from the domain layer;
-  beans registered in `infra/config` (`ServiceConfig`); boundary gate enforces it in CI with a
-  self-test. Quality gates (JaCoCo + SpotBugs) run at `mvn verify`.
-- **Validate the destination — landed.** SSRF protection implemented: HTTPS enforced by default, host validation, private/internal IP blocking (RFC1918, loopback, link-local, metadata IPs), userinfo rejection, DNS resolution with caching. Extensibility hook via `DestinationValidatorPort` for reputation checks. ITs: `SsrfProtectionIT` proves rejection of HTTP, userinfo, invalid schemes, private IPs; valid HTTPS allowed.
-- **Tighten operational exposure — landed.** Actuator endpoints tiered (liveness/readiness/info public; health detail requires ADMIN; metrics/prometheus require ADMIN/METRICS_VIEWER; other actuator endpoints require ADMIN). Swagger conditionally enabled via `app.security.swagger.enabled` (default false). Health detail defaults to `when-authorized`. Swagger loaded conditionally via `@ConditionalOnProperty`.
+- **Refactor `core/service/UserService`** — the remaining architectural exception: it still imports
+  `infra` classes directly (`MongoUserRepository`, `JwtTokenProvider`, REST DTOs). See the "Known
+  exception" note in the [Architecture](#architecture) section.
 - **Fix the GraalVM native build** — correct the `mainClass` in the `native` profile, and verify the
   documented startup/memory targets under load.
-- **Observability (four pillars) — landed.** Micrometer metrics + Prometheus endpoint with latency
-  percentiles and the `id.generation.duration` / `url.retrieval.duration` timers; OpenTelemetry
-  tracing via Spring Boot auto-instrumentation (`micrometer-tracing-bridge-otel`) exported through
-  OTLP/HTTP with 10% head sampling and collector **tail-sampling that always keeps ERROR traces**
-  (`deploy/otel/otel-collector-config.yml`); `traceId`/`spanId` MDC in logs; **SLOs** — availability
-  99.9%, latency p99 < 200 ms, error rate < 0.1% (`docs/slos.md`, Prometheus recording rules +
-  burn-rate alerts under `deploy/monitoring/`); Grafana dashboards (`dashboards/`); k6 load tests
-  (`load-tests/`, manual dispatch via `.github/workflows/load-test.yml`) and baselines
-  (`docs/load-test-baseline.md`). **Structured (JSON) logging** via a `json` profile (`-Dspring.profiles.active=json`)
-  using `logstash-logback-encoder`; default profile stays plain for local dev. Tracing is fail-open,
-  proven by `TracingFailOpenIT`. See `docs/observability.md`.
-- **Operational excellence — landed.** TLS termination via reverse proxy (NGINX/Caddy configs in
-  `deploy/proxy/`); systemd unit (`deploy/url-shortener.service`) with graceful shutdown
-  (`server.shutdown: graceful`, `spring.lifecycle.timeout-per-shutdown-phase: 30s`); fail-fast
-  startup validation (`ProdConfigValidator` checks required env vars in `prod` profile); MongoDB
-  backup/restore scripts (`scripts/backup-mongodb.sh`, `scripts/restore-mongodb.sh`); `click_events`
-  retention purge (daily at 02:00 UTC, deletes events older than `app.analytics.retention-days`,
-  default 90 days, in bounded batches); load baseline script (`scripts/performance-baseline.sh`)
-  with k6 thresholds-as-code; graceful shutdown verification (`scripts/verify-graceful-shutdown.sh`).
-- **CI** — `ci.yml` runs `mvn verify` with Testcontainers on push/PR; `load-test.yml` runs k6 on manual
-  dispatch. **k6 redirect gate** (p95 < 200ms, error < 0.1%) is the baseline for promotion to a
-  blocking gate after 2–3 calibration runs.
+- **Promote the k6 redirect gate to blocking** — the `p95 < 200 ms` / `error < 0.1%` threshold is
+  currently a consultative baseline; it becomes a blocking CI gate after 2–3 calibration runs
+  (`.github/workflows/load-test.yml`).
+
+> Everything previously tracked here has **landed** — Links as Resource, real analytics persistence,
+> redirect-path rate limiting, TTL/link expiry, the locked identity model, framework-free `core`,
+> destination validation, operational-exposure tightening, observability (four pillars) and
+> operational excellence. See [CHANGELOG.md](CHANGELOG.md) for the per-version history.
 
 ## Documentation
 
@@ -313,6 +290,7 @@ Deliberately not implemented yet — candidate backlog, in priority order:
 | :--- | :--- |
 | `README.md` | This file — overview, architecture, setup and testing |
 | `AGENTS.md` | Contributor/agent rules, architecture, debt matrix |
+| `CHANGELOG.md` | Release history (Keep a Changelog) |
 | `docs/data-model-decisions.md` | Locked identity model (Base62, no URL dedup, namespace isolation) |
 | `docs/coding-standards.md` | Day-to-day Java/Spring conventions |
 | `docs/testing-playbook.md` | How to design, run and maintain tests |
@@ -325,3 +303,16 @@ Deliberately not implemented yet — candidate backlog, in priority order:
 | `MONGODB_ARCHITECTURE.md` | MongoDB layering notes (Portuguese prose being migrated to English) |
 | `docker-compose.yaml` | MongoDB + Redis for local development |
 | `pom.xml` | Dependency, build and native-image configuration |
+
+## Contributing
+
+The URL Shortener Service is developed solo/AI-assisted. Before contributing, read
+[AGENTS.md](AGENTS.md) (binding rules for both humans and agents — architecture boundaries, the
+Base62 ID-generation standard, no-URL-dedup, redirect-path integrity), the
+[coding standards](docs/coding-standards.md) and the [testing playbook](docs/testing-playbook.md).
+Keep the full gate green (`mvn verify`) and update `README.md` / `AGENTS.md` / `CHANGELOG.md` in the
+same change set (AGENTS.md rule 10).
+
+## License
+
+[MIT](LICENSE) © 2026 Daniel Castilho (https://tyny.ca).
