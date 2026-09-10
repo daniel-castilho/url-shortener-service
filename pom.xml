@@ -278,6 +278,10 @@
                         </goals>
                         <configuration>
                             <rules>
+                                <!-- Global floor (BUNDLE) + per-layer floors: core/ is the domain,
+                                     held to the Epic 1 testing standard (LINE >= 70%); infra
+                                     adapters keep the historic 60% floor. Measured 2026-09-10:
+                                     core LINE 90.6% / BRANCH 81.0%, whole-bundle clears both. -->
                                 <rule>
                                     <element>BUNDLE</element>
                                     <limits>
@@ -290,6 +294,24 @@
                                             <counter>BRANCH</counter>
                                             <value>COVEREDRATIO</value>
                                             <minimum>0.60</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                                <rule>
+                                    <element>PACKAGE</element>
+                                    <includes>
+                                        <include>ca.tyny.urlshortener.core.*</include>
+                                    </includes>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.70</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.70</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
