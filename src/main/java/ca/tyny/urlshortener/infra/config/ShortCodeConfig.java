@@ -8,8 +8,8 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class ShortCodeConfig {
 
-    @Bean
-    public IdGeneratorPort idGeneratorPort(Base62CodeGenerator base62CodeGenerator) {
-        return base62CodeGenerator::generate;
-    }
+  @Bean
+  public IdGeneratorPort idGeneratorPort(Base62CodeGenerator base62CodeGenerator) {
+    return base62CodeGenerator::generate;
+  }
 }

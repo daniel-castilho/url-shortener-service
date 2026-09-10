@@ -8,15 +8,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class AuthenticationAdapter implements AuthenticationPort {
 
-    private final AuthenticationManager authenticationManager;
+  private final AuthenticationManager authenticationManager;
 
-    public AuthenticationAdapter(AuthenticationManager authenticationManager) {
-        this.authenticationManager = authenticationManager;
-    }
+  public AuthenticationAdapter(AuthenticationManager authenticationManager) {
+    this.authenticationManager = authenticationManager;
+  }
 
-    @Override
-    public void authenticate(String email, String password) {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(email, password));
-    }
+  @Override
+  public void authenticate(String email, String password) {
+    authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(email, password));
+  }
 }

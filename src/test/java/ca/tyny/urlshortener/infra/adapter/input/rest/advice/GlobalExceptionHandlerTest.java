@@ -1,23 +1,5 @@
 package ca.tyny.urlshortener.infra.adapter.input.rest.advice;
 
-import ca.tyny.urlshortener.core.exception.UrlExpiredException;
-import ca.tyny.urlshortener.core.exception.UrlNotFoundException;
-import ca.tyny.urlshortener.core.ports.outgoing.AnalyticsPort;
-import ca.tyny.urlshortener.core.ports.outgoing.RateLimiterPort;
-
-import ca.tyny.urlshortener.infra.adapter.input.rest.dto.ShortenRequest;
-import tools.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.context.annotation.Import;
-import org.springframework.http.MediaType;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
-import ca.tyny.urlshortener.config.WithMockSecurity;
-
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -27,194 +9,233 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest({ GlobalExceptionHandler.class, ca.tyny.urlshortener.infra.adapter.input.rest.UrlController.class })
+import ca.tyny.urlshortener.config.WithMockSecurity;
+import ca.tyny.urlshortener.core.exception.UrlExpiredException;
+import ca.tyny.urlshortener.core.exception.UrlNotFoundException;
+import ca.tyny.urlshortener.core.ports.outgoing.AnalyticsPort;
+import ca.tyny.urlshortener.core.ports.outgoing.RateLimiterPort;
+import ca.tyny.urlshortener.infra.adapter.input.rest.dto.ShortenRequest;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.web.servlet.MockMvc;
+import tools.jackson.databind.ObjectMapper;
+
+@WebMvcTest({
+  GlobalExceptionHandler.class,
+  ca.tyny.urlshortener.infra.adapter.input.rest.UrlController.class
+})
 @WithMockSecurity
 @AutoConfigureMockMvc(addFilters = false)
 @DisplayName("GlobalExceptionHandler Tests")
 class GlobalExceptionHandlerTest {
 
-        @Autowired
-        private MockMvc mockMvc;
+  @Autowired private MockMvc mockMvc;
 
-        @Autowired
-        private ObjectMapper objectMapper;
+  @Autowired private ObjectMapper objectMapper;
 
-        @MockitoBean
-        private ca.tyny.urlshortener.core.ports.incoming.ShortenUrlUseCase shortenUrlUseCase;
+  @MockitoBean private ca.tyny.urlshortener.core.ports.incoming.ShortenUrlUseCase shortenUrlUseCase;
 
-        @MockitoBean
-        private ca.tyny.urlshortener.core.ports.incoming.GetUrlUseCase getUrlUseCase;
+  @MockitoBean private ca.tyny.urlshortener.core.ports.incoming.GetUrlUseCase getUrlUseCase;
 
-        @MockitoBean
-        private AnalyticsPort analyticsPort;
+  @MockitoBean private AnalyticsPort analyticsPort;
 
-        @MockitoBean
-        private RateLimiterPort rateLimiter;
+  @MockitoBean private RateLimiterPort rateLimiter;
 
-        @MockitoBean
-        private ca.tyny.urlshortener.infra.observability.MetricsService metricsService;
+  @MockitoBean private ca.tyny.urlshortener.infra.observability.MetricsService metricsService;
 
-        @MockitoBean
-        private ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort userRepository;
+  @MockitoBean private ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort userRepository;
 
-        @MockitoBean
-        private ca.tyny.urlshortener.infra.security.JwtTokenProvider jwtTokenProvider;
+  @MockitoBean private ca.tyny.urlshortener.infra.security.JwtTokenProvider jwtTokenProvider;
 
-        @MockitoBean
-        private ca.tyny.urlshortener.infra.config.properties.ShortenerProperties shortenerProperties;
+  @MockitoBean
+  private ca.tyny.urlshortener.infra.config.properties.ShortenerProperties shortenerProperties;
 
-        @MockitoBean
-        private ca.tyny.urlshortener.infra.adapter.input.rest.ClientAddressResolver clientAddressResolver;
+  @MockitoBean
+  private ca.tyny.urlshortener.infra.adapter.input.rest.ClientAddressResolver clientAddressResolver;
 
-        @org.junit.jupiter.api.BeforeEach
-        void setUpResolver() {
-                when(clientAddressResolver.resolve(org.mockito.ArgumentMatchers.any()))
-                                .thenReturn("127.0.0.1");
-        }
+  @org.junit.jupiter.api.BeforeEach
+  void setUpResolver() {
+    when(clientAddressResolver.resolve(org.mockito.ArgumentMatchers.any())).thenReturn("127.0.0.1");
+  }
 
-        @Test
-        @DisplayName("Should return 404 with error response when URL not found")
-        void shouldReturn404WhenUrlNotFound() throws Exception {
-                // Given
-                when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
-                String nonExistentId = "notfound";
-when(getUrlUseCase.getOriginalUrl(org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.eq(nonExistentId)))
-                        .thenThrow(new UrlNotFoundException(nonExistentId));
+  @Test
+  @DisplayName("Should return 404 with error response when URL not found")
+  void shouldReturn404WhenUrlNotFound() throws Exception {
+    // Given
+    when(rateLimiter.tryAcquire(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
+        .thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
+    String nonExistentId = "notfound";
+    when(getUrlUseCase.getOriginalUrl(
+            org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.eq(nonExistentId)))
+        .thenThrow(new UrlNotFoundException(nonExistentId));
 
-                // When/Then
-                mockMvc.perform(get("/" + nonExistentId))
-                                .andExpect(status().isNotFound())
-                                .andExpect(jsonPath("$.status").value(404))
-                                .andExpect(jsonPath("$.error").value("URL Not Found"))
-                                .andExpect(jsonPath("$.message").exists())
-                                .andExpect(jsonPath("$.timestamp").exists());
-        }
+    // When/Then
+    mockMvc
+        .perform(get("/" + nonExistentId))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.status").value(404))
+        .andExpect(jsonPath("$.error").value("URL Not Found"))
+        .andExpect(jsonPath("$.message").exists())
+        .andExpect(jsonPath("$.timestamp").exists());
+  }
 
-        @Test
-        @DisplayName("Should return 410 when URL has expired")
-        void shouldReturn410WhenUrlExpired() throws Exception {
-                // Given
-                when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
-                String expiredId = "expired1";
-when(getUrlUseCase.getOriginalUrl(org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.eq(expiredId)))
-                        .thenThrow(new UrlExpiredException(expiredId));
+  @Test
+  @DisplayName("Should return 410 when URL has expired")
+  void shouldReturn410WhenUrlExpired() throws Exception {
+    // Given
+    when(rateLimiter.tryAcquire(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
+        .thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
+    String expiredId = "expired1";
+    when(getUrlUseCase.getOriginalUrl(
+            org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.eq(expiredId)))
+        .thenThrow(new UrlExpiredException(expiredId));
 
-                // When/Then
-                mockMvc.perform(get("/" + expiredId))
-                                .andExpect(status().isGone())
-                                .andExpect(jsonPath("$.status").value(410))
-                                .andExpect(jsonPath("$.error").value("URL Expired"))
-                                .andExpect(jsonPath("$.message").exists())
-                                .andExpect(jsonPath("$.timestamp").exists());
-        }
+    // When/Then
+    mockMvc
+        .perform(get("/" + expiredId))
+        .andExpect(status().isGone())
+        .andExpect(jsonPath("$.status").value(410))
+        .andExpect(jsonPath("$.error").value("URL Expired"))
+        .andExpect(jsonPath("$.message").exists())
+        .andExpect(jsonPath("$.timestamp").exists());
+  }
 
-        @Test
-        @DisplayName("Should return 400 with validation errors for empty URL")
-        void shouldReturn400ForEmptyUrl() throws Exception {
-                // Given
-                when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
-                ShortenRequest request = new ShortenRequest("", null);
+  @Test
+  @DisplayName("Should return 400 with validation errors for empty URL")
+  void shouldReturn400ForEmptyUrl() throws Exception {
+    // Given
+    when(rateLimiter.tryAcquire(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
+        .thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
+    ShortenRequest request = new ShortenRequest("", null);
 
-                // When/Then
-                mockMvc.perform(post("/api/v1/urls")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request)))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.status").value(400))
-                                .andExpect(jsonPath("$.error").value("Validation Failed"))
-                                .andExpect(jsonPath("$.validationErrors.originalUrl").exists());
-        }
+    // When/Then
+    mockMvc
+        .perform(
+            post("/api/v1/urls")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.status").value(400))
+        .andExpect(jsonPath("$.error").value("Validation Failed"))
+        .andExpect(jsonPath("$.validationErrors.originalUrl").exists());
+  }
 
-        @Test
-        @DisplayName("Should return 400 with validation errors for invalid URL format")
-        void shouldReturn400ForInvalidUrlFormat() throws Exception {
-                // Given
-                when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
-                ShortenRequest request = new ShortenRequest("not-a-valid-url", null);
+  @Test
+  @DisplayName("Should return 400 with validation errors for invalid URL format")
+  void shouldReturn400ForInvalidUrlFormat() throws Exception {
+    // Given
+    when(rateLimiter.tryAcquire(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
+        .thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
+    ShortenRequest request = new ShortenRequest("not-a-valid-url", null);
 
-                // When/Then
-                mockMvc.perform(post("/api/v1/urls")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request)))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.status").value(400))
-                                .andExpect(jsonPath("$.error").value("Validation Failed"))
-                                .andExpect(jsonPath("$.validationErrors.originalUrl")
-                                                .value("URL must start with http:// or https://"));
-        }
+    // When/Then
+    mockMvc
+        .perform(
+            post("/api/v1/urls")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.status").value(400))
+        .andExpect(jsonPath("$.error").value("Validation Failed"))
+        .andExpect(
+            jsonPath("$.validationErrors.originalUrl")
+                .value("URL must start with http:// or https://"));
+  }
 
-        @Test
-        @DisplayName("Should return 400 with validation errors for null URL")
-        void shouldReturn400ForNullUrl() throws Exception {
-                // Given
-                when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
-                String requestJson = "{}";
+  @Test
+  @DisplayName("Should return 400 with validation errors for null URL")
+  void shouldReturn400ForNullUrl() throws Exception {
+    // Given
+    when(rateLimiter.tryAcquire(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
+        .thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
+    String requestJson = "{}";
 
-                // When/Then
-                mockMvc.perform(post("/api/v1/urls")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(requestJson))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.status").value(400))
-                                .andExpect(jsonPath("$.error").value("Validation Failed"))
-                                .andExpect(jsonPath("$.validationErrors.originalUrl").exists());
-        }
+    // When/Then
+    mockMvc
+        .perform(post("/api/v1/urls").contentType(MediaType.APPLICATION_JSON).content(requestJson))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.status").value(400))
+        .andExpect(jsonPath("$.error").value("Validation Failed"))
+        .andExpect(jsonPath("$.validationErrors.originalUrl").exists());
+  }
 
-@Test
-        @DisplayName("Should return 400 for IllegalArgumentException")
-        void shouldReturn400ForIllegalArgument() throws Exception {
-                // Given
-                when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
-                ShortenRequest request = new ShortenRequest("https://example.com", null);
-                when(shortenUrlUseCase.shorten(any(), isNull(), isNull(), (Long) isNull(), isNull()))
-                                .thenThrow(new IllegalArgumentException("Invalid input"));
+  @Test
+  @DisplayName("Should return 400 for IllegalArgumentException")
+  void shouldReturn400ForIllegalArgument() throws Exception {
+    // Given
+    when(rateLimiter.tryAcquire(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
+        .thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
+    ShortenRequest request = new ShortenRequest("https://example.com", null);
+    when(shortenUrlUseCase.shorten(any(), isNull(), isNull(), (Long) isNull(), isNull()))
+        .thenThrow(new IllegalArgumentException("Invalid input"));
 
-                // When/Then
-                mockMvc.perform(post("/api/v1/urls")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request)))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.status").value(400))
-                                .andExpect(jsonPath("$.error").value("Invalid Request"))
-                                .andExpect(jsonPath("$.message").value("Invalid input"));
-        }
+    // When/Then
+    mockMvc
+        .perform(
+            post("/api/v1/urls")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.status").value(400))
+        .andExpect(jsonPath("$.error").value("Invalid Request"))
+        .andExpect(jsonPath("$.message").value("Invalid input"));
+  }
 
-        @Test
-        @DisplayName("Should return 400 for DomainNotVerifiedException")
-        void shouldReturn400ForDomainNotVerified() throws Exception {
-                // Given
-                when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
-                ShortenRequest request = new ShortenRequest("https://example.com", null);
-                when(shortenUrlUseCase.shorten(any(), isNull(), isNull(), (Long) isNull(), eq("links.example.com")))
-                                .thenThrow(new ca.tyny.urlshortener.core.exception.DomainNotVerifiedException("links.example.com"));
-        String body = "{\"originalUrl\":\"https://example.com\",\"domain\":\"links.example.com\"}";
+  @Test
+  @DisplayName("Should return 400 for DomainNotVerifiedException")
+  void shouldReturn400ForDomainNotVerified() throws Exception {
+    // Given
+    when(rateLimiter.tryAcquire(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
+        .thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
+    ShortenRequest request = new ShortenRequest("https://example.com", null);
+    when(shortenUrlUseCase.shorten(
+            any(), isNull(), isNull(), (Long) isNull(), eq("links.example.com")))
+        .thenThrow(
+            new ca.tyny.urlshortener.core.exception.DomainNotVerifiedException(
+                "links.example.com"));
+    String body = "{\"originalUrl\":\"https://example.com\",\"domain\":\"links.example.com\"}";
 
-                // When/Then
-                mockMvc.perform(post("/api/v1/urls")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(body))
-                                .andExpect(status().isBadRequest())
-                                .andExpect(jsonPath("$.status").value(400))
-                                .andExpect(jsonPath("$.error").value("Domain Not Verified"));
-        }
+    // When/Then
+    mockMvc
+        .perform(post("/api/v1/urls").contentType(MediaType.APPLICATION_JSON).content(body))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.status").value(400))
+        .andExpect(jsonPath("$.error").value("Domain Not Verified"));
+  }
 
-        @Test
-        @DisplayName("Should return 500 for unexpected exceptions")
-        void shouldReturn500ForUnexpectedException() throws Exception {
-                // Given
-                when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
-                ShortenRequest request = new ShortenRequest("https://example.com", null);
-                when(shortenUrlUseCase.shorten(any(), isNull(), isNull(), (Long) isNull(), isNull()))
-                                .thenThrow(new RuntimeException("Unexpected error"));
+  @Test
+  @DisplayName("Should return 500 for unexpected exceptions")
+  void shouldReturn500ForUnexpectedException() throws Exception {
+    // Given
+    when(rateLimiter.tryAcquire(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
+        .thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
+    ShortenRequest request = new ShortenRequest("https://example.com", null);
+    when(shortenUrlUseCase.shorten(any(), isNull(), isNull(), (Long) isNull(), isNull()))
+        .thenThrow(new RuntimeException("Unexpected error"));
 
-                // When/Then
-                mockMvc.perform(post("/api/v1/urls")
-                                .contentType(MediaType.APPLICATION_JSON)
-                                .content(objectMapper.writeValueAsString(request)))
-                                .andExpect(status().isInternalServerError())
-                                .andExpect(jsonPath("$.status").value(500))
-                                .andExpect(jsonPath("$.error").value("Internal Server Error"))
-                                .andExpect(jsonPath("$.message")
-                                                .value("An unexpected error occurred. Please try again later."));
-        }
+    // When/Then
+    mockMvc
+        .perform(
+            post("/api/v1/urls")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isInternalServerError())
+        .andExpect(jsonPath("$.status").value(500))
+        .andExpect(jsonPath("$.error").value("Internal Server Error"))
+        .andExpect(
+            jsonPath("$.message").value("An unexpected error occurred. Please try again later."));
+  }
 }

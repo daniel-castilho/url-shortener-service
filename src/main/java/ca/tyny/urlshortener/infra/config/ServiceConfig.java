@@ -3,8 +3,8 @@ package ca.tyny.urlshortener.infra.config;
 import ca.tyny.urlshortener.core.idgeneration.Base62CodeGenerator;
 import ca.tyny.urlshortener.core.idgeneration.CompositeUrlIdGenerator;
 import ca.tyny.urlshortener.core.idgeneration.RandomUrlIdStrategy;
-import ca.tyny.urlshortener.core.idgeneration.UrlIdGenerator;
 import ca.tyny.urlshortener.core.idgeneration.UrlIdGenerationStrategy;
+import ca.tyny.urlshortener.core.idgeneration.UrlIdGenerator;
 import ca.tyny.urlshortener.core.idgeneration.VanityUrlIdStrategy;
 import ca.tyny.urlshortener.core.ports.incoming.ArchiveLinkUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.CustomDomainUseCase;
@@ -32,157 +32,172 @@ import ca.tyny.urlshortener.core.service.GetClickAnalyticsUseCaseImpl;
 import ca.tyny.urlshortener.core.service.GetLinkUseCaseImpl;
 import ca.tyny.urlshortener.core.service.ListUserLinksUseCaseImpl;
 import ca.tyny.urlshortener.core.service.QuotaService;
-import ca.tyny.urlshortener.core.service.UrlShortenerService;
 import ca.tyny.urlshortener.core.service.UpdateLinkUseCaseImpl;
+import ca.tyny.urlshortener.core.service.UrlShortenerService;
 import ca.tyny.urlshortener.core.service.UserService;
 import ca.tyny.urlshortener.core.validation.ReservedWordsValidator;
 import ca.tyny.urlshortener.core.validation.UrlValidator;
 import ca.tyny.urlshortener.infra.adapter.input.rest.mapper.LinkMapper;
-import ca.tyny.urlshortener.infra.adapter.output.persistence.mapper.ShortUrlMapper;
+import ca.tyny.urlshortener.infra.adapter.output.analytics.GeoIpCountryResolver;
 import ca.tyny.urlshortener.infra.adapter.output.validation.DefaultUrlValidator;
-import ca.tyny.urlshortener.infra.config.properties.RateLimiterProperties;
+import ca.tyny.urlshortener.infra.config.properties.AnalyticsProperties;
+import ca.tyny.urlshortener.infra.config.properties.DomainProperties;
 import ca.tyny.urlshortener.infra.config.properties.ShortenerProperties;
 import ca.tyny.urlshortener.infra.config.properties.UrlValidationProperties;
-import ca.tyny.urlshortener.infra.config.properties.SecurityProperties;
-import ca.tyny.urlshortener.infra.config.properties.DomainProperties;
-import ca.tyny.urlshortener.infra.config.properties.AnalyticsProperties;
-import ca.tyny.urlshortener.infra.adapter.output.analytics.GeoIpCountryResolver;
+import java.util.List;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 
-import java.util.List;
-
 @Configuration
 @EnableConfigurationProperties({
-        ca.tyny.urlshortener.infra.config.properties.RateLimiterProperties.class,
-        ca.tyny.urlshortener.infra.config.properties.UrlValidationProperties.class,
-        ca.tyny.urlshortener.infra.config.properties.SecurityProperties.class,
-        ca.tyny.urlshortener.infra.config.properties.ShortenerProperties.class,
-        ca.tyny.urlshortener.infra.config.properties.DomainProperties.class,
-        ca.tyny.urlshortener.infra.config.properties.AnalyticsProperties.class
+  ca.tyny.urlshortener.infra.config.properties.RateLimiterProperties.class,
+  ca.tyny.urlshortener.infra.config.properties.UrlValidationProperties.class,
+  ca.tyny.urlshortener.infra.config.properties.SecurityProperties.class,
+  ca.tyny.urlshortener.infra.config.properties.ShortenerProperties.class,
+  ca.tyny.urlshortener.infra.config.properties.DomainProperties.class,
+  ca.tyny.urlshortener.infra.config.properties.AnalyticsProperties.class
 })
 public class ServiceConfig {
 
-    @Bean
-    public GeoIpCountryResolver geoIpCountryResolver(AnalyticsProperties properties) {
-        if (properties.getGeo().isEnabled()) {
-            return GeoIpCountryResolver.fromFile(properties.getGeo().getMaxmindDbPath());
-        }
-        return GeoIpCountryResolver.disabled();
+  @Bean
+  public GeoIpCountryResolver geoIpCountryResolver(AnalyticsProperties properties) {
+    if (properties.getGeo().isEnabled()) {
+      return GeoIpCountryResolver.fromFile(properties.getGeo().getMaxmindDbPath());
     }
+    return GeoIpCountryResolver.disabled();
+  }
 
-    @Bean
-    public Base62CodeGenerator base62CodeGenerator(ShortenerProperties properties) {
-        return new Base62CodeGenerator(properties.codeLength());
-    }
+  @Bean
+  public Base62CodeGenerator base62CodeGenerator(ShortenerProperties properties) {
+    return new Base62CodeGenerator(properties.codeLength());
+  }
 
-    @Bean
-    public UrlShortenerService urlShortenerService(UrlRepositoryPort urlRepository,
-            UrlCachePort urlCache,
-            MetricsPort metrics,
-            UrlIdGenerator urlIdGenerator,
-            Base62CodeGenerator base62CodeGenerator,
-            QuotaService quotaService,
-            UserRepositoryPort userRepository,
-            ReservedWordsValidator reservedWordsValidator,
-            UrlValidator urlValidator,
-            CustomDomainRegistryPort customDomainRegistry,
-            CustomDomainRepositoryPort customDomainRepository,
-            DomainProperties domainProperties,
-            ShortenerProperties shortenerProperties) {
-        return new UrlShortenerService(urlRepository, urlCache, metrics, urlIdGenerator,
-                base62CodeGenerator, quotaService, userRepository, reservedWordsValidator, urlValidator,
-                customDomainRegistry, customDomainRepository, domainProperties.defaultHost(),
-                shortenerProperties.maxTtlSeconds());
-    }
+  @Bean
+  public UrlShortenerService urlShortenerService(
+      UrlRepositoryPort urlRepository,
+      UrlCachePort urlCache,
+      MetricsPort metrics,
+      UrlIdGenerator urlIdGenerator,
+      Base62CodeGenerator base62CodeGenerator,
+      QuotaService quotaService,
+      UserRepositoryPort userRepository,
+      ReservedWordsValidator reservedWordsValidator,
+      UrlValidator urlValidator,
+      CustomDomainRegistryPort customDomainRegistry,
+      CustomDomainRepositoryPort customDomainRepository,
+      DomainProperties domainProperties,
+      ShortenerProperties shortenerProperties) {
+    return new UrlShortenerService(
+        urlRepository,
+        urlCache,
+        metrics,
+        urlIdGenerator,
+        base62CodeGenerator,
+        quotaService,
+        userRepository,
+        reservedWordsValidator,
+        urlValidator,
+        customDomainRegistry,
+        customDomainRepository,
+        domainProperties.defaultHost(),
+        shortenerProperties.maxTtlSeconds());
+  }
 
-    @Bean
-    public UserService userService(UserRepositoryPort userRepository,
-            PasswordEncoderPort passwordEncoder,
-            TokenPort tokenPort,
-            AuthenticationPort authenticationPort,
-            IdGeneratorPort idGeneratorPort) {
-        return new UserService(userRepository, passwordEncoder, tokenPort, authenticationPort, idGeneratorPort);
-    }
+  @Bean
+  public UserService userService(
+      UserRepositoryPort userRepository,
+      PasswordEncoderPort passwordEncoder,
+      TokenPort tokenPort,
+      AuthenticationPort authenticationPort,
+      IdGeneratorPort idGeneratorPort) {
+    return new UserService(
+        userRepository, passwordEncoder, tokenPort, authenticationPort, idGeneratorPort);
+  }
 
-    @Bean
-    public ReservedWordsValidator reservedWordsValidator() {
-        return new ReservedWordsValidator();
-    }
+  @Bean
+  public ReservedWordsValidator reservedWordsValidator() {
+    return new ReservedWordsValidator();
+  }
 
-    @Bean
-    public RandomUrlIdStrategy randomUrlIdStrategy(IdGeneratorPort idGenerator) {
-        return new RandomUrlIdStrategy(idGenerator);
-    }
+  @Bean
+  public RandomUrlIdStrategy randomUrlIdStrategy(IdGeneratorPort idGenerator) {
+    return new RandomUrlIdStrategy(idGenerator);
+  }
 
-    @Bean
-    @Order(1)
-    public VanityUrlIdStrategy vanityUrlIdStrategy(UserRepositoryPort userRepository,
-            UrlRepositoryPort urlRepository) {
-        return new VanityUrlIdStrategy(userRepository, urlRepository);
-    }
+  @Bean
+  @Order(1)
+  public VanityUrlIdStrategy vanityUrlIdStrategy(
+      UserRepositoryPort userRepository, UrlRepositoryPort urlRepository) {
+    return new VanityUrlIdStrategy(userRepository, urlRepository);
+  }
 
-    @Bean
-    public QuotaService quotaService(UserRepositoryPort userRepository) {
-        return new QuotaService(userRepository);
-    }
+  @Bean
+  public QuotaService quotaService(UserRepositoryPort userRepository) {
+    return new QuotaService(userRepository);
+  }
 
-    @Bean
-    public CompositeUrlIdGenerator compositeUrlIdGenerator(List<UrlIdGenerationStrategy> strategies) {
-        return new CompositeUrlIdGenerator(strategies);
-    }
+  @Bean
+  public CompositeUrlIdGenerator compositeUrlIdGenerator(List<UrlIdGenerationStrategy> strategies) {
+    return new CompositeUrlIdGenerator(strategies);
+  }
 
-    @Bean
-    public UrlValidator urlValidator(UrlValidationProperties properties) {
-        return new DefaultUrlValidator(properties);
-    }
+  @Bean
+  public UrlValidator urlValidator(UrlValidationProperties properties) {
+    return new DefaultUrlValidator(properties);
+  }
 
-    @Bean
-    public LinkMapper linkMapper() {
-        return new LinkMapper();
-    }
+  @Bean
+  public LinkMapper linkMapper() {
+    return new LinkMapper();
+  }
 
-    @Bean
-    public ListUserLinksUseCase listUserLinksUseCase(LinkQueryPort linkQueryPort) {
-        return new ListUserLinksUseCaseImpl(linkQueryPort);
-    }
+  @Bean
+  public ListUserLinksUseCase listUserLinksUseCase(LinkQueryPort linkQueryPort) {
+    return new ListUserLinksUseCaseImpl(linkQueryPort);
+  }
 
-    @Bean
-    public GetLinkUseCase getLinkUseCase(LinkQueryPort linkQueryPort) {
-        return new GetLinkUseCaseImpl(linkQueryPort);
-    }
+  @Bean
+  public GetLinkUseCase getLinkUseCase(LinkQueryPort linkQueryPort) {
+    return new GetLinkUseCaseImpl(linkQueryPort);
+  }
 
-    @Bean
-    public GetClickAnalyticsUseCase getClickAnalyticsUseCase(GetLinkUseCase getLinkUseCase,
-            ClickAnalyticsPort clickAnalyticsPort) {
-        return new GetClickAnalyticsUseCaseImpl(getLinkUseCase, clickAnalyticsPort);
-    }
+  @Bean
+  public GetClickAnalyticsUseCase getClickAnalyticsUseCase(
+      GetLinkUseCase getLinkUseCase, ClickAnalyticsPort clickAnalyticsPort) {
+    return new GetClickAnalyticsUseCaseImpl(getLinkUseCase, clickAnalyticsPort);
+  }
 
-    @Bean
-    public UpdateLinkUseCase updateLinkUseCase(LinkQueryPort linkQueryPort,
-            LinkMutationPort linkMutationPort,
-            UrlCachePort urlCachePort,
-            UrlValidator urlValidator,
-            CustomDomainRepositoryPort customDomainRepository,
-            ShortenerProperties properties) {
-        return new UpdateLinkUseCaseImpl(linkQueryPort, linkMutationPort, urlCachePort, urlValidator,
-                customDomainRepository, properties.maxTtlSeconds());
-    }
+  @Bean
+  public UpdateLinkUseCase updateLinkUseCase(
+      LinkQueryPort linkQueryPort,
+      LinkMutationPort linkMutationPort,
+      UrlCachePort urlCachePort,
+      UrlValidator urlValidator,
+      CustomDomainRepositoryPort customDomainRepository,
+      ShortenerProperties properties) {
+    return new UpdateLinkUseCaseImpl(
+        linkQueryPort,
+        linkMutationPort,
+        urlCachePort,
+        urlValidator,
+        customDomainRepository,
+        properties.maxTtlSeconds());
+  }
 
-    @Bean
-    public ArchiveLinkUseCase archiveLinkUseCase(LinkQueryPort linkQueryPort,
-            LinkMutationPort linkMutationPort,
-            UrlCachePort urlCachePort) {
-        return new ArchiveLinkUseCaseImpl(linkQueryPort, linkMutationPort, urlCachePort);
-    }
+  @Bean
+  public ArchiveLinkUseCase archiveLinkUseCase(
+      LinkQueryPort linkQueryPort, LinkMutationPort linkMutationPort, UrlCachePort urlCachePort) {
+    return new ArchiveLinkUseCaseImpl(linkQueryPort, linkMutationPort, urlCachePort);
+  }
 
-    @Bean
-    public CustomDomainUseCase customDomainUseCase(CustomDomainRepositoryPort customDomainRepository,
-            VerificationTokenPort verificationTokenPort,
-            DomainProperties domainProperties) {
-        return new CustomDomainService(customDomainRepository, verificationTokenPort,
-                domainProperties.defaultHost());
-    }
+  @Bean
+  public CustomDomainUseCase customDomainUseCase(
+      CustomDomainRepositoryPort customDomainRepository,
+      VerificationTokenPort verificationTokenPort,
+      DomainProperties domainProperties) {
+    return new CustomDomainService(
+        customDomainRepository, verificationTokenPort, domainProperties.defaultHost());
+  }
 }

@@ -2,104 +2,100 @@ package ca.tyny.urlshortener.infra.adapter.output.persistence;
 
 import ca.tyny.urlshortener.core.model.User;
 import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
+import java.util.Optional;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Repository;
 
-import java.util.Optional;
-
-/**
- * MongoDB implementation of UserRepositoryPort.
- */
+/** MongoDB implementation of UserRepositoryPort. */
 @Repository
 public class MongoUserRepository implements UserRepositoryPort {
 
-    private final MongoTemplate mongoTemplate;
+  private final MongoTemplate mongoTemplate;
 
-    public MongoUserRepository(MongoTemplate mongoTemplate) {
-        this.mongoTemplate = mongoTemplate;
-    }
+  public MongoUserRepository(MongoTemplate mongoTemplate) {
+    this.mongoTemplate = mongoTemplate;
+  }
 
-    @Override
-    public User save(User user) {
-        UserEntity entity = toEntity(user);
-        UserEntity saved = mongoTemplate.save(entity);
-        return toDomain(saved);
-    }
+  @Override
+  public User save(User user) {
+    UserEntity entity = toEntity(user);
+    UserEntity saved = mongoTemplate.save(entity);
+    return toDomain(saved);
+  }
 
-    @Override
-    public Optional<User> findById(String id) {
-        UserEntity entity = mongoTemplate.findById(id, UserEntity.class);
-        return Optional.ofNullable(entity).map(this::toDomain);
-    }
+  @Override
+  public Optional<User> findById(String id) {
+    UserEntity entity = mongoTemplate.findById(id, UserEntity.class);
+    return Optional.ofNullable(entity).map(this::toDomain);
+  }
 
-    @Override
-    public Optional<User> findByEmail(String email) {
-        Query query = new Query(Criteria.where("email").is(email));
-        UserEntity entity = mongoTemplate.findOne(query, UserEntity.class);
-        return Optional.ofNullable(entity).map(this::toDomain);
-    }
+  @Override
+  public Optional<User> findByEmail(String email) {
+    Query query = new Query(Criteria.where("email").is(email));
+    UserEntity entity = mongoTemplate.findOne(query, UserEntity.class);
+    return Optional.ofNullable(entity).map(this::toDomain);
+  }
 
-    @Override
-    public boolean existsByEmail(String email) {
-        Query query = new Query(Criteria.where("email").is(email));
-        return mongoTemplate.exists(query, UserEntity.class);
-    }
+  @Override
+  public boolean existsByEmail(String email) {
+    Query query = new Query(Criteria.where("email").is(email));
+    return mongoTemplate.exists(query, UserEntity.class);
+  }
 
-    @Override
-    public void deleteById(String id) {
-        Query query = new Query(Criteria.where("_id").is(id));
-        mongoTemplate.remove(query, UserEntity.class);
-    }
+  @Override
+  public void deleteById(String id) {
+    Query query = new Query(Criteria.where("_id").is(id));
+    mongoTemplate.remove(query, UserEntity.class);
+  }
 
-    /**
-     * Atomically increments the vanity-URL quota counters (monthly + total)
-     * using $inc on the embedded quotaUsage document. Concurrent increments
-     * are never lost; a missing user is a no-op.
-     */
-    @Override
-    public void incrementVanityUsage(String id) {
-        org.springframework.data.mongodb.core.query.Update update =
-                new org.springframework.data.mongodb.core.query.Update()
-                        .inc("quotaUsage.vanityUrlsCreatedThisMonth", 1)
-                        .inc("quotaUsage.vanityUrlsCreatedTotal", 1);
-        mongoTemplate.updateFirst(new Query(Criteria.where("_id").is(id)), update, UserEntity.class);
-    }
+  /**
+   * Atomically increments the vanity-URL quota counters (monthly + total) using $inc on the
+   * embedded quotaUsage document. Concurrent increments are never lost; a missing user is a no-op.
+   */
+  @Override
+  public void incrementVanityUsage(String id) {
+    org.springframework.data.mongodb.core.query.Update update =
+        new org.springframework.data.mongodb.core.query.Update()
+            .inc("quotaUsage.vanityUrlsCreatedThisMonth", 1)
+            .inc("quotaUsage.vanityUrlsCreatedTotal", 1);
+    mongoTemplate.updateFirst(new Query(Criteria.where("_id").is(id)), update, UserEntity.class);
+  }
 
-    // Mappers
+  // Mappers
 
-    private UserEntity toEntity(User user) {
-        return new UserEntity(
-                user.id(),
-                user.email(),
-                user.name(),
-                user.passwordHash(),
-                user.plan(),
-                user.status(),
-                user.subscriptionStartDate(),
-                user.subscriptionEndDate(),
-                user.quotaUsage(),
-                user.stripeCustomerId(),
-                user.stripeSubscriptionId(),
-                user.createdAt(),
-                user.updatedAt());
-    }
+  private UserEntity toEntity(User user) {
+    return new UserEntity(
+        user.id(),
+        user.email(),
+        user.name(),
+        user.passwordHash(),
+        user.plan(),
+        user.status(),
+        user.subscriptionStartDate(),
+        user.subscriptionEndDate(),
+        user.quotaUsage(),
+        user.stripeCustomerId(),
+        user.stripeSubscriptionId(),
+        user.createdAt(),
+        user.updatedAt());
+  }
 
-    private User toDomain(UserEntity entity) {
-        return new User(
-                entity.getId(),
-                entity.getEmail(),
-                entity.getName(),
-                entity.getPasswordHash(),
-                entity.getPlan(),
-                entity.getStatus(),
-                entity.getSubscriptionStartDate(),
-                entity.getSubscriptionEndDate(),
-                entity.getQuotaUsage(),
-                entity.getStripeCustomerId(),
-                entity.getStripeSubscriptionId(),
-                entity.getCreatedAt(),
-                entity.getUpdatedAt());
-    }
+  private User toDomain(UserEntity entity) {
+    return new User(
+        entity.getId(),
+        entity.getEmail(),
+        entity.getName(),
+        entity.getPasswordHash(),
+        entity.getPlan(),
+        entity.getStatus(),
+        entity.getSubscriptionStartDate(),
+        entity.getSubscriptionEndDate(),
+        entity.getQuotaUsage(),
+        entity.getStripeCustomerId(),
+        entity.getStripeSubscriptionId(),
+        entity.getCreatedAt(),
+        entity.getUpdatedAt());
+  }
 }

@@ -1,6 +1,11 @@
 package ca.tyny.urlshortener.infra.adapter.output.persistence.migration;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import ca.tyny.urlshortener.config.BaseIntegrationTest;
+import java.time.Duration;
+import java.util.List;
+import java.util.stream.Collectors;
 import org.bson.Document;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -8,98 +13,103 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.index.IndexInfo;
 
-import java.time.Duration;
-import java.util.List;
-import java.util.stream.Collectors;
-
-import static org.assertj.core.api.Assertions.assertThat;
-
 @DisplayName("Schema migration versioned runner integration tests")
 class SchemaMigrationIT extends BaseIntegrationTest {
 
-    private static final String SHORT_URLS = "short_urls";
-    private static final String CLICK_EVENTS = "click_events";
-    private static final String USERS = "users";
-    private static final String CUSTOM_DOMAINS = "custom_domains";
-    private static final String CLICK_DAILY = "click_daily";
+  private static final String SHORT_URLS = "short_urls";
+  private static final String CLICK_EVENTS = "click_events";
+  private static final String USERS = "users";
+  private static final String CUSTOM_DOMAINS = "custom_domains";
+  private static final String CLICK_DAILY = "click_daily";
 
-    @Autowired
-    private MongoTemplate mongoTemplate;
+  @Autowired private MongoTemplate mongoTemplate;
 
-    @Autowired
-    private MongoSchemaMigrator migrator;
+  @Autowired private MongoSchemaMigrator migrator;
 
-    @Test
-    @DisplayName("Applying migrations on a fresh database creates history and all desired indexes")
-    void appliesAllMigrationsOnFreshDatabase() {
-        mongoTemplate.getDb().drop();
-        migrator.migrate();
+  @Test
+  @DisplayName("Applying migrations on a fresh database creates history and all desired indexes")
+  void appliesAllMigrationsOnFreshDatabase() {
+    mongoTemplate.getDb().drop();
+    migrator.migrate();
 
-        List<Document> history = mongoTemplate.findAll(Document.class, MongoSchemaMigrator.HISTORY_COLLECTION);
-        assertThat(history).hasSize(9);
-        assertThat(history.stream().map(doc -> doc.getInteger("version")))
-                .containsExactly(1, 2, 3, 4, 5, 6, 7, 8, 9);
-        assertThat(history).allSatisfy(doc -> {
-            assertThat(doc.getString("checksum")).isNotBlank();
-            assertThat(doc.getString("description")).isNotBlank();
-            assertThat(doc.get("appliedAt")).isNotNull();
-        });
+    List<Document> history =
+        mongoTemplate.findAll(Document.class, MongoSchemaMigrator.HISTORY_COLLECTION);
+    assertThat(history).hasSize(9);
+    assertThat(history.stream().map(doc -> doc.getInteger("version")))
+        .containsExactly(1, 2, 3, 4, 5, 6, 7, 8, 9);
+    assertThat(history)
+        .allSatisfy(
+            doc -> {
+              assertThat(doc.getString("checksum")).isNotBlank();
+              assertThat(doc.getString("description")).isNotBlank();
+              assertThat(doc.get("appliedAt")).isNotNull();
+            });
 
-        List<IndexInfo> shortUrlsIndexes = mongoTemplate.indexOps(SHORT_URLS).getIndexInfo();
-        assertThat(indexNames(shortUrlsIndexes))
-                .contains("_id_", "userId_1", "expiresAt_1")
-                .doesNotContain("originalUrl_1");
-        assertThat(indexNames(shortUrlsIndexes)).contains("userId_1_createdAt_-1"); // V7 compound index
-        IndexInfo ttlIndex = shortUrlsIndexes.stream()
-                .filter(index -> "expiresAt_1".equals(index.getName()))
-                .findFirst().orElseThrow();
-        assertThat(ttlIndex.getExpireAfter()).contains(Duration.ZERO);
+    List<IndexInfo> shortUrlsIndexes = mongoTemplate.indexOps(SHORT_URLS).getIndexInfo();
+    assertThat(indexNames(shortUrlsIndexes))
+        .contains("_id_", "userId_1", "expiresAt_1")
+        .doesNotContain("originalUrl_1");
+    assertThat(indexNames(shortUrlsIndexes)).contains("userId_1_createdAt_-1"); // V7 compound index
+    IndexInfo ttlIndex =
+        shortUrlsIndexes.stream()
+            .filter(index -> "expiresAt_1".equals(index.getName()))
+            .findFirst()
+            .orElseThrow();
+    assertThat(ttlIndex.getExpireAfter()).contains(Duration.ZERO);
 
-        List<String> clickEventsIndexes = indexNames(mongoTemplate.indexOps(CLICK_EVENTS).getIndexInfo());
-        assertThat(clickEventsIndexes).contains("_id_", "shortCode_1_timestamp_1", "timestamp_1");
+    List<String> clickEventsIndexes =
+        indexNames(mongoTemplate.indexOps(CLICK_EVENTS).getIndexInfo());
+    assertThat(clickEventsIndexes).contains("_id_", "shortCode_1_timestamp_1", "timestamp_1");
 
-        List<String> usersIndexes = indexNames(mongoTemplate.indexOps(USERS).getIndexInfo());
-        assertThat(usersIndexes).contains("_id_", "email_1", "plan_1", "createdAt_1");
-        IndexInfo emailUniqueIndex = mongoTemplate.indexOps(USERS).getIndexInfo().stream()
-                .filter(index -> "email_1".equals(index.getName()))
-                .findFirst().orElseThrow();
-        assertThat(emailUniqueIndex.isUnique()).isTrue();
+    List<String> usersIndexes = indexNames(mongoTemplate.indexOps(USERS).getIndexInfo());
+    assertThat(usersIndexes).contains("_id_", "email_1", "plan_1", "createdAt_1");
+    IndexInfo emailUniqueIndex =
+        mongoTemplate.indexOps(USERS).getIndexInfo().stream()
+            .filter(index -> "email_1".equals(index.getName()))
+            .findFirst()
+            .orElseThrow();
+    assertThat(emailUniqueIndex.isUnique()).isTrue();
 
-        List<IndexInfo> customDomainsIndexes = mongoTemplate.indexOps(CUSTOM_DOMAINS).getIndexInfo();
-        assertThat(indexNames(customDomainsIndexes)).contains("_id_", "host_1", "userId_1");
-        IndexInfo hostUniqueIndex = customDomainsIndexes.stream()
-                .filter(index -> "host_1".equals(index.getName()))
-                .findFirst().orElseThrow();
-        assertThat(hostUniqueIndex.isUnique()).isTrue();
+    List<IndexInfo> customDomainsIndexes = mongoTemplate.indexOps(CUSTOM_DOMAINS).getIndexInfo();
+    assertThat(indexNames(customDomainsIndexes)).contains("_id_", "host_1", "userId_1");
+    IndexInfo hostUniqueIndex =
+        customDomainsIndexes.stream()
+            .filter(index -> "host_1".equals(index.getName()))
+            .findFirst()
+            .orElseThrow();
+    assertThat(hostUniqueIndex.isUnique()).isTrue();
 
-        List<String> clickDailyIndexes = indexNames(mongoTemplate.indexOps(CLICK_DAILY).getIndexInfo());
-        assertThat(clickDailyIndexes).contains("_id_", "shortCode_1_day_1");
-        IndexInfo dailyUniqueIndex = mongoTemplate.indexOps(CLICK_DAILY).getIndexInfo().stream()
-                .filter(index -> "shortCode_1_day_1".equals(index.getName()))
-                .findFirst().orElseThrow();
-        assertThat(dailyUniqueIndex.isUnique()).isTrue();
-    }
+    List<String> clickDailyIndexes = indexNames(mongoTemplate.indexOps(CLICK_DAILY).getIndexInfo());
+    assertThat(clickDailyIndexes).contains("_id_", "shortCode_1_day_1");
+    IndexInfo dailyUniqueIndex =
+        mongoTemplate.indexOps(CLICK_DAILY).getIndexInfo().stream()
+            .filter(index -> "shortCode_1_day_1".equals(index.getName()))
+            .findFirst()
+            .orElseThrow();
+    assertThat(dailyUniqueIndex.isUnique()).isTrue();
+  }
 
-    @Test
-    @DisplayName("Re-running migrations is idempotent and never duplicates history")
-    void repeatedApplicationIsIdempotent() {
-        mongoTemplate.getDb().drop();
-        migrator.migrate();
-        migrator.migrate();
+  @Test
+  @DisplayName("Re-running migrations is idempotent and never duplicates history")
+  void repeatedApplicationIsIdempotent() {
+    mongoTemplate.getDb().drop();
+    migrator.migrate();
+    migrator.migrate();
 
-        List<Document> history = mongoTemplate.findAll(Document.class, MongoSchemaMigrator.HISTORY_COLLECTION);
-        assertThat(history).hasSize(9);
-        assertThat(indexNames(mongoTemplate.indexOps(SHORT_URLS).getIndexInfo()))
-                .contains("userId_1", "expiresAt_1");
-        assertThat(indexNames(mongoTemplate.indexOps(CLICK_EVENTS).getIndexInfo()))
-                .contains("shortCode_1_timestamp_1", "timestamp_1");
-        assertThat(indexNames(mongoTemplate.indexOps(CUSTOM_DOMAINS).getIndexInfo()))
-                .contains("host_1", "userId_1");
-        assertThat(indexNames(mongoTemplate.indexOps(CLICK_DAILY).getIndexInfo()))
-                .contains("shortCode_1_day_1");
-    }
+    List<Document> history =
+        mongoTemplate.findAll(Document.class, MongoSchemaMigrator.HISTORY_COLLECTION);
+    assertThat(history).hasSize(9);
+    assertThat(indexNames(mongoTemplate.indexOps(SHORT_URLS).getIndexInfo()))
+        .contains("userId_1", "expiresAt_1");
+    assertThat(indexNames(mongoTemplate.indexOps(CLICK_EVENTS).getIndexInfo()))
+        .contains("shortCode_1_timestamp_1", "timestamp_1");
+    assertThat(indexNames(mongoTemplate.indexOps(CUSTOM_DOMAINS).getIndexInfo()))
+        .contains("host_1", "userId_1");
+    assertThat(indexNames(mongoTemplate.indexOps(CLICK_DAILY).getIndexInfo()))
+        .contains("shortCode_1_day_1");
+  }
 
-    private static List<String> indexNames(List<IndexInfo> indexInfo) {
-        return indexInfo.stream().map(IndexInfo::getName).collect(Collectors.toList());
-    }
+  private static List<String> indexNames(List<IndexInfo> indexInfo) {
+    return indexInfo.stream().map(IndexInfo::getName).collect(Collectors.toList());
+  }
 }

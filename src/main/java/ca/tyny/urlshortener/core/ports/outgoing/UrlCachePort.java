@@ -5,9 +5,9 @@ import ca.tyny.urlshortener.core.model.CachedUrlValue;
 
 public interface UrlCachePort {
 
-    CacheLookup lookup(String id);
+  CacheLookup lookup(String id);
 
-    void put(String id, CachedUrlValue value);
+  void put(String id, CachedUrlValue value);
 
-    void evict(String id);
+  void evict(String id);
 }

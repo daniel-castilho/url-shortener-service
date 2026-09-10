@@ -1,11 +1,16 @@
 package ca.tyny.urlshortener.infra.adapter.input.rest;
 
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import ca.tyny.urlshortener.config.WithMockSecurity;
+import ca.tyny.urlshortener.core.service.UserService;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.LoginRequest;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.RefreshTokenRequest;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.RegisterRequest;
-import ca.tyny.urlshortener.core.service.UserService;
-import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,99 +18,96 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import tools.jackson.databind.ObjectMapper;
 
 @WebMvcTest(AuthController.class)
 @WithMockSecurity
 @DisplayName("AuthController Tests")
 class AuthControllerTest {
 
-    @Autowired
-    private MockMvc mockMvc;
+  @Autowired private MockMvc mockMvc;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+  @Autowired private ObjectMapper objectMapper;
 
-    @MockitoBean
-    private ca.tyny.urlshortener.infra.security.JwtTokenProvider jwtTokenProvider;
+  @MockitoBean private ca.tyny.urlshortener.infra.security.JwtTokenProvider jwtTokenProvider;
 
-    @MockitoBean
-    private UserService userService;
+  @MockitoBean private UserService userService;
 
-    @Test
-    @DisplayName("Should register user successfully")
-    void shouldRegisterUser() throws Exception {
-        // Given
-        RegisterRequest request = new RegisterRequest("Test User", "test@example.com", "password123");
-        UserService.AuthResult result = new UserService.AuthResult(
-                "token", "refresh-token", "id", "test@example.com", "Test User");
+  @Test
+  @DisplayName("Should register user successfully")
+  void shouldRegisterUser() throws Exception {
+    // Given
+    RegisterRequest request = new RegisterRequest("Test User", "test@example.com", "password123");
+    UserService.AuthResult result =
+        new UserService.AuthResult("token", "refresh-token", "id", "test@example.com", "Test User");
 
-        when(userService.register(eq("test@example.com"), eq("Test User"), eq("password123")))
-                .thenReturn(result);
+    when(userService.register(eq("test@example.com"), eq("Test User"), eq("password123")))
+        .thenReturn(result);
 
-        // When/Then
-        mockMvc.perform(post("/api/v1/auth/register")
+    // When/Then
+    mockMvc
+        .perform(
+            post("/api/v1/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.token").value("token"))
-                .andExpect(jsonPath("$.email").value("test@example.com"));
-    }
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.token").value("token"))
+        .andExpect(jsonPath("$.email").value("test@example.com"));
+  }
 
-    @Test
-    @DisplayName("Should login user successfully")
-    void shouldLoginUser() throws Exception {
-        // Given
-        LoginRequest request = new LoginRequest("test@example.com", "password123");
-        UserService.AuthResult result = new UserService.AuthResult(
-                "token", "refresh-token", "id", "test@example.com", "Test User");
+  @Test
+  @DisplayName("Should login user successfully")
+  void shouldLoginUser() throws Exception {
+    // Given
+    LoginRequest request = new LoginRequest("test@example.com", "password123");
+    UserService.AuthResult result =
+        new UserService.AuthResult("token", "refresh-token", "id", "test@example.com", "Test User");
 
-        when(userService.login(eq("test@example.com"), eq("password123")))
-                .thenReturn(result);
+    when(userService.login(eq("test@example.com"), eq("password123"))).thenReturn(result);
 
-        // When/Then
-        mockMvc.perform(post("/api/v1/auth/login")
+    // When/Then
+    mockMvc
+        .perform(
+            post("/api/v1/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.token").value("token"));
-    }
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.token").value("token"));
+  }
 
-    @Test
-    @DisplayName("Should validate register request")
-    void shouldValidateRegisterRequest() throws Exception {
-        // Given - Invalid request (empty fields)
-        RegisterRequest request = new RegisterRequest("", "invalid-email", "123");
+  @Test
+  @DisplayName("Should validate register request")
+  void shouldValidateRegisterRequest() throws Exception {
+    // Given - Invalid request (empty fields)
+    RegisterRequest request = new RegisterRequest("", "invalid-email", "123");
 
-        // When/Then
-        mockMvc.perform(post("/api/v1/auth/register")
+    // When/Then
+    mockMvc
+        .perform(
+            post("/api/v1/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest());
-    }
+        .andExpect(status().isBadRequest());
+  }
 
-    @Test
-    @DisplayName("Should refresh token successfully")
-    void shouldRefreshToken() throws Exception {
-        // Given
-        RefreshTokenRequest request = new RefreshTokenRequest("valid-refresh-token");
-        UserService.AuthResult result = new UserService.AuthResult(
-                "new-token", "valid-refresh-token", "id", "test@example.com", "Test User");
+  @Test
+  @DisplayName("Should refresh token successfully")
+  void shouldRefreshToken() throws Exception {
+    // Given
+    RefreshTokenRequest request = new RefreshTokenRequest("valid-refresh-token");
+    UserService.AuthResult result =
+        new UserService.AuthResult(
+            "new-token", "valid-refresh-token", "id", "test@example.com", "Test User");
 
-        when(userService.refreshToken(eq("valid-refresh-token")))
-                .thenReturn(result);
+    when(userService.refreshToken(eq("valid-refresh-token"))).thenReturn(result);
 
-        // When/Then
-        mockMvc.perform(post("/api/v1/auth/refresh")
+    // When/Then
+    mockMvc
+        .perform(
+            post("/api/v1/auth/refresh")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.token").value("new-token"));
-    }
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.token").value("new-token"));
+  }
 }

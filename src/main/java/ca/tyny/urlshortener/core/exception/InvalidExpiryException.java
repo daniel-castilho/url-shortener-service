@@ -5,7 +5,7 @@ package ca.tyny.urlshortener.core.exception;
  */
 public class InvalidExpiryException extends RuntimeException {
 
-    public InvalidExpiryException(String message) {
-        super(message);
-    }
+  public InvalidExpiryException(String message) {
+    super(message);
+  }
 }

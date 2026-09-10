@@ -9,11 +9,11 @@ import java.util.List;
  */
 public record PageResult<T>(List<T> items, Cursor nextCursor, boolean hasMore) {
 
-    public static <T> PageResult<T> empty() {
-        return new PageResult<>(List.of(), null, false);
-    }
+  public static <T> PageResult<T> empty() {
+    return new PageResult<>(List.of(), null, false);
+  }
 
-    public static <T> PageResult<T> of(List<T> items, Cursor nextCursor) {
-        return new PageResult<>(items, nextCursor, nextCursor != null);
-    }
+  public static <T> PageResult<T> of(List<T> items, Cursor nextCursor) {
+    return new PageResult<>(items, nextCursor, nextCursor != null);
+  }
 }

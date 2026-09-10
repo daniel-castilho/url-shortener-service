@@ -8,25 +8,25 @@ import org.springframework.data.mongodb.core.index.IndexOperations;
 import org.springframework.stereotype.Component;
 
 /**
- * Ensures the {@code userId} index on {@code short_urls} (used for per-user listing and
- * quota aggregation). Uses {@code ensureIndex}, which is idempotent.
+ * Ensures the {@code userId} index on {@code short_urls} (used for per-user listing and quota
+ * aggregation). Uses {@code ensureIndex}, which is idempotent.
  */
 @Component
 public class V3EnsureUserIdIndex implements SchemaMigration {
 
-    @Override
-    public int version() {
-        return 3;
-    }
+  @Override
+  public int version() {
+    return 3;
+  }
 
-    @Override
-    public String description() {
-        return "Ensure userId index on short_urls";
-    }
+  @Override
+  public String description() {
+    return "Ensure userId index on short_urls";
+  }
 
-    @Override
-    public void apply(MongoTemplate mongoTemplate) {
-        IndexOperations indexOps = mongoTemplate.indexOps(MongoCollections.SHORT_URLS);
-        indexOps.ensureIndex(new Index("userId", Sort.Direction.ASC));
-    }
+  @Override
+  public void apply(MongoTemplate mongoTemplate) {
+    IndexOperations indexOps = mongoTemplate.indexOps(MongoCollections.SHORT_URLS);
+    indexOps.ensureIndex(new Index("userId", Sort.Direction.ASC));
+  }
 }

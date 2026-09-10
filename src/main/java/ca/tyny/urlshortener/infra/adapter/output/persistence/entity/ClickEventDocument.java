@@ -1,131 +1,133 @@
 package ca.tyny.urlshortener.infra.adapter.output.persistence.entity;
 
 import ca.tyny.urlshortener.infra.adapter.output.persistence.config.MongoCollections;
+import java.time.Instant;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
-
-import java.time.Instant;
 
 /**
  * Persistence document for a single click event.
  *
- * Stored as provenance for analytics aggregates; the per-link running total
- * lives on {@code short_urls.clickCount} and is maintained atomically ($inc).
- * Timestamps are UTC instants; the domain ClickEvent keeps LocalDateTime and
- * the conversion happens at the adapter boundary.
+ * <p>Stored as provenance for analytics aggregates; the per-link running total lives on {@code
+ * short_urls.clickCount} and is maintained atomically ($inc). Timestamps are UTC instants; the
+ * domain ClickEvent keeps LocalDateTime and the conversion happens at the adapter boundary.
  */
 @Document(collection = MongoCollections.CLICK_EVENTS)
 public class ClickEventDocument {
 
-    @Id
-    private String id;
+  @Id private String id;
 
-    /** The resolved short URL code (reference, not a nested document). */
-    private String shortCode;
+  /** The resolved short URL code (reference, not a nested document). */
+  private String shortCode;
 
-    /** When the click occurred (producer-side, UTC). */
-    private Instant timestamp;
+  /** When the click occurred (producer-side, UTC). */
+  private Instant timestamp;
 
-    private String userAgent;
+  private String userAgent;
 
-    private String ip;
+  private String ip;
 
-    private String referrer;
+  private String referrer;
 
-    private String device;
+  private String device;
 
-    private String country;
+  private String country;
 
-    /** When the worker actually persisted the event (UTC). */
-    private Instant consumedAt;
+  /** When the worker actually persisted the event (UTC). */
+  private Instant consumedAt;
 
-    public ClickEventDocument() {
-    }
+  public ClickEventDocument() {}
 
-    public ClickEventDocument(String shortCode, Instant timestamp, String userAgent, String ip) {
-        this(shortCode, timestamp, userAgent, ip, null, null, null);
-    }
+  public ClickEventDocument(String shortCode, Instant timestamp, String userAgent, String ip) {
+    this(shortCode, timestamp, userAgent, ip, null, null, null);
+  }
 
-    public ClickEventDocument(String shortCode, Instant timestamp, String userAgent, String ip,
-            String referrer, String device, String country) {
-        this.shortCode = shortCode;
-        this.timestamp = timestamp;
-        this.userAgent = userAgent;
-        this.ip = ip;
-        this.referrer = referrer;
-        this.device = device;
-        this.country = country;
-    }
+  public ClickEventDocument(
+      String shortCode,
+      Instant timestamp,
+      String userAgent,
+      String ip,
+      String referrer,
+      String device,
+      String country) {
+    this.shortCode = shortCode;
+    this.timestamp = timestamp;
+    this.userAgent = userAgent;
+    this.ip = ip;
+    this.referrer = referrer;
+    this.device = device;
+    this.country = country;
+  }
 
-    public String getId() {
-        return id;
-    }
+  public String getId() {
+    return id;
+  }
 
-    public void setId(String id) {
-        this.id = id;
-    }
+  public void setId(String id) {
+    this.id = id;
+  }
 
-    public String getShortCode() {
-        return shortCode;
-    }
+  public String getShortCode() {
+    return shortCode;
+  }
 
-    public void setShortCode(String shortCode) {
-        this.shortCode = shortCode;
-    }
+  public void setShortCode(String shortCode) {
+    this.shortCode = shortCode;
+  }
 
-    public Instant getTimestamp() {
-        return timestamp;
-    }
+  public Instant getTimestamp() {
+    return timestamp;
+  }
 
-    public void setTimestamp(Instant timestamp) {
-        this.timestamp = timestamp;
-    }
+  public void setTimestamp(Instant timestamp) {
+    this.timestamp = timestamp;
+  }
 
-    public String getUserAgent() {
-        return userAgent;
-    }
+  public String getUserAgent() {
+    return userAgent;
+  }
 
-    public void setUserAgent(String userAgent) {
-        this.userAgent = userAgent;
-    }
+  public void setUserAgent(String userAgent) {
+    this.userAgent = userAgent;
+  }
 
-    public String getIp() {
-        return ip;
-    }
+  public String getIp() {
+    return ip;
+  }
 
-    public void setIp(String ip) {
-        this.ip = ip;
-    }
+  public void setIp(String ip) {
+    this.ip = ip;
+  }
 
-    public String getReferrer() {
-        return referrer;
-    }
+  public String getReferrer() {
+    return referrer;
+  }
 
-    public void setReferrer(String referrer) {
-        this.referrer = referrer;
-    }
+  public void setReferrer(String referrer) {
+    this.referrer = referrer;
+  }
 
-    public String getDevice() {
-        return device;
-    }
+  public String getDevice() {
+    return device;
+  }
 
-    public void setDevice(String device) {
-        this.device = device;
-    }
+  public void setDevice(String device) {
+    this.device = device;
+  }
 
-    public String getCountry() {
-        return country;
-    }
+  public String getCountry() {
+    return country;
+  }
 
-    public void setCountry(String country) {
-        this.country = country;
-    }
+  public void setCountry(String country) {
+    this.country = country;
+  }
 
-    public Instant getConsumedAt() {
-        return consumedAt;
-    }
+  public Instant getConsumedAt() {
+    return consumedAt;
+  }
 
-    public void setConsumedAt(Instant consumedAt) {
-        this.consumedAt = consumedAt;
-    }
+  public void setConsumedAt(Instant consumedAt) {
+    this.consumedAt = consumedAt;
+  }
 }

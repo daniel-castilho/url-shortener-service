@@ -7,102 +7,107 @@ import ca.tyny.urlshortener.core.exception.UrlNotFoundException;
 import ca.tyny.urlshortener.core.model.ShortUrl;
 import ca.tyny.urlshortener.core.model.UtmParams;
 import ca.tyny.urlshortener.core.ports.incoming.UpdateLinkUseCase;
+import ca.tyny.urlshortener.core.ports.outgoing.CustomDomainRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.LinkMutationPort;
 import ca.tyny.urlshortener.core.ports.outgoing.LinkQueryPort;
-import ca.tyny.urlshortener.core.ports.outgoing.CustomDomainRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
 import ca.tyny.urlshortener.core.validation.DomainBindingValidator;
 import ca.tyny.urlshortener.core.validation.UrlValidator;
-
 import java.time.Instant;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class UpdateLinkUseCaseImpl implements UpdateLinkUseCase {
 
-    private final LinkQueryPort linkQueryPort;
-    private final LinkMutationPort linkMutationPort;
-    private final CustomDomainRepositoryPort customDomainRepository;
-    private final UrlCachePort urlCachePort;
-    private final UrlValidator urlValidator;
-    private final long maxTtlSeconds;
+  private final LinkQueryPort linkQueryPort;
+  private final LinkMutationPort linkMutationPort;
+  private final CustomDomainRepositoryPort customDomainRepository;
+  private final UrlCachePort urlCachePort;
+  private final UrlValidator urlValidator;
+  private final long maxTtlSeconds;
 
-    public UpdateLinkUseCaseImpl(LinkQueryPort linkQueryPort,
-                                 LinkMutationPort linkMutationPort,
-                                 UrlCachePort urlCachePort,
-                                 UrlValidator urlValidator,
-                                 long maxTtlSeconds) {
-        this(linkQueryPort, linkMutationPort, urlCachePort, urlValidator, null, maxTtlSeconds);
+  public UpdateLinkUseCaseImpl(
+      LinkQueryPort linkQueryPort,
+      LinkMutationPort linkMutationPort,
+      UrlCachePort urlCachePort,
+      UrlValidator urlValidator,
+      long maxTtlSeconds) {
+    this(linkQueryPort, linkMutationPort, urlCachePort, urlValidator, null, maxTtlSeconds);
+  }
+
+  public UpdateLinkUseCaseImpl(
+      LinkQueryPort linkQueryPort,
+      LinkMutationPort linkMutationPort,
+      UrlCachePort urlCachePort,
+      UrlValidator urlValidator,
+      CustomDomainRepositoryPort customDomainRepository,
+      long maxTtlSeconds) {
+    this.linkQueryPort = linkQueryPort;
+    this.linkMutationPort = linkMutationPort;
+    this.urlCachePort = urlCachePort;
+    this.urlValidator = urlValidator;
+    this.customDomainRepository = customDomainRepository;
+    this.maxTtlSeconds = maxTtlSeconds;
+  }
+
+  @Override
+  public ShortUrl update(String userId, String id, UpdateLinkCommand command)
+      throws UrlNotFoundException,
+          ForbiddenException,
+          IllegalArgumentException,
+          InvalidExpiryException {
+
+    ShortUrl shortUrl = linkQueryPort.findById(id).orElseThrow(() -> new UrlNotFoundException(id));
+
+    if (!shortUrl.userId().equals(userId)) {
+      throw new ForbiddenException("User does not own this link");
     }
 
-    public UpdateLinkUseCaseImpl(LinkQueryPort linkQueryPort,
-                                 LinkMutationPort linkMutationPort,
-                                 UrlCachePort urlCachePort,
-                                 UrlValidator urlValidator,
-                                 CustomDomainRepositoryPort customDomainRepository,
-                                 long maxTtlSeconds) {
-        this.linkQueryPort = linkQueryPort;
-        this.linkMutationPort = linkMutationPort;
-        this.urlCachePort = urlCachePort;
-        this.urlValidator = urlValidator;
-        this.customDomainRepository = customDomainRepository;
-        this.maxTtlSeconds = maxTtlSeconds;
+    if (shortUrl.deletedAt() != null) {
+      throw new IllegalArgumentException("Cannot update an archived link");
     }
 
-    @Override
-    public ShortUrl update(String userId, String id, UpdateLinkCommand command)
-            throws UrlNotFoundException, ForbiddenException, IllegalArgumentException, InvalidExpiryException {
-
-        ShortUrl shortUrl = linkQueryPort.findById(id)
-                .orElseThrow(() -> new UrlNotFoundException(id));
-
-        if (!shortUrl.userId().equals(userId)) {
-            throw new ForbiddenException("User does not own this link");
-        }
-
-        if (shortUrl.deletedAt() != null) {
-            throw new IllegalArgumentException("Cannot update an archived link");
-        }
-
-        if (command.originalUrl() != null) {
-            urlValidator.validate(command.originalUrl());
-        }
-
-        List<String> tags = command.tags();
-        if (tags != null) {
-            if (tags.size() > 20) {
-                throw new IllegalArgumentException("Maximum 20 tags allowed");
-            }
-            tags = tags.stream()
-                    .map(String::toLowerCase)
-                    .distinct()
-                    .collect(Collectors.toList());
-            for (String tag : tags) {
-                if (tag.length() < 1 || tag.length() > 50 || !tag.matches("[a-z0-9_-]+")) {
-                    throw new IllegalArgumentException("Tags must be 1-50 chars, alphanumeric/underscore/hyphen only");
-                }
-            }
-        }
-
-        String newTitle = command.title() != null ? command.title() : shortUrl.title();
-
-        Instant expiresAt = command.expiresAtSupplied() ? command.expiresAt() : shortUrl.expiresAt();
-        UtmParams utm = command.utmSupplied() ? command.utm() : shortUrl.utm();
-
-        String newDomain = command.domainSupplied()
-                ? DomainBindingValidator.bindableDomain(customDomainRepository, userId, command.domain())
-                : shortUrl.domain();
-
-        ShortUrl updated = shortUrl
-                .withOriginalUrl(command.originalUrl() != null ? command.originalUrl() : shortUrl.originalUrl())
-                .withTitle(newTitle)
-                .withTags(tags != null ? tags : shortUrl.tags())
-                .withUtm(utm)
-                .withExpiresAt(expiresAt)
-                .withDomain(newDomain);
-
-        linkMutationPort.update(updated);
-        urlCachePort.evict(id);
-        return updated;
+    if (command.originalUrl() != null) {
+      urlValidator.validate(command.originalUrl());
     }
+
+    List<String> tags = command.tags();
+    if (tags != null) {
+      if (tags.size() > 20) {
+        throw new IllegalArgumentException("Maximum 20 tags allowed");
+      }
+      tags = tags.stream().map(String::toLowerCase).distinct().collect(Collectors.toList());
+      for (String tag : tags) {
+        if (tag.length() < 1 || tag.length() > 50 || !tag.matches("[a-z0-9_-]+")) {
+          throw new IllegalArgumentException(
+              "Tags must be 1-50 chars, alphanumeric/underscore/hyphen only");
+        }
+      }
+    }
+
+    String newTitle = command.title() != null ? command.title() : shortUrl.title();
+
+    Instant expiresAt = command.expiresAtSupplied() ? command.expiresAt() : shortUrl.expiresAt();
+    UtmParams utm = command.utmSupplied() ? command.utm() : shortUrl.utm();
+
+    String newDomain =
+        command.domainSupplied()
+            ? DomainBindingValidator.bindableDomain(
+                customDomainRepository, userId, command.domain())
+            : shortUrl.domain();
+
+    ShortUrl updated =
+        shortUrl
+            .withOriginalUrl(
+                command.originalUrl() != null ? command.originalUrl() : shortUrl.originalUrl())
+            .withTitle(newTitle)
+            .withTags(tags != null ? tags : shortUrl.tags())
+            .withUtm(utm)
+            .withExpiresAt(expiresAt)
+            .withDomain(newDomain);
+
+    linkMutationPort.update(updated);
+    urlCachePort.evict(id);
+    return updated;
+  }
 }

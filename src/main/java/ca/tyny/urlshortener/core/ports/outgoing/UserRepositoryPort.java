@@ -1,62 +1,60 @@
 package ca.tyny.urlshortener.core.ports.outgoing;
 
 import ca.tyny.urlshortener.core.model.User;
-
 import java.util.Optional;
 
 /**
- * Port for User repository operations.
- * This interface defines the contract for user persistence.
+ * Port for User repository operations. This interface defines the contract for user persistence.
  */
 public interface UserRepositoryPort {
 
-    /**
-     * Save or update a user
-     * 
-     * @param user the user to save
-     * @return the saved user
-     */
-    User save(User user);
+  /**
+   * Save or update a user
+   *
+   * @param user the user to save
+   * @return the saved user
+   */
+  User save(User user);
 
-    /**
-     * Find a user by ID
-     * 
-     * @param id the user ID
-     * @return Optional containing the user if found
-     */
-    Optional<User> findById(String id);
+  /**
+   * Find a user by ID
+   *
+   * @param id the user ID
+   * @return Optional containing the user if found
+   */
+  Optional<User> findById(String id);
 
-    /**
-     * Find a user by email
-     * 
-     * @param email the user email
-     * @return Optional containing the user if found
-     */
-    Optional<User> findByEmail(String email);
+  /**
+   * Find a user by email
+   *
+   * @param email the user email
+   * @return Optional containing the user if found
+   */
+  Optional<User> findByEmail(String email);
 
-    /**
-     * Check if a user exists by email
-     * 
-     * @param email the email to check
-     * @return true if user exists, false otherwise
-     */
-    boolean existsByEmail(String email);
+  /**
+   * Check if a user exists by email
+   *
+   * @param email the email to check
+   * @return true if user exists, false otherwise
+   */
+  boolean existsByEmail(String email);
 
-    /**
-     * Delete a user by ID
-     * 
-     * @param id the user ID
-     */
-    void deleteById(String id);
+  /**
+   * Delete a user by ID
+   *
+   * @param id the user ID
+   */
+  void deleteById(String id);
 
-    /**
-     * Atomically increments the vanity-URL quota counters for a user.
-     *
-     * The implementation must use a server-side atomic increment (e.g. MongoDB
-     * {@code $inc}) on both the monthly and total counters — never
-     * read-modify-write, which loses updates under concurrency.
-     *
-     * @param userId the user ID
-     */
-    void incrementVanityUsage(String userId);
+  /**
+   * Atomically increments the vanity-URL quota counters for a user.
+   *
+   * <p>The implementation must use a server-side atomic increment (e.g. MongoDB {@code $inc}) on
+   * both the monthly and total counters — never read-modify-write, which loses updates under
+   * concurrency.
+   *
+   * @param userId the user ID
+   */
+  void incrementVanityUsage(String userId);
 }

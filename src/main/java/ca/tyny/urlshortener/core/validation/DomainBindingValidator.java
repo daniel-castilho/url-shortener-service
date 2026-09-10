@@ -16,45 +16,47 @@ import ca.tyny.urlshortener.core.ports.outgoing.CustomDomainRepositoryPort;
  */
 public final class DomainBindingValidator {
 
-    private DomainBindingValidator() {
-        throw new AssertionError("Utility class should not be instantiated");
+  private DomainBindingValidator() {
+    throw new AssertionError("Utility class should not be instantiated");
+  }
+
+  /**
+   * Resolves the normalized domain a caller may bind a link to, or {@code null} to stay
+   * default-host bound.
+   *
+   * @param requestedDomain raw requested domain; blank/null means "default host"
+   * @return the normalized, verified host the caller owns
+   * @throws IllegalArgumentException when authentication is required but missing
+   * @throws InvalidDomainException when the host is not claimed or is malformed
+   * @throws ForbiddenException when the domain belongs to another user
+   * @throws DomainNotVerifiedException when the domain is not verified/active
+   */
+  public static String bindableDomain(
+      CustomDomainRepositoryPort repository, String userId, String requestedDomain) {
+    if (requestedDomain == null || requestedDomain.isBlank()) {
+      return null;
+    }
+    if (userId == null) {
+      throw new IllegalArgumentException("Authentication required for custom domains");
     }
 
-    /**
-     * Resolves the normalized domain a caller may bind a link to, or {@code null} to stay
-     * default-host bound.
-     *
-     * @param requestedDomain raw requested domain; blank/null means "default host"
-     * @return the normalized, verified host the caller owns
-     * @throws IllegalArgumentException when authentication is required but missing
-     * @throws InvalidDomainException when the host is not claimed or is malformed
-     * @throws ForbiddenException when the domain belongs to another user
-     * @throws DomainNotVerifiedException when the domain is not verified/active
-     */
-    public static String bindableDomain(CustomDomainRepositoryPort repository,
-            String userId, String requestedDomain) {
-        if (requestedDomain == null || requestedDomain.isBlank()) {
-            return null;
-        }
-        if (userId == null) {
-            throw new IllegalArgumentException("Authentication required for custom domains");
-        }
-
-        String normalized = Hostnames.normalize(requestedDomain);
-        if (normalized == null || normalized.isBlank()) {
-            throw new InvalidDomainException("Invalid domain: " + requestedDomain);
-        }
-        Hostnames.validate(normalized);
-
-        CustomDomain domain = repository.findByHost(normalized)
-                .orElseThrow(() -> new InvalidDomainException("Domain is not claimed: " + normalized));
-
-        if (!domain.userId().equals(userId)) {
-            throw new ForbiddenException("You do not own the custom domain: " + normalized);
-        }
-        if (domain.status() != DomainStatus.ACTIVE) {
-            throw new DomainNotVerifiedException(normalized);
-        }
-        return normalized;
+    String normalized = Hostnames.normalize(requestedDomain);
+    if (normalized == null || normalized.isBlank()) {
+      throw new InvalidDomainException("Invalid domain: " + requestedDomain);
     }
+    Hostnames.validate(normalized);
+
+    CustomDomain domain =
+        repository
+            .findByHost(normalized)
+            .orElseThrow(() -> new InvalidDomainException("Domain is not claimed: " + normalized));
+
+    if (!domain.userId().equals(userId)) {
+      throw new ForbiddenException("You do not own the custom domain: " + normalized);
+    }
+    if (domain.status() != DomainStatus.ACTIVE) {
+      throw new DomainNotVerifiedException(normalized);
+    }
+    return normalized;
+  }
 }

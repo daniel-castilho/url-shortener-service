@@ -11,12 +11,12 @@ import java.util.List;
 @FunctionalInterface
 public interface DnsTxtResolver {
 
-    /**
-     * Returns the TXT record values of {@code host}.
-     *
-     * @param host lower-case host to look up
-     * @return the raw TXT values (quotes stripped); empty when the record is absent or the
-     *         lookup fails (missing name, timeout, etc.)
-     */
-    List<String> resolveTxt(String host);
+  /**
+   * Returns the TXT record values of {@code host}.
+   *
+   * @param host lower-case host to look up
+   * @return the raw TXT values (quotes stripped); empty when the record is absent or the lookup
+   *     fails (missing name, timeout, etc.)
+   */
+  List<String> resolveTxt(String host);
 }

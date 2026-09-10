@@ -1,31 +1,19 @@
 package ca.tyny.urlshortener.core.model;
 
-/**
- * Status of a user's subscription.
- */
+/** Status of a user's subscription. */
 public enum SubscriptionStatus {
-    /**
-     * Subscription is active and in good standing
-     */
-    ACTIVE,
+  /** Subscription is active and in good standing */
+  ACTIVE,
 
-    /**
-     * User is in trial period
-     */
-    TRIAL,
+  /** User is in trial period */
+  TRIAL,
 
-    /**
-     * Subscription has been canceled but still active until end of billing period
-     */
-    CANCELED,
+  /** Subscription has been canceled but still active until end of billing period */
+  CANCELED,
 
-    /**
-     * Subscription has expired
-     */
-    EXPIRED,
+  /** Subscription has expired */
+  EXPIRED,
 
-    /**
-     * Payment is past due
-     */
-    PAST_DUE
+  /** Payment is past due */
+  PAST_DUE
 }

@@ -5,15 +5,14 @@ import java.util.List;
 import java.util.Map;
 
 public record ClickAnalyticsResponse(
-        String id,
-        String unit,
-        Instant from,
-        Instant to,
-        long totalClicks,
-        List<ClickSeriesPoint> series,
-        Map<String, Map<String, Long>> breakdown,
-        Map<String, Long> uniquePerBucket) {
+    String id,
+    String unit,
+    Instant from,
+    Instant to,
+    long totalClicks,
+    List<ClickSeriesPoint> series,
+    Map<String, Map<String, Long>> breakdown,
+    Map<String, Long> uniquePerBucket) {
 
-    public record ClickSeriesPoint(Instant time, long clicks) {
-    }
+  public record ClickSeriesPoint(Instant time, long clicks) {}
 }

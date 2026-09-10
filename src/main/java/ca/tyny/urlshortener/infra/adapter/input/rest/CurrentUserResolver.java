@@ -16,20 +16,21 @@ import org.springframework.stereotype.Component;
 @Component
 public class CurrentUserResolver {
 
-    private final UserRepositoryPort userRepository;
+  private final UserRepositoryPort userRepository;
 
-    public CurrentUserResolver(UserRepositoryPort userRepository) {
-        this.userRepository = userRepository;
-    }
+  public CurrentUserResolver(UserRepositoryPort userRepository) {
+    this.userRepository = userRepository;
+  }
 
-    public String resolveUserId() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
-            throw new IllegalStateException("Unauthenticated");
-        }
-        String email = auth.getName();
-        return userRepository.findByEmail(email)
-                .map(User::id)
-                .orElseThrow(() -> new IllegalStateException("User not found: " + email));
+  public String resolveUserId() {
+    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+    if (auth == null || !auth.isAuthenticated() || auth instanceof AnonymousAuthenticationToken) {
+      throw new IllegalStateException("Unauthenticated");
     }
+    String email = auth.getName();
+    return userRepository
+        .findByEmail(email)
+        .map(User::id)
+        .orElseThrow(() -> new IllegalStateException("User not found: " + email));
+  }
 }

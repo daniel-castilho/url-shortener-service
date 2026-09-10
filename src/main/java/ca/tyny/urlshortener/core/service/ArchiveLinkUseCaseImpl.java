@@ -10,30 +10,30 @@ import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
 
 public class ArchiveLinkUseCaseImpl implements ArchiveLinkUseCase {
 
-    private final LinkQueryPort linkQueryPort;
-    private final LinkMutationPort linkMutationPort;
-    private final UrlCachePort urlCachePort;
+  private final LinkQueryPort linkQueryPort;
+  private final LinkMutationPort linkMutationPort;
+  private final UrlCachePort urlCachePort;
 
-    public ArchiveLinkUseCaseImpl(LinkQueryPort linkQueryPort, LinkMutationPort linkMutationPort, UrlCachePort urlCachePort) {
-        this.linkQueryPort = linkQueryPort;
-        this.linkMutationPort = linkMutationPort;
-        this.urlCachePort = urlCachePort;
+  public ArchiveLinkUseCaseImpl(
+      LinkQueryPort linkQueryPort, LinkMutationPort linkMutationPort, UrlCachePort urlCachePort) {
+    this.linkQueryPort = linkQueryPort;
+    this.linkMutationPort = linkMutationPort;
+    this.urlCachePort = urlCachePort;
+  }
+
+  @Override
+  public void archive(String userId, String id) throws UrlNotFoundException, ForbiddenException {
+    ShortUrl shortUrl = linkQueryPort.findById(id).orElseThrow(() -> new UrlNotFoundException(id));
+
+    if (!shortUrl.userId().equals(userId)) {
+      throw new ForbiddenException("User does not own this link");
     }
 
-    @Override
-    public void archive(String userId, String id) throws UrlNotFoundException, ForbiddenException {
-        ShortUrl shortUrl = linkQueryPort.findById(id)
-                .orElseThrow(() -> new UrlNotFoundException(id));
-
-        if (!shortUrl.userId().equals(userId)) {
-            throw new ForbiddenException("User does not own this link");
-        }
-
-        if (shortUrl.deletedAt() != null) {
-            return;
-        }
-
-        linkMutationPort.archive(id);
-        urlCachePort.evict(id);
+    if (shortUrl.deletedAt() != null) {
+      return;
     }
+
+    linkMutationPort.archive(id);
+    urlCachePort.evict(id);
+  }
 }

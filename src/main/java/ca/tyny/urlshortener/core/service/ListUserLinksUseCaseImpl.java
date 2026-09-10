@@ -9,16 +9,16 @@ import ca.tyny.urlshortener.core.ports.outgoing.LinkQueryPort;
 
 public class ListUserLinksUseCaseImpl implements ListUserLinksUseCase {
 
-    private final LinkQueryPort linkQueryPort;
+  private final LinkQueryPort linkQueryPort;
 
-    public ListUserLinksUseCaseImpl(LinkQueryPort linkQueryPort) {
-        this.linkQueryPort = linkQueryPort;
-    }
+  public ListUserLinksUseCaseImpl(LinkQueryPort linkQueryPort) {
+    this.linkQueryPort = linkQueryPort;
+  }
 
-    @Override
-    public PageResult<ShortUrl> list(String userId, PageRequest request) {
-        int limit = request.limit();
-        Cursor cursor = request.cursor();
-        return linkQueryPort.findByUserId(userId, limit, cursor);
-    }
+  @Override
+  public PageResult<ShortUrl> list(String userId, PageRequest request) {
+    int limit = request.limit();
+    Cursor cursor = request.cursor();
+    return linkQueryPort.findByUserId(userId, limit, cursor);
+  }
 }

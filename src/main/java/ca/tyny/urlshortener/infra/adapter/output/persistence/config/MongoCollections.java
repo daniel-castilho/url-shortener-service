@@ -1,43 +1,38 @@
 package ca.tyny.urlshortener.infra.adapter.output.persistence.config;
 
 /**
- * Centralizes MongoDB collection name constants.
- * Avoids magic strings scattered across the codebase (DRY principle).
+ * Centralizes MongoDB collection name constants. Avoids magic strings scattered across the codebase
+ * (DRY principle).
  *
- * Facilitates future refactoring if collection names need to change.
+ * <p>Facilitates future refactoring if collection names need to change.
  */
 public class MongoCollections {
 
-    /**
-     * Collection storing shortened URLs.
-     * Used for entity mapping via @Document(collection = MongoCollections.SHORT_URLS)
-     */
-    public static final String SHORT_URLS = "short_urls";
+  /**
+   * Collection storing shortened URLs. Used for entity mapping via @Document(collection =
+   * MongoCollections.SHORT_URLS)
+   */
+  public static final String SHORT_URLS = "short_urls";
 
-    /**
-     * Collection storing persisted click events.
-     * Written in batches by the analytics worker; queried by shortCode/timestamp.
-     */
-    public static final String CLICK_EVENTS = "click_events";
+  /**
+   * Collection storing persisted click events. Written in batches by the analytics worker; queried
+   * by shortCode/timestamp.
+   */
+  public static final String CLICK_EVENTS = "click_events";
 
-    /**
-     * Collection storing user accounts.
-     */
-    public static final String USERS = "users";
+  /** Collection storing user accounts. */
+  public static final String USERS = "users";
 
-    /**
-     * Collection storing claimed custom domains (host ownership + DNS verification state).
-     */
-    public static final String CUSTOM_DOMAINS = "custom_domains";
+  /** Collection storing claimed custom domains (host ownership + DNS verification state). */
+  public static final String CUSTOM_DOMAINS = "custom_domains";
 
-    /**
-     * Collection storing per-day click rollups (shortCode, day, clicks, breakdown),
-     * populated by the scheduled {@code click_daily} aggregation job.
-     */
-    public static final String CLICK_DAILY = "click_daily";
+  /**
+   * Collection storing per-day click rollups (shortCode, day, clicks, breakdown), populated by the
+   * scheduled {@code click_daily} aggregation job.
+   */
+  public static final String CLICK_DAILY = "click_daily";
 
-    private MongoCollections() {
-        throw new AssertionError("Utility class should not be instantiated");
-    }
+  private MongoCollections() {
+    throw new AssertionError("Utility class should not be instantiated");
+  }
 }
-
