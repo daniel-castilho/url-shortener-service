@@ -403,6 +403,35 @@ current. The hard rule lives in `AGENTS.md` (rule 10).
 
 ---
 
+## 14. Herde-de-Lições (promoted from lessons.md — Epic 1 story 1.2)
+
+Patterns that appeared ≥ 3 times in `docs/lessons.md` are promoted here as standing rules and marked
+`→ coding-standards` at the source. The lessons file keeps the narrative (the debugging story); this
+section keeps the rule.
+
+### 14.1 Degradation policy is explicit per dependency, never accidental (promoted 2026-09-10)
+
+Cross-cutting rule distilled from 4 lessons (rate limiter, tracing export, Redis L1/L2 cache,
+analytics queue). For every optional infrastructure dependency, state **fail-open vs fail-fast** in
+the adapter and assert it in an `*IT`:
+
+- **Fail-open** (protects availability of the hot path): rate limiter, analytics tracking, OTLP
+  export, cache L1/L2 — a Redis/collector outage degrades to DB lookup or dropped events, never
+  fails the redirect. Assert with a dead-endpoint IT (e.g. `TracingFailOpenIT`).
+- **Fail-fast / fail-closed** (protects correctness/security): DNS resolution in URL validation
+  (secure default), the DB circuit breaker, `ProdConfigValidator` at startup.
+- Never copy one policy onto the other; the difference is a documented decision, and mixing them
+  silently is how outages become unexplainable.
+
+### 14.2 Counters and shared numeric state mutate atomically at the storage seam (promoted 2026-09-10)
+
+Distilled from 3 occurrences (quota counters, click counters, double-counting metrics). Any counter
+update is a single `$inc` (or atomic Lua script) on the storage side — **never** read-modify-write
+(`set(get()+1)`) and **never** incremented in two layers (a business metric is recorded in exactly
+one place). Concurrency ITs are the spec: N racing requests must produce the exact count.
+
+---
+
 ## Quick pre-commit checklist
 
 - [ ] No wildcard imports added; 4-space indent; layout follows the layer

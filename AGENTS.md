@@ -348,6 +348,18 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     `PORT`/`MONGODB_URI`/`REDIS_*`) and a k6 v2 summary-export parser fix.
     — `resolved`
 
+22. **Epic 1 (Maintainable — Fundação & Padrões): gates de manutenibilidade** — Spotless
+    3.10.2 + google-java-format 1.36.1 bound at `validate` (check-only; `spotless:apply` para
+    normalizar — base já normalizada em commit `style:` dedicado, 220 arquivos, suíte unit 269/269
+    verde após o reformat); ArchUnit 1.5.0 (test scope) com `BoundaryRulesTest` codificando a Regra 1
+    no bytecode + `BoundaryRulesSelfTestTest` (gate que morde — mesma disciplina do
+    `check-boundaries.sh --self-test`); promoção das lições recorrentes (≥3 ocorrências) para
+    `coding-standards.md` §14 ("Herde-de-Lições": §14.1 fail-open/fail-fast deliberado, §14.2
+    contadores atômicos) com marcação `→ coding-standards` nas lições de origem; novo gate
+    `scripts/check-doc-sync.sh` (+ `--self-test`) validando status da matriz de dívida e promoções
+    `lessons ↔ coding-standards`, wired no CI (job `doc-sync`). Aprovação humana para as adições no
+    `pom.xml` (Regra 9) registrada na sessão de planejamento do épico. — `resolved`
+
 ## 🔍 Operational Discipline & Debugging Guidelines
 
 - **Investigate before trial-and-error:** when a compile or test fails, read the full stack trace and

@@ -50,15 +50,14 @@ non-obvious failure or design decision cost real debugging time.
   this — keep it that way; note `@DirtiesContext` strategies can also restart the context, at the cost
   of speed.)
 
-## Metrics / counters (double-counting, atomicity)
+## Metrics / counters (double-counting, atomicity) — **→ coding-standards §14.2** (promoted 2026-09-10) — **→ coding-standards §14.2** (promoted 2026-09‑10; see §14.1 for the metric-double-count side)
 
 - **Recording the same metric in two layers double-counts.** `urls.shortened.total` was incremented
   both in `UrlShortenerService` (via `MetricsPort`) and in `UrlController` (via `MetricsService`) —
   Micrometer dedupes by name, so one shorten produced **+2**. Record a business metric in exactly one
   place (prefer the controller, which already measures latency, or the service — not both).
 - **Counters must be atomic.** `QuotaService.incrementVanityUrlUsage` does `set(get()+1)`
-  (read-modify-write) and **loses increments under concurrency**. Any counter update must use an atomic
-  `$inc` on the storage side (see `data-model-decisions`).
+  (read-modify-write) and **loses increments under concurrency**. Any counter update must use an atomic  `$inc` on the storage side (see `data-model-decisions`).
 
 ## ID generation & codes (locked: random Base62)
 
@@ -81,11 +80,12 @@ non-obvious failure or design decision cost real debugging time.
   (`status_code: ERROR → keep`) in the OTel Collector (`deploy/otel/otel-collector-config.yml`).
 - **OTLP export must never block the hot path.** `OtlpSpanExporter`/bridge export is asynchronous and
   fail-open; assert it (`TracingFailOpenIT` points the endpoint at a dead port and still passes).
+  **→ coding-standards §14.1** (promoted 2026-09-10)
 - **Spring Boot owns the endpoints.** Use `management.otlp.tracing.endpoint` (not
   `management.otel.exporter.*`); a re-declared `CONSOLE` logback appender (already provided by
   `console-appender.xml`) halts startup — override `CONSOLE_LOG_PATTERN` instead.
 
-## Caching & the bloom filter
+## Caching & the bloom filter — degradation policy of the cache tier is **→ coding-standards §14.1** (promoted 2026-09-10)
 
 - **A "protection" layer that doesn't short-circuit the expensive call is just overhead.** The bloom
   filter correctly returned "probably not present" for unknown codes, but the service still queried
@@ -103,7 +103,7 @@ non-obvious failure or design decision cost real debugging time.
   validation, HTTPS-first policy and a private-IP blocklist.
 - **Fail-open vs. fail-fast must be deliberate.** The rate limiter and the DB circuit breaker use
   different policies (`rateLimiterCb` fail-open, `databaseCb` fail-fast). Document the intent; don't
-  copy one onto the other.
+  copy one onto the other. **→ coding-standards §14.1** (promoted 2026-09-10)
 - **URL validation belongs in a dedicated validator, not the value object.** The `Url` record should
   only do basic format checks; comprehensive SSRF protection (DNS resolution, IP blocklists, HTTPS
   enforcement) belongs in a `UrlValidator` adapter that can be configured and tested independently.

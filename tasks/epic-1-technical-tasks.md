@@ -12,11 +12,11 @@
 - [x] Codificar a Regra 1 como testes ArchUnit (redundância deliberada com o script: bytecode vs grep). _(BoundaryRulesTest 2/2 + BoundaryRulesSelfTestTest 2/2 verdes)_
 
 ## 1.2 Promover lições repetidas para `coding-standards.md`
-- [ ] Rodar um script ou revisão manual que conte ocorrências de cada lição em `lessons.md`.
-- [ ] Identificar lições com contagem ≥ 3.
-- [ ] Copiar o padrão (trecho + regra dourada) para `coding-standards.md` sob uma nova seção “Herde‑de‑Lições”.
-- [ ] Remover a lição promovida de `lessons.md` (ou marcar como `→ coding-standards`).
-- [ ] Atualizar a matriz de dívida em `AGENTS.md` com a nova referência.
+- [x] Rodar um script ou revisão manual que conte ocorrências de cada lição em `lessons.md`. _(2026‑09‑10: grep por padrão — fail-open/best-effort/degrade 4×; atomic/$inc/read-modify-write 3×)_
+- [x] Identificar lições com contagem ≥ 3. _(2 padrões: degradação fail-open/fail-fast deliberada; mutação atômica de contadores)_
+- [x] Copiar o padrão (trecho + regra dourada) para `coding-standards.md` sob uma nova seção “Herde‑de‑Lições”. _(§14 Herde‑de‑Lições: §14.1 + §14.2)_
+- [x] Remover a lição promovida de `lessons.md` (ou marcar como `→ coding-standards`). _(3 marcações: Metrics/counters §14.2, Caching/bloom §14.1, Fail-open-vs-fail-fast §14.1, OTLP §14.1)_
+- [x] Atualizar a matriz de dívida em `AGENTS.md` com a nova referência. _(Item 22 adicionado, status `resolved`)_
 
 ## 1.3 Padronizar pacotes e nomes de classes
 - [x] Listar todos os pacotes atuais sob `src/main/java`. _(2026‑09‑10: 30 packages — todos sob `core/` ou `infra/`)_
@@ -41,10 +41,11 @@
 - [x] Confirmar `./mvnw spotless:check` verde. _(2026‑09‑10: exit 0)_
 
 ## 1.5 Sincronizar matriz de dívida técnica
-- [ ] Garantir que cada item em `AGENTS.md` “Known Technical Debt” tenha campo `status: open/in-progress/resolved` e data de previsão.
-- [ ] Cross‑check com `lessons.md`: toda lição promovida deve ter seu rastro na matriz.
-- [ ] Manter itens `resolved` na matriz como trilha de auditoria (política Regra 10 do AGENTS.md); apenas garantir que cada item tem status e data corretos.
-- [ ] Comitar as alterações em `AGENTS.md` e enviar PR com rótulo `docs: sync technical debt matrix`.
+- [x] Garantir que cada item em `AGENTS.md` “Known Technical Debt” tenha campo `status: open/in-progress/resolved` e data de previsão. _(2026‑09‑10: 22 itens, todos `resolved` com evidência; verificado pelo gate)_
+- [x] Cross‑check com `lessons.md`: toda lição promovida deve ter seu rastro na matriz. _(4 marcações `→ coding-standards §14.x` apontam para seções existentes — verificado pelo gate)_
+- [x] Manter itens `resolved` na matriz como trilha de auditoria (política Regra 10 do AGENTS.md); apenas garantir que cada item tem status e data corretos. _(Decisão do owner: manter; template “remover resolved” rejeitado)_
+- [x] Comitar as alterações em `AGENTS.md` e enviar PR com rótulo `docs: sync technical debt matrix`. _(Commits por fase conforme fluxo acordado; PR só sob pedido explícito)_
+- [x] Gate novo: `scripts/check-doc-sync.sh` (+ `--self-test`) — valida status da matriz e promoções; wired no CI (job `doc-sync`).
 
 --- 
 
