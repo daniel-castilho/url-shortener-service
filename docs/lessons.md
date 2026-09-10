@@ -111,6 +111,12 @@ non-obvious failure or design decision cost real debugging time.
 - **DNS resolution is a blocking operation — cache it.** DNS lookups add latency and can be exploited
   for DoS. Cache successful resolutions with TTL; fail closed on DNS failure (secure default).
   Never block the hot path on DNS — validate at write time (shorten), not read time (redirect).
+- **Sanitize client-controlled log arguments at the sink, not at the source.** Length-only validation
+  is not charset validation: a client-controlled value (short code, request id, header) containing
+  `\n`/`\r` that reaches a `log.warn` can forge log lines (CWE-117). The recognized sanitizer is a
+  local `logSafe()` at the logging site (`value.replace('\n', '_').replace('\r', '_')`) — an upstream
+  guard in the controller does not flow down to an adapter's own sinks, and "my keys look like UUIDs"
+  is not a charset rule. `[SEED · dargent]`
 
 ## Spring / configuration
 
@@ -135,6 +141,14 @@ non-obvious failure or design decision cost real debugging time.
   codebase sitting at ~41% line coverage invites "skip the gate" pressure. Land the gate *and* the
   tests that clear it in the same change set (unit suite went 87 → 125 tests), so the floor starts
   honest.
+- **Measure coverage only after integration tests — unit-only numbers lie.** A JaCoCo check that runs
+  on unit-test exec data alone under-reports a suite whose real exercise happens in `*IT` classes;
+  run `jacoco:check` on the merged exec files after failsafe, and set floors per module/element so a
+  strong area cannot mask a weak one. Coverage is a floor, not a target. `[SEED · dargent]`
+- **GitHub Actions expressions have no string slicing.** `${{ github.sha[0:7] }}` is a parse error
+  in the workflow expression grammar; a workflow file that fails preprocessing shows up as a 0-second,
+  zero-job, logless "failure" run on every event. Slice in shell (`short7="${GITHUB_SHA:0:7}"`), and
+  run actionlint (mirrors GitHub's parser) before pushing workflow changes. `[SEED · dargent]`
 
 ## Operations
 
@@ -157,3 +171,13 @@ non-obvious failure or design decision cost real debugging time.
   silently when the team is bilingual. Enforcing English-only in code reviews prevents a class of
   "documentation debt" that is invisible to linters but slows onboarding. Translating comments
   in-place (not just deleting them) preserves the original design intent.
+- **Boot 4 resolves Jackson 3 — `tools.jackson.*`, not `com.fasterxml.*`.** The groupId moved from
+  `com.fasterxml.jackson` to `tools.jackson` (annotations stay at `com.fasterxml.jackson.core`), and
+  there is no `JsonProcessingException` in Jackson 3. Before writing Jackson code on Boot 4, prove
+  the resolved tree (`mvn dependency:tree`); when a "package not found" hits a library you know is
+  transitively present, suspect a groupId relocation before adding dependencies. `[SEED · dargent]`
+- **An extracted seam proves itself by what it did NOT touch — the abstraction proof is a diff.** The
+  acceptance bar for "core untouched" is a diff audit (zero edits under `core/`, each adapter change
+  with a one-line rationale), not a diagram; behavior-equality of the existing suite is part of the
+  proof, never "looks equivalent". Routing/infrastructure state stays behind a port — infrastructure
+  state masquerading as domain state is how hexagons rot. `[SEED · dargent]`
