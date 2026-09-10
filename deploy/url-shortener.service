@@ -4,7 +4,7 @@
 # Enable:  sudo systemctl daemon-reload && sudo systemctl enable --now url-shortener
 #
 # Requirements:
-#   - Java 21+ in PATH
+#   - Java 25+ in PATH
 #   - Application JAR at /opt/url-shortener/url-shortener.jar
 #   - Config via environment variables (see EnvironmentFile)
 #   - MongoDB and Redis accessible per MONGODB_URI / REDIS_HOST
@@ -35,7 +35,7 @@ ExecReload=/bin/kill -HUP $MAINPID
 KillMode=mixed
 KillSignal=SIGTERM
 TimeoutStopSec=30
-# Graceful shutdown: Spring Boot 3.x supports graceful shutdown with SIGTERM
+# Graceful shutdown: Spring Boot 4 supports graceful shutdown with SIGTERM
 # The app will drain in-flight requests during the grace period (see application.yaml)
 Restart=on-failure
 RestartSec=10

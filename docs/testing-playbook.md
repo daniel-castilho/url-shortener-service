@@ -1,6 +1,6 @@
 # Testing Playbook
 
-**Role:** Define how to design, run, diagnose and maintain tests for this Java 21 / Spring Boot 3.5.7
+**Role:** Define how to design, run, diagnose and maintain tests for this Java 25 / Spring Boot 4.1.1
 Hexagonal service (MongoDB + Redis, JWT, virtual threads).
 **Audience:** Human contributors and AI software-engineering agents.
 **Stack constraints:** JUnit 5 + Mockito + Testcontainers (MongoDB, Redis) + RestAssured. Do not add a
@@ -46,7 +46,7 @@ the same change set.
 | **Release smoke**        | Manual until automated | Compose/local runtime                                     | Small, high-value path before release/deployment                                 |
 
 > **Convention (landed):** integration/E2E tests are named `*IT`, run by the **maven-failsafe-plugin**
-> in `mvn verify`, and are excluded from the fast `mvn test` loop.
+> in `./mvnw verify`, and are excluded from the fast `./mvnw test` loop.
 
 ### Test placement
 
@@ -76,7 +76,7 @@ shouldDescribeExpectedBehaviour
 ### 3.1 Fast loop — no Docker
 
 ```bash
-mvn test
+./mvnw test
 ```
 
 This runs `*Test` / `*Tests` classes (domain/application unit and context smoke). It does **not**
@@ -85,8 +85,8 @@ require Docker.
 ### 3.2 Integration + E2E — Docker required
 
 ```bash
-mvn test -Dtest='*IT'        # quick targeted run
-# full gate: mvn verify      # failsafe runs *IT during integration-test
+./mvnw test -Dtest='*IT'        # quick targeted run
+# full gate: ./mvnw verify      # failsafe runs *IT during integration-test
 ```
 
 Docker must be available because `BaseIntegrationTest` starts MongoDB and Redis via Testcontainers.
@@ -96,18 +96,18 @@ On hosts running Docker Engine ≥ 29, docker-java needs `api.version = 1.44` in
 ### 3.3 Quality checks
 
 ```bash
-mvn verify                   # JaCoCo + SpotBugs run as part of the default lifecycle
-mvn jacoco:check             # coverage alone (LINE ≥ 60%, BRANCH ≥ 60%)
-mvn spotbugs:check           # static analysis alone (effort Max, threshold High)
+./mvnw verify                   # JaCoCo + SpotBugs run as part of the default lifecycle
+./mvnw jacoco:check             # coverage alone (LINE ≥ 60%, BRANCH ≥ 60%)
+./mvnw spotbugs:check           # static analysis alone (effort Max, threshold High)
 ```
 
 Both gates are wired into `pom.xml` at the `verify` phase; a build that violates either floor fails.
 
 ### 3.4 Full gate
 
-`mvn verify` is the complete local gate: Surefire runs `*Test` during `test`,
+`./mvnw verify` is the complete local gate: Surefire runs `*Test` during `test`,
 maven-failsafe-plugin runs `*IT` during `integration-test`, and quality executions plus the packaged
-jar complete at `verify`. `mvn clean package` alone remains a production **artifact build**, not a
+jar complete at `verify`. `./mvnw clean package` alone remains a production **artifact build**, not a
 test gate.
 
 ---
@@ -206,7 +206,7 @@ A feature is not fully covered if its only test mocks the behaviour that carries
 Keep this section honest. Move an item out only when an automated test/gate exists.
 
 1. **Failsafe lifecycle — CLOSED.** `maven-failsafe-plugin` is wired; `*IT` classes run in
-   `mvn verify` and are excluded from the fast `mvn test` loop.
+   `./mvnw verify` and are excluded from the fast `./mvnw test` loop.
 2. **Actuator/Swagger exposure — CLOSED.** Actuator endpoints tiered: liveness/readiness/info public; health detail requires ADMIN; metrics/prometheus require ADMIN/METRICS_VIEWER; other actuator endpoints require ADMIN. Swagger conditionally enabled via `app.security.swagger.enabled` (default false). `SsrfProtectionIT` and `RedirectRateLimitIT` verify throttling headers.
 3. **Rate-limit integration on the redirect path — CLOSED.** `RedirectRateLimitIT` proves the token bucket (capacity 3, PT1M window) throttles both valid and unknown codes with 429 + `Retry-After` + `RateLimit-*` headers; scope isolation (shorten budget untouched); concurrent burst admits exactly the configured capacity.
 4. **Analytics/click persistence — CLOSED.** `ClickPipelineIT` proves redirect→persist+`$inc`,
@@ -215,9 +215,9 @@ Keep this section honest. Move an item out only when an automated test/gate exis
 5. **No expiry (TTL) test — CLOSED.** `ExpiredUrlIT` proves `410 Gone` on redirect + `ttlSeconds`
    expiry; `ShortUrlTest`/`UrlShortenerServiceTest` pin `expiresAt` semantics.
 6. **Coverage/static-analysis gate — CLOSED.** JaCoCo 0.8.15 (LINE ≥ 60%, BRANCH ≥ 60%) and SpotBugs
-   4.9.8.5 (effort Max, threshold High) are enforced at `mvn verify`, locally and in CI.
+   4.9.8.5 (effort Max, threshold High) are enforced at `./mvnw verify`, locally and in CI.
 7. **CI workflow — CLOSED.** `.github/workflows/ci.yml` runs the boundary gate (+ self-test),
-   `mvn test`, `mvn verify` (Testcontainers), and packaging on every push/PR.
+   `./mvnw test`, `./mvnw verify` (Testcontainers), and packaging on every push/PR.
 8. **No performance/load baseline** — add a k6/Gatling scenario for the redirect path and record
    p50/p95/p99 as a regression tripwire.
 9. **Boundary check automated in CI — CLOSED.** `scripts/check-boundaries.sh` runs locally/CI with a
@@ -248,7 +248,7 @@ smoke to validate the assembled local runtime.
 
 ```bash
 docker-compose up -d        # mongodb + redis
-mvn spring-boot:run         # or java -jar target/*.jar
+./mvnw spring-boot:run         # or java -jar target/*.jar
 ```
 
 Prerequisites: disposable local environment only; never use production credentials; retain IDs/tokens
@@ -309,7 +309,7 @@ keys or full token payloads.
 | **MongoDB**        | Save/find error, duplicate key, missing index      | Compare entity annotations, IT provisioning and README schema; reproduce with the repository IT |
 | **Redis**          | Cache/rate-limit/bloom failure                      | Check endpoint, keys, TTL and BaseIntegrationTest flush/init behaviour              |
 | **Environment**    | Docker/port/Testcontainers problem                  | Verify prerequisites; distinguish infra failure from product failure               |
-| **Discovery**      | `*IT` not picked up                                 | Failsafe only runs them in `mvn verify`; use that or the explicit `-Dtest='*IT'`    |
+| **Discovery**      | `*IT` not picked up                                 | Failsafe only runs them in `./mvnw verify`; use that or the explicit `-Dtest='*IT'`    |
 
 ---
 
@@ -327,9 +327,9 @@ Root cause: one concise sentence
 3. Wider verification, if required
 
 ## Verify
-mvn test
+./mvnw test
 # when persistence/cache/security/HTTP changed:
-mvn test -Dtest='*IT' -DfailIfNoTests=false   # or, once failsafe is wired: mvn verify
+./mvnw test -Dtest='*IT' -DfailIfNoTests=false   # or, once failsafe is wired: ./mvnw verify
 ```
 
 ---
@@ -360,7 +360,7 @@ mvn test -Dtest='*IT' -DfailIfNoTests=false   # or, once failsafe is wired: mvn 
 - [ ] Persistence/cache changes have an appropriate `*IT` against real Mongo/Redis.
 - [ ] Concurrency-sensitive changes are tested with real atomic/conditional behaviour.
 - [ ] Test data is isolated and execution-order independent.
-- [ ] `mvn test` is green.
+- [ ] `./mvnw test` is green.
 - [ ] `*IT` is green when persistence, cache, security or HTTP behaviour changed.
 - [ ] The boundary grep has no new matches.
 - [ ] Smoke instructions are updated when the assembled HTTP/runtime flow changed.

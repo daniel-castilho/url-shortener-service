@@ -33,11 +33,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java 21
+      - name: Setup Java 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
           cache: maven
 
       - name: Start app (relaxed per-IP rate limits for the load window)
@@ -45,7 +45,7 @@ jobs:
           RATE_LIMITER_LIMIT: '1000000'
           RATE_LIMITER_REDIRECT_LIMIT: '1000000'
         run: |
-          mvn -q spring-boot:run > /tmp/app.log 2>&1 &
+          ./mvnw -q spring-boot:run > /tmp/app.log 2>&1 &
 
       - name: Wait for app readiness
         run: |

@@ -22,8 +22,8 @@ client ──► [NGINX/Caddy :443] ──► url-shortener-service :8080 (HTTP,
   shorten is also allowed.
 - Health: `GET /actuator/health`. Metrics/Prometheus: `/actuator/prometheus`.
 - Working directory for all commands: repository root.
-- Either run from a built jar (`mvn package`) or via Docker (`Dockerfile`). There is **no Maven
-  wrapper** (`./mvnw`).
+- Either run from a built jar (`./mvnw package`) or via Docker (`Dockerfile`). The repo bundles the
+  **Maven wrapper** (`./mvnw`, 3.9.16) — no system Maven required.
 - TLS termination is handled by a reverse proxy (NGINX or Caddy) — see §8.
 
 ---
@@ -33,8 +33,8 @@ client ──► [NGINX/Caddy :443] ──► url-shortener-service :8080 (HTTP,
 ### 1a. Build
 
 ```sh
-mvn clean package                 # JVM jar  -> target/url-shortener-service-0.0.1-SNAPSHOT.jar
-mvn clean package -Pnative        # GraalVM native image (requires GraalVM + native-image)
+./mvnw clean package                 # JVM jar  -> target/url-shortener-service-0.0.1-SNAPSHOT.jar
+./mvnw clean package -Pnative        # GraalVM native image (requires GraalVM + native-image)
 ```
 
 ### 1b. Start the backing services (once, or if not running)
@@ -222,7 +222,7 @@ bash scripts/verify-graceful-shutdown.sh
 
 ## 7. Operational checklist before a release
 
-- [ ] `mvn clean package` succeeds (and `mvn verify` + `*IT` green when tests changed).
+- [ ] `./mvnw clean package` succeeds (and `./mvnw verify` + `*IT` green when tests changed).
 - [ ] `bash scripts/check-boundaries.sh` passes (architecture boundaries intact).
 - [ ] `APP_JWT_SECRET` is set to a strong random value (≥32 chars); the default is not used.
 - [ ] `MONGODB_URI` / `REDIS_HOST` / `REDIS_PORT` point at the real services.

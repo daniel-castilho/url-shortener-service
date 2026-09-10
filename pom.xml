@@ -5,35 +5,38 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.7</version>
-        <relativePath/> <!-- lookup parent from repository -->
+        <version>4.1.1</version>
+        <relativePath/> <!-- lookup from repository -->
     </parent>
     <groupId>ca.tyny</groupId>
     <artifactId>url-shortener-service</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>url-shortener-service</name>
-    <description>High performance URL Shortener with Undertow and GraalVM</description>
+    <description>High performance URL Shortener with Tomcat and GraalVM</description>
 
     <properties>
-        <java.version>21</java.version>
+        <java.version>25</java.version>
+        <!-- CVE bump over Boot 4.1.1's managed 11.0.24 (dargent does the same) -->
+        <tomcat.version>11.0.25</tomcat.version>
+        <!-- kept in alignment with the Boot 4.1.1 BOM (1.18.46, JDK 25-ready) -->
         <lombok.version>1.18.46</lombok.version>
+        <spotbugs.version>4.10.4.1</spotbugs.version>
+        <jacoco.version>0.8.15</jacoco.version>
+        <testcontainers.version>2.0.5</testcontainers.version>
     </properties>
 
     <dependencies>
-        <!-- Web Starter with Undertow instead of Tomcat -->
+        <!-- Web: Tomcat (default of starter-web). Undertow is not supported by Spring Boot 4. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.springframework.boot</groupId>
-                    <artifactId>spring-boot-starter-tomcat</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
+
+        <!-- AOP weaver (Boot 4 renamed starter-aop → starter-aspectj): required for the
+             annotation-based resilience4j @CircuitBreaker proxies. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-undertow</artifactId>
+            <artifactId>spring-boot-starter-aspectj</artifactId>
         </dependency>
 
         <!-- Data Dependencies -->
@@ -52,20 +55,16 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
         <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-aop</artifactId>
-        </dependency>
-        <dependency>
             <groupId>io.github.resilience4j</groupId>
-            <artifactId>resilience4j-spring-boot3</artifactId>
-            <version>2.2.0</version>
+            <artifactId>resilience4j-spring-boot4</artifactId>
+            <version>2.4.0</version>
         </dependency>
 
-        <!-- Structured (JSON) logging — logstash-logback-encoder 8.x (logback 1.5, Jackson 2) -->
+        <!-- Structured (JSON) logging. 9.x is the Jackson 3 / logback 1.5 line. -->
         <dependency>
             <groupId>net.logstash.logback</groupId>
             <artifactId>logstash-logback-encoder</artifactId>
-            <version>8.1</version>
+            <version>9.0</version>
         </dependency>
 
         <!-- Developer Tools -->
@@ -78,16 +77,17 @@
         <dependency>
             <groupId>org.redisson</groupId>
             <artifactId>redisson-spring-boot-starter</artifactId>
-            <version>3.43.0</version>
+            <version>4.7.0</version>
         </dependency>
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>
         </dependency>
+        <!-- springdoc 3.x is the Spring Boot 4 line -->
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>2.3.0</version>
+            <version>3.1.1</version>
         </dependency>
 
         <!-- GeoIP (country enrichment for click analytics; opt-in via app.analytics.geo.enabled) -->
@@ -96,35 +96,35 @@
             <artifactId>geoip2</artifactId>
             <version>5.2.0</version>
         </dependency>
-        
+
         <!-- Bean Validation -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
-        
+
         <!-- Security -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
-        
+
         <!-- JWT -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-api</artifactId>
-            <version>0.12.3</version>
+            <version>0.12.7</version>
         </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-impl</artifactId>
-            <version>0.12.3</version>
+            <version>0.12.7</version>
             <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-jackson</artifactId>
-            <version>0.12.3</version>
+            <version>0.12.7</version>
             <scope>runtime</scope>
         </dependency>
 
@@ -146,32 +146,34 @@
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Boot 4: @WebMvcTest moved out of starter-test into the technology-specific test slice -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Testcontainers 2.x: artifact names gained the testcontainers- prefix.
+             Managed via the Boot 4.1.1 BOM (testcontainers.version=2.0.5). -->
         <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>testcontainers</artifactId>
-            <version>1.21.3</version>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <version>1.21.3</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.testcontainers</groupId>
-            <artifactId>mongodb</artifactId>
-            <version>1.21.3</version>
+            <artifactId>testcontainers-mongodb</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.rest-assured</groupId>
             <artifactId>rest-assured</artifactId>
-            <version>5.4.0</version>
+            <!-- 6.x is the first line that supports Groovy 5 (pulled by 5.5.7) and Jackson 3,
+                 matching the Boot 4 / Java 25 platform. -->
+            <version>6.0.1</version>
             <scope>test</scope>
         </dependency>
 
-        <!-- OpenTelemetry -->
+        <!-- OpenTelemetry: versions managed by the Boot 4.1.1 BOM (1.62.0) -->
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-tracing-bridge-otel</artifactId>
@@ -179,12 +181,10 @@
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-exporter-otlp</artifactId>
-            <version>1.41.0</version>
         </dependency>
         <dependency>
             <groupId>io.opentelemetry</groupId>
             <artifactId>opentelemetry-sdk-extension-autoconfigure</artifactId>
-            <version>1.41.0</version>
         </dependency>
     </dependencies>
 
@@ -193,10 +193,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.14.1</version>
                 <configuration>
-                    <source>21</source>
-                    <target>21</target>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>
@@ -243,7 +240,6 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
-                <version>3.5.4</version>
                 <executions>
                     <execution>
                         <goals>
@@ -256,7 +252,7 @@
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
-                <version>0.8.15</version>
+                <version>${jacoco.version}</version>
                 <executions>
                     <execution>
                         <id>prepare-agent</id>
@@ -294,7 +290,7 @@
             <plugin>
                 <groupId>com.github.spotbugs</groupId>
                 <artifactId>spotbugs-maven-plugin</artifactId>
-                <version>4.9.8.5</version>
+                <version>${spotbugs.version}</version>
                 <configuration>
                     <failOnError>true</failOnError>
                     <threshold>High</threshold>

@@ -3,7 +3,7 @@
 #
 # Requirements:
 #   - Docker (mongo + redis via docker-compose)
-#   - Java 21 + Maven (to boot the app)
+#   - Java 25 + Maven wrapper (to boot the app)
 #   - k6 is executed through the grafana/k6 container (no host install needed)
 #
 # Behaviour:
@@ -73,7 +73,7 @@ done
 log "2/5 building and booting the app (relaxed rate limits)"
 export RATE_LIMITER_LIMIT=1000000
 export RATE_LIMITER_REDIRECT_LIMIT=1000000
-mvn -q spring-boot:run > "$RESULTS_DIR/app-baseline.log" 2>&1 &
+./mvnw -q spring-boot:run > "$RESULTS_DIR/app-baseline.log" 2>&1 &
 APP_PID=$!
 
 for i in $(seq 1 60); do

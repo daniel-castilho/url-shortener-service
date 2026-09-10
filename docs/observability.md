@@ -55,7 +55,7 @@ dispatch via `.github/workflows/load-test.yml`. Baselines tracked in
 
 ```bash
 # Run k6 load tests against a locally started app (relaxed per-IP budgets):
-RATE_LIMITER_LIMIT=1000000 RATE_LIMITER_REDIRECT_LIMIT=1000000 mvn spring-boot:run &
+RATE_LIMITER_LIMIT=1000000 RATE_LIMITER_REDIRECT_LIMIT=1000000 ./mvnw spring-boot:run &
 k6 run load-tests/mixed.js
 ```
 

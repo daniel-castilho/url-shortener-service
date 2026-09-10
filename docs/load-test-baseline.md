@@ -7,7 +7,7 @@ Run against the app started with relaxed per-IP rate limits for the load window:
 
 ```bash
 RATE_LIMITER_LIMIT=1000000 RATE_LIMITER_REDIRECT_LIMIT=1000000 \
-  mvn spring-boot:run &
+  ./mvnw spring-boot:run &
 ```
 
 Then:
@@ -27,11 +27,15 @@ k6 run load-tests/mixed.js
 | mixed 1:10 (20 + 200 rps) | `load-tests/mixed.js` | 5 ms | 7.6 ms | 11 ms | 220 |
 
 - Environment: Linux 6.18 (WSL2), 16 cores, 32 GB RAM, JVM 21.0.2, Virtual Threads, Undertow
+  (**pre-platform-upgrade baseline** — measured on Java 21 / Spring Boot 3.5.7 / Undertow)
 - MongoDB: 6.0 (Docker), single-node
 - Redis: 7-alpine (Docker), single-node
 - k6 version: v0.58.0
 - App version: `v0.10.0`
 - Date: 2026-08-27
+
+> **Follow-up:** re-run after the Java 25 / Spring Boot 4.1.1 / Tomcat 11 migration and publish the new
+> numbers here before the next release. Regressions > 10% at the same load must be investigated.
 
 Compare against the previous baseline; regressions > 10% at the same load
 should be investigated before the release milestone is closed.

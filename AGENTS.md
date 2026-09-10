@@ -1,7 +1,7 @@
 # AGENTS.md — Guidelines for AI & Human Contributors
 
-**URL Shortener Service** — a high-performance, on-premises link-shortening API built with **Java 21**,
-**Spring Boot 3.5.7**, **MongoDB** and **Redis**, implementing a **Hexagonal Architecture (Ports &
+**URL Shortener Service** — a high-performance, on-premises link-shortening API built with **Java 25**,
+**Spring Boot 4.1.1**, **MongoDB** and **Redis**, implementing a **Hexagonal Architecture (Ports &
 Adapters)** and **SOLID principles**.
 
 - **Repository:** `daniel-castilho/url-shortener-service`
@@ -79,9 +79,9 @@ Sources of truth: `README.md`, `pom.xml`, `src/main/resources/application.yaml`,
     - Update the audit/roadmap files in `/home/user` when a roadmap item is completed.
     _Work is NOT done while documentation describes a stale state._
 
-11. **Test Suite Integrity:** the full gate `mvn verify` (unit + `*IT` integration + E2E with
+11. **Test Suite Integrity:** the full gate `./mvnw verify` (unit + `*IT` integration + E2E with
     Testcontainers) must pass before declaring a turn or commit done. Run the targeted unit tests with
-    `mvn test` for fast iteration.
+    `./mvnw test` for fast iteration.
 
 ---
 
@@ -89,16 +89,16 @@ Sources of truth: `README.md`, `pom.xml`, `src/main/resources/application.yaml`,
 
 | Purpose | Command | Location |
 | :--- | :--- | :--- |
-| **Run the dev server** | `mvn spring-boot:run` | Root |
-| **Run unit tests (no Docker)** | `mvn test` | Root |
-| **Run + integration/E2E tests (needs Docker + Testcontainers)** | `mvn test -Dtest='*IT'` | Root |
-| **Full gate: unit + IT + E2E (Testcontainers) + jar** | `mvn verify` | Root |
-| **Build the jar** | `mvn clean package` | Root |
-| **Build the GraalVM native binary** | `mvn clean package -Pnative` | Root |
+| **Run the dev server** | `./mvnw spring-boot:run` | Root |
+| **Run unit tests (no Docker)** | `./mvnw test` | Root |
+| **Run + integration/E2E tests (needs Docker + Testcontainers)** | `./mvnw test -Dtest='*IT'` | Root |
+| **Full gate: unit + IT + E2E (Testcontainers) + jar** | `./mvnw verify` | Root |
+| **Build the jar** | `./mvnw clean package` | Root |
+| **Build the GraalVM native binary** | `./mvnw clean package -Pnative` | Root |
 | **Start external services (Mongo + Redis)** | `docker-compose up -d` | Root |
 | **Stop external services** | `docker-compose down` | Root |
-| **Coverage gate** | `mvn verify` (JaCoCo runs at `verify`; LINE ≥ 60%, BRANCH ≥ 60%) | Root |
-| **Static analysis gate** | `mvn verify` (SpotBugs runs at `verify`; effort Max, threshold High) | Root |
+| **Coverage gate** | `./mvnw verify` (JaCoCo runs at `verify`; LINE ≥ 60%, BRANCH ≥ 60%) | Root |
+| **Static analysis gate** | `./mvnw verify` (SpotBugs runs at `verify`; effort Max, threshold High) | Root |
 | **Architecture boundary check** | `bash scripts/check-boundaries.sh` (+ `--self-test`) | Root |
 
 ---
@@ -129,7 +129,7 @@ src/main/java/com/example/urlshortener/
     │       ├── analytics/            # Click-event queue + batched worker (async, persisted)
     │       ├── persistence/          # Mongo repositories, entities & mappers
     │       └── redis/                # Redis cache, bloom filter, rate limiter, ID generator
-    ├── config/                       # Spring beans, security, Undertow, OpenAPI, native hints
+    ├── config/                       # Spring beans, security, Tomcat, OpenAPI, native hints
     ├── observability/                # Micrometer metrics service & adapter
     └── security/                     # JWT filter, token provider, UserDetailsService
 ```
@@ -159,7 +159,7 @@ src/main/java/com/example/urlshortener/
   - Inbound ports (use cases): `*UseCase` (e.g. `ShortenUrlUseCase`).
   - Adapters/repository impls: descriptive (e.g. `MongoUrlRepository`, `RedisUrlCache`).
   - Mappers: `*Mapper` (domain ↔ entity); DTOs: `*Request` / `*Response`.
-- **Java 21 idioms:** use `record` for value objects, DTOs and immutable models; avoid Lombok in
+- **Java 25 idioms:** use `record` for value objects, DTOs and immutable models; avoid Lombok in
   `core/` (prefer explicit constructors); use `Pattern`/`ZonedDateTime`/`Instant` for domain time where
   appropriate. `var` is allowed only where the type is obvious.
 - **Error handling:** `core/` throws **domain exceptions**; `infra/` maps framework exceptions into
@@ -184,10 +184,10 @@ src/main/java/com/example/urlshortener/
 
 - **Unit tests (`core/`)** — JUnit 5 + Mockito, no Spring context, no I/O. Cover entities, value
   objects, ID generation (incl. collision retry), quota, reserved words and use-case services against
-  mock ports. Run with `mvn test` (no Docker).
+  mock ports. Run with `./mvnw test` (no Docker).
 - **Integration tests (`*IT`)** — Testcontainers boot real MongoDB + Redis; validate persistence,
   cache, bloom filter, rate limiter, analytics persistence and the redirect path. Named `*IT` so
-  `mvn test` does not run them; run with `mvn test -Dtest='*IT'` or by `mvn verify` (failsafe).
+  `./mvnw test` does not run them; run with `./mvnw test -Dtest='*IT'` or by `./mvnw verify` (failsafe).
 - **End-to-end tests** — RestAssured against a running app on a random port
   (`@SpringBootTest(webEnvironment = RANDOM_PORT)`) with Testcontainers. Validate complete flows:
   shorten → redirect, auth → vanity URL, quota enforcement, expiry.
@@ -287,7 +287,7 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     bounded Redis Stream (`RedisClickEventQueue`, `XADD MAXLEN ~`) behind `AnalyticsPort`; consumer
     is self-healing and at-least-once (item 5). — `resolved`
 16. **Quality gates wired** — JaCoCo 0.8.15 (LINE ≥ 60%, BRANCH ≥ 60%) and SpotBugs 4.9.8.5
-    (effort Max, threshold High) run at `mvn verify`; both gates green. Testcontainers upgraded
+    (effort Max, threshold High) run at `./mvnw verify`; both gates green. Testcontainers upgraded
     1.19.3 → 1.21.3. **Environment note:** Docker Engine ≥ 29 only serves API `1.44+` while docker-java
     probes with older defaults — machines running such engines need `~/.docker-java.properties`
     containing `api.version = 1.44` (already configured on the dev workstation; CI runners are
@@ -323,9 +323,25 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     `expiresAt`/`utm`), soft delete via `deletedAt` (idempotent; archived redirect → 404)](*), cache
     eviction on update/archive (`UrlCachePort.evict`). Docs synced (README, data-model-decisions, coding-standards,
     testing-playbook). Tests: `LinkResourceIT` (25), `LinkUseCasesTest` (12), extended `MongoUrlRepositoryIT`.
-    `mvn verify` + boundary gate green. — `resolved`
+    `./mvnw verify` + boundary gate green. — `resolved`
 
 ---
+
+21. **Platform upgrade: Java 21 + Spring Boot 3.5.7 + Undertow → Java 25 + Spring Boot 4.1.1 + Tomcat**
+    — Boot 4 removed Undertow support; the app now runs on **Tomcat 11** (virtual threads enabled),
+    Jakarta EE 11, `spring.mongodb.*` (was `spring.data.mongodb.*`), `spring-boot-starter-aspectj`
+    (was `aop`), Jackson 3 (`tools.jackson` for object I/O), `@WebMvcTest`/`@AutoConfigureMockMvc` from
+    `spring-boot-starter-webmvc-test`, Spring Security 7 (`DaoAuthenticationProvider` constructor),
+    Redis:4 `ValueOperations.set()` generics, Testcontainers **2.0.5** (`MongoDBContainer`
+    `org.testcontainers.mongodb`; **replica-set init is explicit via `withReplicaSet()`** — the 1.x
+    auto-init is gone), Redisson 4.7.0, jjwt 0.12.7, springdoc 3.1.1, spotbugs 4.10.4.1, lombok
+    1.18.46, logstash-encoder 9.0, **REST Assured 6.0.1** (5.5.7 pulls Groovy 5.0.8 which NPEs in
+    `ClosureMetaClass` — 5.5.x cannot run under Groovy 5), and a bounded Maven **wrapper 3.9.16**
+    (`./mvnw`). Dockerfile/CI/systemd/prod-validator/`application*.yaml` updated; `ReadPathIT` etc.
+    use the singleton-container pattern (no `@DirtiesContext`) with WT cache cap + ulimit. Full gate
+    `./mvnw verify` (265 unit + 114 IT) + SpotBugs + JaCoCo + boundary gate green. **Follow-up:**
+    re-run `scripts/performance-baseline.sh` on the new platform and refresh `docs/load-test-baseline.md`.
+    — `resolved`
 
 ## 🔍 Operational Discipline & Debugging Guidelines
 

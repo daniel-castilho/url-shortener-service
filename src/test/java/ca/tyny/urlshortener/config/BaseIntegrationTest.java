@@ -5,7 +5,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
-import org.testcontainers.containers.MongoDBContainer;
+import org.testcontainers.mongodb.MongoDBContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /**
@@ -24,9 +24,22 @@ public abstract class BaseIntegrationTest {
 
         static final MongoDBContainer mongoDB = new MongoDBContainer(DockerImageName.parse("mongo:6.0"))
                         .withExposedPorts(27017)
-                        .withCommand("--replSet", "docker-rs", "--wiredTigerCacheSizeGB=0.25")
-                        .withCreateContainerCmdModifier(cmd -> cmd.withUlimits(
-                                        new com.github.dockerjava.api.model.Ulimit("nofile", 65536L, 65536L)));
+                        // Testcontainers 2.x: rs.initiate() only runs when withReplicaSet() is used
+                        // (the 1.x MongoDBContainer did it automatically). The app uses transactions,
+                        // so a primary is mandatory — NotPrimaryOrSecondary otherwise.
+                        .withReplicaSet()
+                        // Keep the test mongod small on the shared Docker Desktop/WSL2 VM:
+                        // WiredTiger defaults its cache to ~50% of the VM's RAM.
+                        .withCreateContainerCmdModifier(cmd -> {
+                                cmd.withUlimits(new com.github.dockerjava.api.model.Ulimit("nofile", 65536L, 65536L));
+                                String[] base = cmd.getCmd();
+                                java.util.List<String> full = new java.util.ArrayList<>();
+                                if (base != null) {
+                                        full.addAll(java.util.Arrays.asList(base));
+                                }
+                                full.add("--wiredTigerCacheSizeGB=0.25");
+                                cmd.withCmd(full.toArray(new String[0]));
+                        });
 
         static final GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:alpine"))
                         .withExposedPorts(6379);
@@ -61,7 +74,7 @@ public abstract class BaseIntegrationTest {
                 // MongoDB
                 String mongoUri = String.format("mongodb://%s:%d/url_shortener",
                                 mongoDB.getHost(), mongoDB.getMappedPort(27017));
-                registry.add("spring.data.mongodb.uri", () -> mongoUri);
+                registry.add("spring.mongodb.uri", () -> mongoUri);
 
                 // Redis
                 registry.add("spring.data.redis.host", redis::getHost);

@@ -1,19 +1,21 @@
 # Multi-stage build for optimized Docker image
 
-# Stage 1: Build
-FROM maven:3.9-eclipse-temurin-21 AS build
+# Stage 1: Build (Java 25 platform; Maven wrapper 3.9.16)
+FROM maven:3.9-eclipse-temurin-25 AS build
 WORKDIR /app
 
-# Copy pom.xml and download dependencies (cached layer)
+# Copy wrapper + pom.xml and download dependencies (cached layer)
+COPY .mvn .mvn
+COPY mvnw .
 COPY pom.xml .
-RUN mvn dependency:go-offline -B
+RUN ./mvnw dependency:go-offline -B
 
 # Copy source code and build
 COPY src ./src
-RUN mvn package -DskipTests -B
+RUN ./mvnw package -DskipTests -B
 
 # Stage 2: Runtime
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 WORKDIR /app
 
 # Create non-root user for security

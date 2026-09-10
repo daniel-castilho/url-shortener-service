@@ -1,12 +1,12 @@
 # URL Shortener Service
 
-![Java](https://img.shields.io/badge/Java-21-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)
-![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.5.7-6DB33F?style=for-the-badge&logo=spring&logoColor=white)
-![Maven](https://img.shields.io/badge/Maven-3.8+-C71A36?style=for-the-badge&logo=apache-maven&logoColor=white)
+![Java](https://img.shields.io/badge/Java-25-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1.1-6DB33F?style=for-the-badge&logo=spring&logoColor=white)
+![Maven](https://img.shields.io/badge/Maven-3.9.16-C71A36?style=for-the-badge&logo=apache-maven&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-URL Shortener Service is a high-performance link-shortening API built with **Java 21**, **Spring Boot 3.5.7**
+URL Shortener Service is a high-performance link-shortening API built with **Java 25**, **Spring Boot 4.1.1**
 and a **Hexagonal Architecture (Ports & Adapters)**. Its business core (`core` package) is free of
 framework and adapter dependencies — the shortening logic talks only to abstractions (ports), which
 keeps the application testable, swappable and independent of the persistence, cache and web
@@ -31,9 +31,9 @@ technologies used by the `infra` layer.
 
 | Category | Technology |
 | :--- | :--- |
-| **Language & Framework** | ![Java](https://img.shields.io/badge/Java-21-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white) ![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.5.7-6DB33F?style=for-the-badge&logo=spring&logoColor=white) |
-| **Web Server** | ![Undertow](https://img.shields.io/badge/Undertow-1F77B4?style=for-the-badge) ![Virtual Threads](https://img.shields.io/badge/Virtual_Threads_(Loom)-00C4CC?style=for-the-badge) |
-| **Build & Dependencies** | ![Maven](https://img.shields.io/badge/Maven-3.8+-C71A36?style=for-the-badge&logo=apache-maven&logoColor=white) |
+| **Language & Framework** | ![Java](https://img.shields.io/badge/Java-25-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white) ![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1.1-6DB33F?style=for-the-badge&logo=spring&logoColor=white) |
+| **Web Server** | ![Tomcat](https://img.shields.io/badge/Tomcat-11-F8DC75?style=for-the-badge&logo=apache&logoColor=black) ![Virtual Threads](https://img.shields.io/badge/Virtual_Threads_(Loom)-00C4CC?style=for-the-badge) |
+| **Build & Dependencies** | ![Maven](https://img.shields.io/badge/Maven_Wrapper-3.9.16-C71A36?style=for-the-badge&logo=apache-maven&logoColor=white) |
 | **Database** | ![MongoDB](https://img.shields.io/badge/MongoDB_6.0-47A248?style=for-the-badge&logo=mongodb&logoColor=white) |
 | **Cache** | ![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white) ![Redisson](https://img.shields.io/badge/Redisson-4A90E2?style=for-the-badge) ![Caffeine](https://img.shields.io/badge/Caffeine-DA5B0B?style=for-the-badge) |
 | **Security** | ![Spring Security](https://img.shields.io/badge/Spring_Security-6DB33F?style=for-the-badge&logo=spring-security&logoColor=white) ![JWT](https://img.shields.io/badge/JWT-000000?style=for-the-badge&logo=json-web-tokens&logoColor=white) |
@@ -42,7 +42,7 @@ technologies used by the `infra` layer.
 | **API Docs** | ![Swagger](https://img.shields.io/badge/Swagger-85EA2D?style=for-the-badge&logo=swagger&logoColor=black) |
 | **Testing** | ![JUnit 5](https://img.shields.io/badge/JUnit5-25A162?style=for-the-badge&logo=junit5&logoColor=white) ![Mockito](https://img.shields.io/badge/Mockito-D43A2A?style=for-the-badge&logo=mockito&logoColor=white) ![Testcontainers](https://img.shields.io/badge/Testcontainers-262261?style=for-the-badge&logo=testcontainers&logoColor=white) ![RestAssured](https://img.shields.io/badge/REST_Assured-000000?style=for-the-badge&logo=rest-assured&logoColor=white) |
 
-- **Web:** Spring Web + **Undertow** (non-blocking I/O, direct buffers) with **Virtual Threads** enabled.
+- **Web:** Spring Web + **Tomcat 11** with **Virtual Threads** enabled.
 - **Data:** Spring Data MongoDB (`auto-index-creation: false`; schema managed by versioned in-code
   migrations via `MongoSchemaMigrator`) and Spring Data Redis.
 - **Cache:** **Caffeine** local (L1, 100 items / 5s TTL) → **Redis** (L2, 24h TTL + jitter) →
@@ -82,7 +82,7 @@ src/main/java/com/example/urlshortener/
     │       ├── analytics/                # Async click-event queue + batched worker
     │       ├── persistence/              # Mongo repositories, entities & mappers
     │       └── redis/                    # Redis cache, bloom filter, rate limiter
-    ├── config/                           # Spring beans, security, Undertow, OpenAPI, native hints
+    ├── config/                           # Spring beans, security, Tomcat, OpenAPI, native hints
     ├── observability/                    # Micrometer metrics service & adapter
     └── security/                         # JWT filter, token provider, UserDetailsService
 ```
@@ -102,8 +102,8 @@ src/main/java/com/example/urlshortener/
 
 ## Requirements
 
-- JDK 21
-- Maven 3.8+ (this project does **not** bundle a `./mvnw` wrapper)
+- JDK 25
+- Maven 3.9.16 (via the bundled **`./mvnw`** wrapper)
 - Docker and Docker Compose
 
 ## Getting Started
@@ -117,13 +117,13 @@ docker-compose up -d
 ```
 
 This starts `mongo:6.0` and `redis:alpine`. MongoDB indexes are managed on startup by the
-application's versioned schema migrations (`MongoSchemaMigrator`, versions `V1`–`V7`, recorded in the
+application's versioned schema migrations (`MongoSchemaMigrator`, versions `V1`–`V9`, recorded in the
 `schema_migrations` history; `auto-index-creation` is off).
 
 ### 2. Run the application
 
 ```sh
-mvn spring-boot:run
+./mvnw spring-boot:run
 ```
 
 Also available as a container (multi-stage `Dockerfile`, non-root user, healthcheck):
@@ -144,22 +144,22 @@ The application is available at `http://localhost:8080` (Swagger UI, see below).
 
 | Purpose | Command |
 | :--- | :--- |
-| Run the dev server | `mvn spring-boot:run` |
-| Run unit tests (no Docker needed) | `mvn test` |
-| Run the integration suite (needs Docker + Testcontainers) | `mvn test -Dtest='*IT'` |
-| Full gate (unit + IT + jar) | `mvn verify` |
-| Build the jar | `mvn clean package` |
-| Build the GraalVM native binary | `mvn clean package -Pnative` |
+| Run the dev server | `./mvnw spring-boot:run` |
+| Run unit tests (no Docker needed) | `./mvnw test` |
+| Run the integration suite (needs Docker + Testcontainers) | `./mvnw test -Dtest='*IT'` |
+| Full gate (unit + IT + jar) | `./mvnw verify` |
+| Build the jar | `./mvnw clean package` |
+| Build the GraalVM native binary | `./mvnw clean package -Pnative` |
 | Start external services (Mongo + Redis) | `docker-compose up -d` |
 | Stop external services | `docker-compose down` |
 
 ## Testing
 
 - **Unit tests** — exercise the `core` layer (models, ID generation, services, quota) with JUnit 5 +
-  Mockito, no Spring context, no I/O. Run with `mvn test`.
+  Mockito, no Spring context, no I/O. Run with `./mvnw test`.
 - **Integration tests** — use **Testcontainers** to boot real MongoDB and Redis in Docker and validate
   persistence, cache, rate limiting and the redirect path. Target naming is `*IT` (run with
-  `mvn test -Dtest='*IT'` or `mvn verify`).
+  `./mvnw test -Dtest='*IT'` or `./mvnw verify`).
 
 ## API & Documentation
 
@@ -257,7 +257,7 @@ Implemented on `main`:
   tested). See `docs/data-model-decisions.md` → *Links as Resource*.
 - **API docs** — springdoc OpenAPI / Swagger UI, bean validation and structured error responses via a
   global exception handler.
-- **Quality gates** — `mvn verify` enforces JaCoCo coverage (LINE ≥ 60%, BRANCH ≥ 60%), SpotBugs
+- **Quality gates** — `./mvnw verify` enforces JaCoCo coverage (LINE ≥ 60%, BRANCH ≥ 60%), SpotBugs
   static analysis (effort Max, threshold High), integration/E2E suites via Testcontainers, and an
   architecture boundary check with self-test. `core/` is framework-free: no Spring/Lombok
   annotations; beans are wired explicitly in `infra/config`.
@@ -310,7 +310,7 @@ The URL Shortener Service is developed solo/AI-assisted. Before contributing, re
 [AGENTS.md](AGENTS.md) (binding rules for both humans and agents — architecture boundaries, the
 Base62 ID-generation standard, no-URL-dedup, redirect-path integrity), the
 [coding standards](docs/coding-standards.md) and the [testing playbook](docs/testing-playbook.md).
-Keep the full gate green (`mvn verify`) and update `README.md` / `AGENTS.md` / `CHANGELOG.md` in the
+Keep the full gate green (`./mvnw verify`) and update `README.md` / `AGENTS.md` / `CHANGELOG.md` in the
 same change set (AGENTS.md rule 10).
 
 ## License

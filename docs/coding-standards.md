@@ -62,7 +62,7 @@ ca.tyny.urlshortener/
 │   │       ├── analytics/         # click-event queue + batched worker (async, persisted)
 │   │       ├── persistence/       # Mongo*Repository, *Entity, *Mapper, config (MongoCollections)
 │   │       └── redis/             # Redis cache, bloom filter, rate limiter
-│   ├── config/                    # beans, security, Undertow, OpenAPI, native hints
+│   ├── config/                    # beans, security, Tomcat, OpenAPI, native hints
 │   ├── observability/             # Micrometer metrics service & adapter
 │   └── security/                  # JWT filter, token provider, UserDetailsService
 └── Application.java               # Spring Boot entry point (ca.tyny.urlshortener.Application)
@@ -145,7 +145,7 @@ variants**. Prefer the pattern that matches existing code; if none fits, ask the
 
 ---
 
-## 5. Java 21 language features
+## 5. Java 25 language features
 
 - **Records** for immutable value objects and DTOs (`ShortUrl`, `Url`, `*Request` / `*Response`).
   Prefer records when the shape is fixed; use explicit classes only where behaviour matters.
@@ -161,14 +161,14 @@ variants**. Prefer the pattern that matches existing code; if none fits, ask the
   which is acceptable for a repository — keep method-parameter optional usage out).
 - **Streams.** Prefer `Stream`/`collect` over manual loops where clearer. No stateful lambdas, no
   side effects inside stream pipelines.
-- **Virtual threads** are enabled globally under Undertow — write blocking-but-simple code in
+- **Virtual threads** are enabled globally under Tomcat — write blocking-but-simple code in
   services (no thread-pool over-engineering for I/O).
 
 ---
 
 ## 6. Spring Boot conventions
 
-- **Java 21 / Spring Boot 3.5.7.** `core/` is annotation-free: no `@Component`/`@Service`, no
+- **Java 25 / Spring Boot 4.1.1.** `core/` is annotation-free: no `@Component`/`@Service`, no
   Lombok. Domain/use-case classes use explicit constructors; beans are registered via `@Bean` in
   `infra/config` (see `ServiceConfig`). Lombok is allowed in `infra/` adapters only.
 - **Constructor injection only** (`@RequiredArgsConstructor` for Lombok-managed fields in `infra/`,
@@ -266,7 +266,7 @@ variants**. Prefer the pattern that matches existing code; if none fits, ask the
 - Follow the layout of the layer you are editing; Maven/Spring Boot convention. No formatter config is
   committed — keep style consistent manually.
 - Imports: keep them clean and ordered (IDE auto-organize); **no wildcard imports** in new code.
-- Run `mvn test` (fast loop) before commit; run `mvn verify` after significant changes — it is the
+- Run `./mvnw test` (fast loop) before commit; run `./mvnw verify` after significant changes — it is the
   full gate (unit + IT/E2E + JaCoCo coverage floor + SpotBugs + jar).
 - Quality gates: JaCoCo 0.8.15 (LINE ≥ 60%, BRANCH ≥ 60%) and SpotBugs 4.9.8.5 (effort Max,
   threshold High) fail the build at `verify`. Do not weaken thresholds or add suppressions without
@@ -340,10 +340,10 @@ variants**. Prefer the pattern that matches existing code; if none fits, ask the
 | End-to-end          | RestAssured + Testcontainers  | `*IT` on `RANDOM_PORT`; run explicitly `-Dtest='*IT'`        |
 
 - Method/test names: `method_condition_expectedResult` or descriptive `should ...`.
-- Fast loop: `mvn test` (no Docker). Full gate: `mvn verify` (once failsafe is wired — see testing
+- Fast loop: `./mvnw test` (no Docker). Full gate: `./mvnw verify` (once failsafe is wired — see testing
   playbook). Identity tests must pin Base62 length/alphabet, collision retry, duplicate URL → new
   code, and namespace isolation — never Hashids or unique-on-URL as expected behaviour.
-- After significant changes: `mvn clean package` + smoke against `docker-compose up -d`.
+- After significant changes: `./mvnw clean package` + smoke against `docker-compose up -d`.
 - Full guidance: `docs/testing-playbook.md`.
 
 ---
@@ -419,5 +419,5 @@ current. The hard rule lives in `AGENTS.md` (rule 10).
 - [ ] Counters use `$inc` (atomic); no read-modify-write under concurrency
 - [ ] Unit test for new domain/application behaviour; existing suite not weakened
 - [ ] No secrets in the diff; log messages in English with context
-- [ ] `mvn test` green (and `*IT` green when persistence/cache/security/HTTP changed)
+- [ ] `./mvnw test` green (and `*IT` green when persistence/cache/security/HTTP changed)
 - [ ] Commit message says what and why

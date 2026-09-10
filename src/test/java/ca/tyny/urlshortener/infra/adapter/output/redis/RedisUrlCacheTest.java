@@ -4,7 +4,7 @@ import ca.tyny.urlshortener.core.model.CacheLookup;
 import ca.tyny.urlshortener.core.model.CachedUrlValue;
 import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import com.github.benmanes.caffeine.cache.Cache;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -151,8 +151,12 @@ class RedisUrlCacheTest {
         cache.put(TEST_ID, new CachedUrlValue(TEST_URL, null));
 
         // Then
-        verify(valueOperations).set(eq("url:" + TEST_ID), anyString(), argThat(duration -> duration.toHours() == 24
-                && duration.toSeconds() >= 86400 && duration.toSeconds() <= 86460));
+        // Cast needed: Spring Data Redis 4 adds a set(K,V,Consumer<SetSpec>) overload that makes
+        // the bare argThat lambda ambiguous against the Duration overload.
+        verify(valueOperations).set(eq("url:" + TEST_ID), anyString(),
+                org.mockito.ArgumentMatchers.<java.time.Duration>argThat(
+                        duration -> duration.toHours() == 24
+                                && duration.toSeconds() >= 86400 && duration.toSeconds() <= 86460));
     }
 
     @Test
@@ -166,7 +170,8 @@ class RedisUrlCacheTest {
 
         // Then
         verify(valueOperations).set(eq("url:" + TEST_ID), anyString(),
-                argThat(duration -> duration.toSeconds() >= 28 && duration.toSeconds() <= 30));
+                org.mockito.ArgumentMatchers.<java.time.Duration>argThat(
+                        duration -> duration.toSeconds() >= 28 && duration.toSeconds() <= 30));
     }
 
     @Test

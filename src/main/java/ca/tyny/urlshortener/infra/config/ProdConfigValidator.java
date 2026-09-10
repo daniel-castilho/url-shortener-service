@@ -39,19 +39,19 @@ public class ProdConfigValidator {
         }
 
         // MongoDB URI
-        String mongoUri = environment.getProperty("spring.data.mongodb.uri");
+        String mongoUri = environment.getProperty("spring.mongodb.uri");
         if (mongoUri == null || mongoUri.isBlank()) {
-            errors.add("spring.data.mongodb.uri is required");
+            errors.add("spring.mongodb.uri is required");
         } else if (mongoUri.contains("localhost") || mongoUri.contains("127.0.0.1")) {
-            errors.add("spring.data.mongodb.uri should not point to localhost in production");
+            errors.add("spring.mongodb.uri should not point to localhost in production");
         }
 
         // Redis host
-        String redisHost = environment.getProperty("spring.redis.host");
+        String redisHost = environment.getProperty("spring.data.redis.host");
         if (redisHost == null || redisHost.isBlank()) {
-            errors.add("spring.redis.host is required");
+            errors.add("spring.data.redis.host is required");
         } else if ("localhost".equals(redisHost) || "127.0.0.1".equals(redisHost)) {
-            errors.add("spring.redis.host should not be localhost in production");
+            errors.add("spring.data.redis.host should not be localhost in production");
         }
 
         // Rate limiter trusted proxy CIDRs (must be configured for proxy deployment)

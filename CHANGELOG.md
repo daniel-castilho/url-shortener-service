@@ -28,6 +28,18 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ### Changed
 
+- **Platform upgrade: Java 21 + Spring Boot 3.5.7 + Undertow → Java 25 + Spring Boot 4.1.1 + Tomcat.**
+  Boot 4 removed Undertow support (the app now runs on **Tomcat 11** with virtual threads, Jakarta
+  EE 11) and renamed `spring.data.mongodb.*` → `spring.mongodb.*`. Stack updates: Jackson 3
+  (`tools.jackson`), `spring-boot-starter-aspectj`, `spring-boot-starter-webmvc-test`, Spring
+  Security 7 (DAO authentication provider constructor), Redis:4 (ValueOperations generics),
+  Testcontainers **2.0.5** (`MongoDBContainer` from `org.testcontainers.mongodb`, replica set with
+  **explicit `withReplicaSet()`**), Redisson 4.7.0, jjwt 0.12.7, springdoc 3.1.1, spotbugs 4.10.4.1
+  (requires Maven ≥ 3.8.9), lombok 1.18.46, logstash-encoder 9.0, REST Assured **6.0.1** (5.5.7
+  pulls Groovy 5.0.8, which throws an NPE in `ClosureMetaClass` — 5.5.x cannot run under Groovy 5).
+- **Maven wrapper 3.9.16** — the repo bundles `./mvnw` (was: local `mvn` only); spotbugs' higher
+  Maven floor made the wrapper the canonical entry point. Updated README commands, CI (Java 25,
+  temurin), Dockerfile (temurin-25), systemd unit and scripts accordingly.
 - Bumped Lombok to 1.18.46 (JDK 25 compatibility; required for local builds on Corretto 25).
 
 ## [0.12.0] - 2026-08-28

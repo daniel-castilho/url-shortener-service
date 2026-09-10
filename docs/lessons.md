@@ -35,7 +35,7 @@ non-obvious failure or design decision cost real debugging time.
   approval.
 - **Debug Testcontainers startup** by pointing logback at a temp file with DEBUG for
   `org.testcontainers` and `com.github.dockerjava`:
-  `mvn test -Dlogback.configurationFile=/tmp/logback-testcontainers.xml -Dtest='<MyIT>'`.
+  `./mvnw test -Dlogback.configurationFile=/tmp/logback-testcontainers.xml -Dtest='<MyIT>'`.
 - **MongoDB/Redis start empty.** `BaseIntegrationTest` provisions the schema and drops/flushes each
   test method — don't assume persisted state across tests.
 
