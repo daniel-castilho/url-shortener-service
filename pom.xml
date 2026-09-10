@@ -23,6 +23,8 @@
         <spotbugs.version>4.10.4.1</spotbugs.version>
         <jacoco.version>0.8.15</jacoco.version>
         <testcontainers.version>2.0.5</testcontainers.version>
+        <spotless.version>3.10.2</spotless.version>
+        <archunit.version>1.5.0</archunit.version>
     </properties>
 
     <dependencies>
@@ -173,6 +175,15 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Architecture boundary tests (Epic 1 / AGENTS.md Rule 1): JUnit home for the
+             ArchUnit rules that codify the hexagonal dependency rule. -->
+        <dependency>
+            <groupId>com.tngtech.archunit</groupId>
+            <artifactId>archunit-junit5</artifactId>
+            <version>${archunit.version}</version>
+            <scope>test</scope>
+        </dependency>
+
         <!-- OpenTelemetry: versions managed by the Boot 4.1.1 BOM (1.62.0) -->
         <dependency>
             <groupId>io.micrometer</groupId>
@@ -302,6 +313,37 @@
                         <goals>
                             <goal>check</goal>
                         </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>${spotless.version}</version>
+                <configuration>
+                    <java>
+                        <includes>
+                            <include>src/main/java/**/*.java</include>
+                            <include>src/test/java/**/*.java</include>
+                        </includes>
+                        <googleJavaFormat>
+                            <version>1.36.1</version>
+                            <style>GOOGLE</style>
+                            <reflowLongStrings>false</reflowLongStrings>
+                        </googleJavaFormat>
+                        <removeUnusedImports />
+                        <formatAnnotations />
+                        <trimTrailingWhitespace />
+                        <endWithNewline />
+                    </java>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>spotless-check</id>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <phase>validate</phase>
                     </execution>
                 </executions>
             </plugin>
