@@ -39,7 +39,8 @@ public class QuotaUsage {
     return LocalDateTime.now().isAfter(quotaResetDate);
   }
 
-  // Getters and Setters
+  // Mutable by design: persisted via MongoUserRepository and mutated atomically ($inc) on the
+  // storage side; setters exist for the persistence mapper, not for domain flows.
 
   public int getVanityUrlsCreatedThisMonth() {
     return vanityUrlsCreatedThisMonth;
