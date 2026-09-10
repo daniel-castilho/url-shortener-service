@@ -7,8 +7,11 @@
 #   - k6 is executed through the grafana/k6 container (no host install needed)
 #
 # Behaviour:
-#   1. ensures mongo + redis are up (docker-compose),
-#   2. boots the app with relaxed per-IP rate limits for the load window,
+#   1. ensures mongo + redis are up (docker-compose); skipped when
+#      BASELINE_SKIP_COMPOSE=1 (use it when targeting pre-existing infra via
+#      MONGODB_URI / REDIS_HOST / REDIS_PORT, e.g. isolated baseline ports),
+#   2. boots the app with relaxed per-IP rate limits for the load window;
+#      binds the app to $PORT (default 8080) via SERVER_PORT so it matches BASE_URL,
 #   3. runs shorten / redirect / mixed k6 scenarios with thresholds-as-code,
 #   4. prints a summary table (p50/p95/p99 from the k6 summary export),
 #   5. leaves/resolves the environment; records results in load-tests/results/.
@@ -23,6 +26,11 @@
 # Usage:
 #   bash scripts/performance-baseline.sh [duration] [redirect-rps] [shorten-rps]
 #   default: 1m / 200 / 20 (local dev-friendly; adjust for a heavier gate run)
+#   Example (isolated infra on alternate ports):
+#     BASELINE_SKIP_COMPOSE=1 PORT=8081 \
+#     MONGODB_URI=mongodb://localhost:27018/url_shortener \
+#     REDIS_HOST=localhost REDIS_PORT=6380 \
+#     bash scripts/performance-baseline.sh 1m 200 20
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -62,17 +70,22 @@ cleanup() {
 trap cleanup EXIT
 
 log "1/5 ensuring mongo + redis are up"
-docker compose up -d
-for i in $(seq 1 30); do
-  if docker ps --filter name=urlshortener-mongo --format '{{.Status}}' | grep -q healthy; then
-    break
-  fi
-  sleep 2
-done
+if [ -n "${BASELINE_SKIP_COMPOSE:-}" ]; then
+  log "BASELINE_SKIP_COMPOSE set — skipping docker compose; using MONGODB_URI=$MONGODB_URI REDIS_HOST=$REDIS_HOST REDIS_PORT=$REDIS_PORT"
+else
+  docker compose up -d
+  for i in $(seq 1 30); do
+    if docker ps --filter name=urlshortener-mongo --format '{{.Status}}' | grep -q healthy; then
+      break
+    fi
+    sleep 2
+  done
+fi
 
-log "2/5 building and booting the app (relaxed rate limits)"
+log "2/5 building and booting the app (relaxed rate limits, port ${PORT})"
 export RATE_LIMITER_LIMIT=1000000
 export RATE_LIMITER_REDIRECT_LIMIT=1000000
+export SERVER_PORT="$PORT"
 ./mvnw -q spring-boot:run > "$RESULTS_DIR/app-baseline.log" 2>&1 &
 APP_PID=$!
 
@@ -120,9 +133,16 @@ m = d.get("metrics", {})
 for metric in ("http_req_duration", "http_req_failed"):
     if metric not in m:
         continue
-    v = m[metric].get("values", {})
+    # k6 >= v2.0 exports trend/rate metrics flat in the summary JSON
+    # (older k6 nested them under "values")
+    v = m[metric]
+    if isinstance(v, dict) and "values" in v and isinstance(v["values"], dict):
+        v = v["values"]
     if metric == "http_req_failed":
-        print(f"  {metric}: rate={v.get('rate', '-')}")
+        rate = v.get("rate")
+        if rate is None:
+            rate = v.get("value", "-")  # k6 v2 flat export exposes the rate as "value"
+        print(f"  {metric}: rate={rate}")
     else:
         print(f"  {metric}: p50={v.get('p(50)', '-')} p95={v.get('p(95)', '-')} p99={v.get('p(99)', '-')} avg={v.get('avg', '-')} (ms)")
 PY

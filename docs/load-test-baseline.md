@@ -18,7 +18,47 @@ k6 run load-tests/redirect.js
 k6 run load-tests/mixed.js
 ```
 
-## Baseline — 2026-08-27
+Or use the wrapper script (boots infra + app + runs all three scenarios and prints a summary):
+
+```bash
+bash scripts/performance-baseline.sh [duration] [redirect-rps] [shorten-rps]
+```
+
+When other projects already own the default ports (8080/6379/27017), run in isolated mode
+against dedicated infra on alternate ports:
+
+```bash
+BASELINE_SKIP_COMPOSE=1 PORT=18080 \
+MONGODB_URI=mongodb://localhost:27018/url_shortener \
+REDIS_HOST=localhost REDIS_PORT=6380 \
+bash scripts/performance-baseline.sh 1m 200 20
+```
+
+## Baseline — 2026-09-09 (post platform upgrade)
+
+| Workload | Rate | p50 | p95 | p99 | Throughput (req/s) |
+|----------|------|-----|-----|-----|--------------------|
+| shorten (constant 20 rps) | `load-tests/shorten.js` | 10.3 ms | 24.1 ms | 64.6 ms | 21.5 |
+| redirect (constant 200 rps) | `load-tests/redirect.js` | 7.2 ms | 12.8 ms | 21.7 ms | 211.4 |
+| mixed 1:10 (20 + 200 rps) | `load-tests/mixed.js` | 7.4 ms | 13.3 ms | 20.4 ms | 230.3 |
+
+- Thresholds: all passed (k6 exit `0`; `p(95) < 200ms`, `http_req_failed < 0.1%`)
+- Environment: Linux 6.18.33.2 (WSL2), 16 cores, 15 GB RAM, JVM 25.0.4.1 (Corretto),
+  Tomcat 11, Spring Boot 4.1.1, Virtual Threads
+  (**post-platform-upgrade baseline** — Java 25 / Spring Boot 4.1.1 / Tomcat 11; commit `875c7d5`)
+- MongoDB: 6.0.28 (Docker, single-node, isolated port 27018)
+- Redis: 8.10.1 (Docker, single-node, isolated port 6380)
+- k6 version: v2.2.0 (grafana/k6 container, host networking)
+- Date: 2026-09-09, app version: `main` @ `875c7d5`
+
+> **Comparison vs 2026-08-27:** at the same load the tail latencies are ~40–85% higher
+> (shorten p95 16→24 ms, redirect p99 17→22 ms, mixed p95 7.6→13.3 ms). The measurement
+> stack changed too (k6 v0.58.0 native binary → k6 v2.2.0 container; Redis 7 → 8.10.1), so
+> the regression cannot be attributed to Tomcat 11 vs Undertow alone. **Next step:** re-run a
+> like-for-like comparison (same k6 version, same Redis major) to isolate the platform effect
+> before the next release is closed; a real >10% platform regression must be investigated.
+
+## Baseline — 2026-08-27 (pre platform upgrade)
 
 | Workload | Rate | p50 | p95 | p99 | Throughput (req/s) |
 |----------|------|-----|-----|-----|--------------------|
@@ -33,9 +73,3 @@ k6 run load-tests/mixed.js
 - k6 version: v0.58.0
 - App version: `v0.10.0`
 - Date: 2026-08-27
-
-> **Follow-up:** re-run after the Java 25 / Spring Boot 4.1.1 / Tomcat 11 migration and publish the new
-> numbers here before the next release. Regressions > 10% at the same load must be investigated.
-
-Compare against the previous baseline; regressions > 10% at the same load
-should be investigated before the release milestone is closed.

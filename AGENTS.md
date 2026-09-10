@@ -339,8 +339,13 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     `ClosureMetaClass` — 5.5.x cannot run under Groovy 5), and a bounded Maven **wrapper 3.9.16**
     (`./mvnw`). Dockerfile/CI/systemd/prod-validator/`application*.yaml` updated; `ReadPathIT` etc.
     use the singleton-container pattern (no `@DirtiesContext`) with WT cache cap + ulimit. Full gate
-    `./mvnw verify` (265 unit + 114 IT) + SpotBugs + JaCoCo + boundary gate green. **Follow-up:**
-    re-run `scripts/performance-baseline.sh` on the new platform and refresh `docs/load-test-baseline.md`.
+    `./mvnw verify` (265 unit + 114 IT) + SpotBugs + JaCoCo + boundary gate green. **Follow-up done:**
+    `scripts/performance-baseline.sh` re-run on the new platform (isolated ports; k6 v2.2.0 container)
+    and `docs/load-test-baseline.md` refreshed — 2026-09-09 baseline published; tails ~40–85% above the
+    2026-08-27 baseline, but the measurement stack changed too (k6 v0.58.0 native → v2.2.0 container,
+    Redis 7 → 8.10.1), so a like-for-like comparison is still pending before attributing any regression
+    to Tomcat 11 vs Undertow. The baseline script also gained an isolated mode (`BASELINE_SKIP_COMPOSE=1`,
+    `PORT`/`MONGODB_URI`/`REDIS_*`) and a k6 v2 summary-export parser fix.
     — `resolved`
 
 ## 🔍 Operational Discipline & Debugging Guidelines
