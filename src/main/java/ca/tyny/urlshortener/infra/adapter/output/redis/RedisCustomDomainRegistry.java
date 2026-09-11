@@ -25,6 +25,11 @@ public class RedisCustomDomainRegistry implements CustomDomainRegistryPort {
 
   private static final Logger log = LoggerFactory.getLogger(RedisCustomDomainRegistry.class);
 
+  // CWE-117 defense at the sink: hosts are client-supplied when claiming domains
+  static String logSafe(String value) {
+    return value == null ? null : value.replace('\n', '_').replace('\r', '_');
+  }
+
   static final String ACTIVE_DOMAINS_KEY = "url_shortener:custom_domains:active";
   static final long REFRESH_INTERVAL_MS = 5_000L;
 
@@ -52,7 +57,7 @@ public class RedisCustomDomainRegistry implements CustomDomainRegistryPort {
     try {
       redis.opsForSet().add(ACTIVE_DOMAINS_KEY, host);
     } catch (Exception e) {
-      log.warn("Failed to record active domain {} in Redis: {}", host, e.getMessage());
+      log.warn("Failed to record active domain {} in Redis: {}", logSafe(host), e.getMessage());
     }
     synchronized (lock) {
       Set<String> next = new java.util.HashSet<>(snapshot);
@@ -66,7 +71,7 @@ public class RedisCustomDomainRegistry implements CustomDomainRegistryPort {
     try {
       redis.opsForSet().remove(ACTIVE_DOMAINS_KEY, host);
     } catch (Exception e) {
-      log.warn("Failed to remove active domain {} from Redis: {}", host, e.getMessage());
+      log.warn("Failed to remove active domain {} from Redis: {}", logSafe(host), e.getMessage());
     }
     synchronized (lock) {
       Set<String> next = new java.util.HashSet<>(snapshot);

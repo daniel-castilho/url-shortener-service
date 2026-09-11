@@ -31,6 +31,11 @@ public class RedisClickEventQueue implements AnalyticsPort {
 
   private static final Logger log = LoggerFactory.getLogger(RedisClickEventQueue.class);
 
+  // CWE-117 defense at the sink: the short code originates from the redirect path variable
+  static String logSafe(String value) {
+    return value == null ? null : value.replace('\n', '_').replace('\r', '_');
+  }
+
   public static final String FIELD_CODE = "code";
   public static final String FIELD_TIMESTAMP = "ts";
   public static final String FIELD_USER_AGENT = "ua";
@@ -95,7 +100,10 @@ public class RedisClickEventQueue implements AnalyticsPort {
     } catch (Exception e) {
       // Fail-open: analytics must never break the redirect path
       droppedCounter.increment();
-      log.warn("Failed to enqueue click event for code {} — event dropped", event.shortCode(), e);
+      log.warn(
+          "Failed to enqueue click event for code {} — event dropped",
+          logSafe(event.shortCode()),
+          e);
     }
   }
 

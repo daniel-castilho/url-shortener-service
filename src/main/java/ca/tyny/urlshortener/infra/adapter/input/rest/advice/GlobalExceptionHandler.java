@@ -30,9 +30,16 @@ public class GlobalExceptionHandler {
 
   private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+  // CWE-117 defense at the sink (lessons.md §Security): exception messages embed
+  // client-controlled ids/aliases/URLs, so a forged id with \n/\r could forge log lines.
+  // CodeQL-recognized sanitizer: replace(char, char) on \n and \r, in the logging method.
+  static String logSafe(String value) {
+    return value == null ? null : value.replace('\n', '_').replace('\r', '_');
+  }
+
   @ExceptionHandler(UrlNotFoundException.class)
   public ResponseEntity<ErrorResponse> handleUrlNotFound(UrlNotFoundException ex) {
-    log.warn("URL not found: {}", ex.getMessage());
+    log.warn("URL not found: {}", logSafe(ex.getMessage()));
 
     ErrorResponse error =
         new ErrorResponse(
@@ -43,7 +50,7 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(UrlExpiredException.class)
   public ResponseEntity<ErrorResponse> handleUrlExpired(UrlExpiredException ex) {
-    log.warn("URL expired: {}", ex.getMessage());
+    log.warn("URL expired: {}", logSafe(ex.getMessage()));
 
     ErrorResponse error =
         new ErrorResponse(
@@ -54,7 +61,7 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(IllegalArgumentException.class)
   public ResponseEntity<ErrorResponse> handleIllegalArgument(IllegalArgumentException ex) {
-    log.warn("Invalid argument: {}", ex.getMessage());
+    log.warn("Invalid argument: {}", logSafe(ex.getMessage()));
 
     ErrorResponse error =
         new ErrorResponse(
@@ -68,7 +75,7 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(InvalidDestinationException.class)
   public ResponseEntity<ErrorResponse> handleInvalidDestination(InvalidDestinationException ex) {
-    log.warn("Invalid destination URL: {}", ex.getMessage());
+    log.warn("Invalid destination URL: {}", logSafe(ex.getMessage()));
 
     ErrorResponse error =
         new ErrorResponse(
@@ -82,7 +89,7 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(InvalidExpiryException.class)
   public ResponseEntity<ErrorResponse> handleInvalidExpiry(InvalidExpiryException ex) {
-    log.warn("Invalid expiry: {}", ex.getMessage());
+    log.warn("Invalid expiry: {}", logSafe(ex.getMessage()));
 
     ErrorResponse error =
         new ErrorResponse(
@@ -93,7 +100,7 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(ForbiddenException.class)
   public ResponseEntity<ErrorResponse> handleForbidden(ForbiddenException ex) {
-    log.warn("Forbidden: {}", ex.getMessage());
+    log.warn("Forbidden: {}", logSafe(ex.getMessage()));
 
     ErrorResponse error =
         new ErrorResponse(
@@ -118,7 +125,7 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(QuotaExceededException.class)
   public ResponseEntity<ErrorResponse> handleQuotaExceeded(QuotaExceededException ex) {
-    log.warn("Quota exceeded: {}", ex.getMessage());
+    log.warn("Quota exceeded: {}", logSafe(ex.getMessage()));
 
     ErrorResponse error =
         new ErrorResponse(
@@ -132,7 +139,7 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(AliasAlreadyExistsException.class)
   public ResponseEntity<ErrorResponse> handleAliasAlreadyExists(AliasAlreadyExistsException ex) {
-    log.warn("Alias already exists: {}", ex.getMessage());
+    log.warn("Alias already exists: {}", logSafe(ex.getMessage()));
 
     ErrorResponse error =
         new ErrorResponse(
@@ -146,7 +153,7 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(DomainAlreadyExistsException.class)
   public ResponseEntity<ErrorResponse> handleDomainAlreadyExists(DomainAlreadyExistsException ex) {
-    log.warn("Domain already claimed: {}", ex.getMessage());
+    log.warn("Domain already claimed: {}", logSafe(ex.getMessage()));
 
     ErrorResponse error =
         new ErrorResponse(
@@ -160,7 +167,7 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(DomainNotFoundException.class)
   public ResponseEntity<ErrorResponse> handleDomainNotFound(DomainNotFoundException ex) {
-    log.warn("Domain not found: {}", ex.getMessage());
+    log.warn("Domain not found: {}", logSafe(ex.getMessage()));
 
     ErrorResponse error =
         new ErrorResponse(
@@ -171,7 +178,7 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(InvalidDomainException.class)
   public ResponseEntity<ErrorResponse> handleInvalidDomain(InvalidDomainException ex) {
-    log.warn("Invalid domain: {}", ex.getMessage());
+    log.warn("Invalid domain: {}", logSafe(ex.getMessage()));
 
     ErrorResponse error =
         new ErrorResponse(
@@ -182,7 +189,7 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(DomainNotVerifiedException.class)
   public ResponseEntity<ErrorResponse> handleDomainNotVerified(DomainNotVerifiedException ex) {
-    log.warn("Domain not verified: {}", ex.getMessage());
+    log.warn("Domain not verified: {}", logSafe(ex.getMessage()));
 
     ErrorResponse error =
         new ErrorResponse(
@@ -197,7 +204,7 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(MethodArgumentNotValidException.class)
   public ResponseEntity<ValidationErrorResponse> handleValidationErrors(
       MethodArgumentNotValidException ex) {
-    log.warn("Validation failed: {}", ex.getMessage());
+    log.warn("Validation failed: {}", logSafe(ex.getMessage()));
 
     Map<String, String> errors = new HashMap<>();
     ex.getBindingResult()
@@ -225,7 +232,7 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(MethodArgumentTypeMismatchException.class)
   public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
-    log.warn("Type mismatch: {}", ex.getMessage());
+    log.warn("Type mismatch: {}", logSafe(ex.getMessage()));
 
     String message =
         String.format("Invalid value '%s' for parameter '%s'", ex.getValue(), ex.getName());

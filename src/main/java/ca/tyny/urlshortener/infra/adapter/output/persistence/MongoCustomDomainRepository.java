@@ -29,6 +29,11 @@ public class MongoCustomDomainRepository implements CustomDomainRepositoryPort {
 
   private static final Logger log = LoggerFactory.getLogger(MongoCustomDomainRepository.class);
 
+  // CWE-117 defense at the sink: the host is client-supplied when claiming a domain
+  static String logSafe(String value) {
+    return value == null ? null : value.replace('\n', '_').replace('\r', '_');
+  }
+
   private final MongoTemplate mongoTemplate;
   private final CustomDomainMapper mapper;
 
@@ -98,10 +103,10 @@ public class MongoCustomDomainRepository implements CustomDomainRepositoryPort {
       mongoTemplate.save(mapper.toPersistence(domain));
       log.debug("Custom domain saved: {}", domain.host());
     } catch (DuplicateKeyException e) {
-      log.warn("Duplicate host claim for: {}", domain.host());
+      log.warn("Duplicate host claim for: {}", logSafe(domain.host()));
       throw new DomainAlreadyExistsException(domain.host());
     } catch (Exception e) {
-      log.error("Error saving custom domain: {}", domain.host(), e);
+      log.error("Error saving custom domain: {}", logSafe(domain.host()), e);
       throw new RepositoryException("Failed to persist custom domain", e);
     }
   }

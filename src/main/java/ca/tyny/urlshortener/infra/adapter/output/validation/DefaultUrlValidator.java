@@ -32,6 +32,20 @@ public class DefaultUrlValidator implements UrlValidator {
 
   private static final Logger log = LoggerFactory.getLogger(DefaultUrlValidator.class);
 
+  // CWE-117 defense at the sink: hosts come from client-supplied destination URLs
+  static String logSafe(String value) {
+    return value == null ? null : value.replace('\n', '_').replace('\r', '_');
+  }
+
+  private static String extractHost(String url) {
+    try {
+      URI uri = new URI(url);
+      return uri.getHost();
+    } catch (Exception e) {
+      return "unparseable";
+    }
+  }
+
   private static final Pattern HOST_PATTERN =
       Pattern.compile("^([a-zA-Z0-9]([a-zA-Z0-9\\-]{0,61}[a-zA-Z0-9])?\\.)+[a-zA-Z]{2,}$");
 
@@ -78,7 +92,10 @@ public class DefaultUrlValidator implements UrlValidator {
   public void validate(String url) throws InvalidDestinationException {
     var result = doValidate(url);
     if (!result.allowed()) {
-      log.warn("URL validation blocked: {} - {}", url, result.reason());
+      // Log host + reason, never the full destination URL (AGENTS.md Rule 6). The host is
+      // client-supplied, so it goes through the sink sanitizer (CWE-117).
+      log.warn(
+          "URL validation blocked: host={}; reason={}", logSafe(extractHost(url)), result.reason());
       throw new InvalidDestinationException(result.reason());
     }
   }
@@ -166,7 +183,7 @@ public class DefaultUrlValidator implements UrlValidator {
       // For simplicity, we use the default with a timeout wrapper
       ips = Arrays.asList(InetAddress.getAllByName(host));
     } catch (UnknownHostException e) {
-      log.warn("DNS resolution failed for host: {}", host);
+      log.warn("DNS resolution failed for host: {}", logSafe(host));
       ips = Collections.emptyList();
     }
 
