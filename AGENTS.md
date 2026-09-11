@@ -360,6 +360,17 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     `lessons ↔ coding-standards`, wired no CI (job `doc-sync`). Aprovação humana para as adições no
     `pom.xml` (Regra 9) registrada na sessão de planejamento do épico. — `resolved`
 
+23. **Epic 2 (Secure by Design) — OWASP Dependency-Check no CI**: dependency-check-maven
+    12.2.2 bound ao `verify` (fail CVSS ≥ 7, `owasp-suppressions.xml` vazia com policy
+    rationale+review per line), `scripts/check-security.sh` (+ `--self-test`) e job CI `security-check`
+    (cache NVD + retry 2x + fail-open documentado). Corrigidos kotlin-stdlib CVE-2026-53914 (bump
+    2.4.20) e removido spring-boot-devtools (CVE-2022-31691 false positive de CPE; aprovação do owner);
+    `opentelemetry-api` CVE-2026-54285 = MEDIUM < 7 e CPE do opentelemetry-js, sem suppression.
+    **Fonte de dados NVD (2026-09-11): mirror nightly do ODC (`DependencyCheck_Builder`) via
+    `nvdDatafeedUrl`** — o cold sync direto da NVD API 2.0 ficou >1h travado no CI (keyed E keyless),
+    casando com upstream #7431/#8435; o mirror sync completo em ~2min (verificado local) e check em
+    ~15s; a secret `NVD_API_KEY` permanece no org mas **não** é wired (datafeed a ignora). — `resolved`
+
 ## 🔍 Operational Discipline & Debugging Guidelines
 
 - **Investigate before trial-and-error:** when a compile or test fails, read the full stack trace and
