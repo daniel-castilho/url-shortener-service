@@ -81,6 +81,21 @@ same WSL2 host, Java 25 / Boot 4.1.1 / Tomcat 11 virtual threads). App: `main` @
 > between 08-27/09-09 was measurement noise (host load + stack switch), not an app/platform
 > regression. Baseline and SLOs are validated; no performance investigation is warranted.
 
+## Stress — 2026-09-11 (Epic 5 story 5.5, 2× nominal, ramping)
+
+`load-tests/stress.js` (ramping-arrival-rate): redirect 100→200→400 rps and shorten
+10→20→40 rps, holding **2× nominal** for 4m (total window ~8m; pool 500 codes).
+
+| Scenario | p50 | p95 | p99 | http_req_failed |
+|----------|-----|-----|-----|-----------------|
+| redirect (peak 400 rps) | 3.75 ms | 4.63 ms | 5.52 ms | 0 (0 / 165,498 reqs) |
+| shorten (peak 40 rps) | 3.60 ms | 4.45 ms | 5.72 ms | 0 |
+
+- 165,498 requests over the window (~375 req/s peak combined), **zero failures**, p95 well
+  under the 200 ms SLO at every stage — no degradation to document; the service absorbs 2×
+  nominal load with cache-warm latency (L1 + Redis L2 + bloom absorbing the redirect storm).
+- Artifacts: `load-tests/results/stress-20260911-074441.summary.json`
+
 ## Baseline — 2026-08-27 (pre platform upgrade)
 
 | Workload | Rate | p50 | p95 | p99 | Throughput (req/s) |
