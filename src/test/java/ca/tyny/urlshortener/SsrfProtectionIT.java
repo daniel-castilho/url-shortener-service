@@ -164,7 +164,8 @@ class SsrfProtectionIT extends BaseIntegrationTest {
         "172.16.0.1", // RFC1918 Class B
         "192.168.0.1", // RFC1918 Class C
         "169.254.169.254", // metadata + link-local
-        "[::1]" // IPv6 loopback
+        "[::1]", // IPv6 loopback
+        "[::ffff:169.254.169.254]" // IPv4-mapped IPv6 metadata (CIDR ::ffff:169.254.169.254/128)
         );
   }
 }

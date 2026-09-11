@@ -164,6 +164,19 @@ class DefaultUrlValidatorTest {
   }
 
   @Test
+  @DisplayName("Rejects IPv4-mapped IPv6 metadata literal (SSRF)")
+  void rejectsIpv4MappedMetadataLiteral() {
+    UrlValidator validator = createValidator(false, true, 2000);
+
+    // ::ffff:169.254.169.254/128 resolves to an Inet4Address whose getHostAddress() is
+    // 169.254.169.254 (cloud metadata): caught either by the metadata set or by the mapped CIDR.
+    var result =
+        ((DefaultUrlValidator) validator).doValidate("https://[::ffff:169.254.169.254]/path");
+    assertThat(result.allowed()).isFalse();
+    assertThat(result.reason()).containsAnyOf("cloud metadata IP", "private/internal IP");
+  }
+
+  @Test
   @DisplayName("Rejects invalid scheme")
   void rejectsInvalidScheme() {
     UrlValidator validator = createValidator(false, true, 2000);
