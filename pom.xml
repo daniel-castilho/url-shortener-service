@@ -369,10 +369,16 @@
                          "no known >= 7 vulns for the current dependency set". -->
                     <failBuildOnCVSS>7</failBuildOnCVSS>
                     <suppressionFile>${project.basedir}/owasp-suppressions.xml</suppressionFile>
-                    <!-- NVD key: passed as -DnvdApiKey ONLY when the CI secret exists (keyless =
-                         throttled-but-working; dependency-check 13 rejects an empty-string key).
+                    <!-- NVD data source (Epic 2.5 hardening, 2026-09): the plugin updates from the
+                         ODC-maintained nightly mirror (DependencyCheck_Builder) instead of the NVD
+                         API directly. The NVD API went through 60s-timeout/retry storms 2026 (issues
+                         #7431/#8435) that left keyless cold syncs stuck for >1h; the GitHub-hosted
+                         mirror cold-syncs in ~2min locally (verified 2026-09-11) and stays fresher
+                         than NVD's own feeds under load. {0} = year. The NVD_API_KEY secret remains
+                         available but is NOT wired here: with the datafeed the key is unused.
                          Data dir is cached on CI so delta-syncs dominate. -->
                     <dataDirectory>${user.home}/.m2/dependency-check-data</dataDirectory>
+                    <nvdDatafeedUrl>https://dependency-check.github.io/DependencyCheck_Builder/nvd_cache/nvdcve-{0}.json.gz</nvdDatafeedUrl>
                     <nvdApiDelay>6000</nvdApiDelay>
                     <formats>
                         <format>HTML</format>

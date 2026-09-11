@@ -57,7 +57,7 @@ jobs:
           key: owasp-nvd-v1
           restore-keys: owasp-nvd-
       - name: Run integration tests
-        run: ./mvnw verify -DfailIfNoTests=false
+        run: ./mvnw verify -DfailIfNoTests=false -DnvdDatafeedUrl=https://dependency-check.github.io/DependencyCheck_Builder/nvd_cache/nvdcve-{0}.json.gz
 
   security-check:
     name: Security Gate
@@ -79,17 +79,16 @@ jobs:
         run: bash scripts/check-security.sh
       - name: Static security gate self-test
         run: bash scripts/check-security.sh --self-test
-      # Epic 2 story 2.5: the NVD key is passed ONLY when the secret exists (dependabot PRs
-      # receive NO repo secrets; keyless = documented throttled-but-working). A tool outage
-      # fails the job — never silent-pass (2 retries, then fail).
-      - name: OWASP Dependency-Check (NVD keyed, cached)
-        env:
-          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+      # Epic 2 story 2.5: the plugin consumes the ODC nightly NVD mirror (DependencyCheck_Builder)
+      # via nvdDatafeedUrl — NVD API cold syncs were stuck >1h in CI (2026-09-11, keyed AND keyless),
+      # the mirror cold-syncs in ~2min (verified locally). The NVD_API_KEY secret is kept in the org
+      # for optional manual keyed API use but is intentionally NOT wired here. A tool outage fails
+      # the job — never silent-pass (2 retries, then fail).
+      - name: OWASP Dependency-Check (NVD mirror, cached)
         run: |
           set -euo pipefail
-          KEY_ARGS=()
-          if [[ -n "${NVD_API_KEY:-}" ]]; then KEY_ARGS+=(-DnvdApiKey="$NVD_API_KEY"); fi
-          attempt() { ./mvnw -B dependency-check:check -DskipTests "${KEY_ARGS[@]}" "$@"; }
+          FEED='-DnvdDatafeedUrl=https://dependency-check.github.io/DependencyCheck_Builder/nvd_cache/nvdcve-{0}.json.gz'
+          attempt() { ./mvnw -B dependency-check:check -DskipTests "$FEED" "$@"; }
           if ! attempt; then
             echo "OWASP attempt 1 failed — retrying once in 60s (NVD sync flakiness, documented P2 policy)"
             sleep 60
