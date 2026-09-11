@@ -374,7 +374,6 @@
                          Data dir is cached on CI so delta-syncs dominate. -->
                     <dataDirectory>${user.home}/.m2/dependency-check-data</dataDirectory>
                     <nvdApiDelay>6000</nvdApiDelay>
-                    <retentionJsHours>24</retentionJsHours>
                     <formats>
                         <format>HTML</format>
                         <format>JSON</format>
