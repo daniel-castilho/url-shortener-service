@@ -397,13 +397,31 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     `/actuator/info` público. — `resolved`
 
 26. **Tier actuator efetivamente hard-lock: sem role de operador (Epic 3 story 3.3, follow-up)** —
-    `CustomUserDetailsService` retorna `Collections.emptyList()` como authorities e o modelo `User`
-    não tem campos de role; nenhum principal alcança `ROLE_ADMIN`/`METRICS_VIEWER`, então
-    `/actuator/health` (components), `/actuator/metrics` e `/actuator/prometheus` são inacessíveis
-    por HTTP até para operadores (401/403 sempre). Além disso `security.actuator.health-detail-enabled`
-    está bound em `SecurityProperties` mas nunca consumido (o switch real é
-    `management.endpoint.health.show-details`). Decidir identidade de operador (usuário BasicAuth
-    escopado, role no JWT ou allowlist de IP) e wirear `health-detail-enabled` ou removê-lo. — `open`
+     `CustomUserDetailsService` retornava `Collections.emptyList()` como authorities e o modelo `User`
+     não tem campos de role; nenhum principal alcançava `ROLE_ADMIN`/`METRICS_VIEWER`, então
+     `/actuator/health` (components), `/actuator/metrics` e `/actuator/prometheus` eram inacessíveis
+     por HTTP até para operadores (401/403 sempre). Além disso `security.actuator.health-detail-enabled`
+     estava bound em `SecurityProperties` mas nunca consumido (o switch real é
+     `management.endpoint.health.show-details`).
+     **Resolvido (2026-09-11):** identidade de operador implementada como **BasicAuth escopado ao
+     actuator** — `BasicOperatorAuthFilter` (não-bean, instanciado via `addFilterBefore` no
+     `SecurityConfig` conforme o padrão canônico do Spring Security 7 para filters custom) concede
+     `ROLE_OPERATOR` quando as credenciais batem com `app.security.operator.username/password`
+     (env `OPERATOR_USERNAME`/`OPERATOR_PASSWORD`, comparação constant-time `MessageDigest.isEqual`;
+     vazias fora do prod = **nenhuma** conta operator existe, qualquer Basic falha closed). Tiers:
+     health/metrics/prometheus/circuitbreakers → `ADMIN | OPERATOR` (metrics também
+     `METRICS_VIEWER`); env/beans/index seguem ADMIN-only (least privilege). Prop morta
+     `health-detail-enabled` **removida** do `SecurityProperties` (o switch real
+     `HEALTH_SHOW_DETAILS:when-authorized` agora tem um autenticado real para autorizar — health
+     com components visível ao operator). `ProdConfigValidator` fail-fast em prod: operator ausente,
+     senha < 16 chars ou username adivinhável (operator/admin) aborta o boot. Corrigido junto: o
+     bloco `security:` do `application.yaml` NUNCA bindava (prefixo real `app.security`; vivia de
+     `@DefaultValue`) — movido para `app.security:`. `ProdConfigValidatorIT` +3 (8 total);
+     `OperatorAccessIT` nova (9: health c/ details, metrics+nomeada, prometheus scrape,
+     circuitbreakers c/ databaseCb, least-privilege 403 em env/beans/index, senha errada 401,
+     usuário inexistente 401, anon 401, JWT user 403). Curl manual (env real): health 200 c/
+     components (mongo/redis/circuitBreakers CLOSED), `metrics/jvm.memory.used` 200 (valor
+     208288504.0), prometheus 200, circuitbreakers 200, env 403, senha errada 401, anônimo 401. — `resolved`
 
 27. **Prometheus registry ausente no pom (Epic 3 story 3.7)** — após o upgrade Boot 4.1.1
     (dívida 21), `micrometer-registry-prometheus` não estava no `pom.xml`; sem o artifact o Actuator

@@ -69,6 +69,48 @@ class ProdConfigValidatorIT {
     assertThatCode(validator::validate).doesNotThrowAnyException();
   }
 
+  @Test
+  @DisplayName("Prod profile without operator credentials fails fast (debt 26)")
+  void failsOnMissingOperatorCredentials() {
+    MockEnvironment env =
+        currentProdEnv("this-is-a-strong-32-char-plus-production-secret!")
+            .withProperty("app.security.operator.username", "ops-oncall")
+            .withProperty("app.security.operator.password", "");
+    ProdConfigValidator validator = new ProdConfigValidator(env);
+
+    assertThatThrownBy(validator::validate)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("security.operator.password (OPERATOR_PASSWORD) is required");
+  }
+
+  @Test
+  @DisplayName("Prod profile with a weak operator password fails fast")
+  void failsOnWeakOperatorPassword() {
+    MockEnvironment env =
+        currentProdEnv("this-is-a-strong-32-char-plus-production-secret!")
+            .withProperty("app.security.operator.username", "ops-oncall")
+            .withProperty("app.security.operator.password", "short");
+    ProdConfigValidator validator = new ProdConfigValidator(env);
+
+    assertThatThrownBy(validator::validate)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("security.operator.password must be at least 16 characters");
+  }
+
+  @Test
+  @DisplayName("Prod profile with a guessable operator username fails fast")
+  void failsOnGuessableOperatorUsername() {
+    MockEnvironment env =
+        currentProdEnv("this-is-a-strong-32-char-plus-production-secret!")
+            .withProperty("app.security.operator.username", "operator")
+            .withProperty("app.security.operator.password", "a-strong-16-char-pass!");
+    ProdConfigValidator validator = new ProdConfigValidator(env);
+
+    assertThatThrownBy(validator::validate)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("security.operator.username must not be a guessable default");
+  }
+
   private MockEnvironment currentProdEnv(String jwtSecret) {
     MockEnvironment env =
         new MockEnvironment()
@@ -76,7 +118,9 @@ class ProdConfigValidatorIT {
             .withProperty("spring.data.redis.host", "redis.internal")
             .withProperty("rate-limiter.trusted-proxy-cidrs", "10.0.0.0/8")
             .withProperty("management.otlp.tracing.endpoint", "http://otel-collector.internal:4318")
-            .withProperty("app.analytics.retention-days", "90");
+            .withProperty("app.analytics.retention-days", "90")
+            .withProperty("app.security.operator.username", "ops-oncall")
+            .withProperty("app.security.operator.password", "a-strong-16-char-pass!");
     if (jwtSecret != null) {
       env.withProperty("app.jwt.secret", jwtSecret);
     }

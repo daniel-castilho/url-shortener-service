@@ -1,6 +1,7 @@
 package ca.tyny.urlshortener.infra.config;
 
 import ca.tyny.urlshortener.infra.config.properties.SecurityProperties;
+import ca.tyny.urlshortener.infra.security.BasicOperatorAuthFilter;
 import ca.tyny.urlshortener.infra.security.CustomUserDetailsService;
 import ca.tyny.urlshortener.infra.security.JwtAuthenticationFilter;
 import jakarta.servlet.http.HttpServletResponse;
@@ -52,6 +53,11 @@ public class SecurityConfig {
                             referrer.policy(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN)))
         .authenticationProvider(authenticationProvider())
         .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+        // Operator BasicAuth (debt 26): plain instantiation, NOT a bean — see
+        // BasicOperatorAuthFilter javadoc (double-registration avoidance).
+        .addFilterBefore(
+            new BasicOperatorAuthFilter(securityProperties),
+            UsernamePasswordAuthenticationFilter.class)
         .exceptionHandling(
             ex ->
                 ex.authenticationEntryPoint(
@@ -83,15 +89,19 @@ public class SecurityConfig {
                     .requestMatchers("/api/v1/domains/**")
                     .authenticated()
 
-                    // Actuator - tiered access
+                    // Actuator - tiered access (debt 26: ROLE_OPERATOR is the infrastructure
+                    // operator over BasicAuth, env-injected via OPERATOR_USERNAME/PASSWORD;
+                    // ADMIN (JWT) retains everything; METRICS_VIEWER keeps metrics/Prometheus)
                     .requestMatchers("/actuator/health/liveness", "/actuator/health/readiness")
                     .permitAll()
                     .requestMatchers("/actuator/info")
                     .permitAll()
                     .requestMatchers("/actuator/health")
-                    .hasRole("ADMIN")
+                    .hasAnyRole("ADMIN", "OPERATOR")
                     .requestMatchers("/actuator/metrics/**", "/actuator/prometheus")
-                    .hasAnyRole("ADMIN", "METRICS_VIEWER")
+                    .hasAnyRole("ADMIN", "METRICS_VIEWER", "OPERATOR")
+                    .requestMatchers("/actuator/circuitbreakers/**")
+                    .hasAnyRole("ADMIN", "OPERATOR")
                     .requestMatchers("/actuator/**")
                     .hasRole("ADMIN")
 

@@ -123,12 +123,11 @@ rate-limiter:
     - ::1/128
 
 # ========================================
-# Security Hardening
+# Security Hardening (binds to SecurityProperties prefix app.security)
 # ========================================
-security:
+app.security:
   actuator:
     enabled: true
-    health-detail-enabled: false
     public-endpoints:
       - health/liveness
       - health/readiness
@@ -136,6 +135,13 @@ security:
   swagger:
     enabled: false
     allowed-ips: []
+  # Infrastructure operator (debt 26): grants ROLE_OPERATOR over the actuator
+  # tiers (health, metrics, prometheus, circuitbreakers) via HTTP Basic.
+  # Credentials come from the environment — empty outside prod means NO operator
+  # account exists and tiered endpoints keep rejecting anonymous callers.
+  operator:
+    username: ${OPERATOR_USERNAME:}
+    password: ${OPERATOR_PASSWORD:}
 
 # ========================================
 # Resilience4j Circuit Breakers

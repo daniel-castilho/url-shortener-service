@@ -74,6 +74,22 @@ public class ProdConfigValidator {
       errors.add("app.analytics.retention-days is required for click_events retention policy");
     }
 
+    // Operator credentials (debt 26): the actuator tiers must be reachable by an
+    // infrastructure operator — BasicAuth credentials injected via environment.
+    String operatorUsername = environment.getProperty("app.security.operator.username");
+    String operatorPassword = environment.getProperty("app.security.operator.password");
+    if (operatorUsername == null || operatorUsername.isBlank()) {
+      errors.add("security.operator.username (OPERATOR_USERNAME) is required in production");
+    } else if ("operator".equalsIgnoreCase(operatorUsername)
+        || "admin".equalsIgnoreCase(operatorUsername)) {
+      errors.add("security.operator.username must not be a guessable default (operator/admin)");
+    }
+    if (operatorPassword == null || operatorPassword.isBlank()) {
+      errors.add("security.operator.password (OPERATOR_PASSWORD) is required in production");
+    } else if (operatorPassword.length() < 16) {
+      errors.add("security.operator.password must be at least 16 characters");
+    }
+
     if (!errors.isEmpty()) {
       String msg =
           "Production configuration validation failed:\n  - " + String.join("\n  - ", errors);
