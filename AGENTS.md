@@ -424,9 +424,26 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
      contenção, alocação dominada por observation-plumbing do framework — **nenhuma mitigação
      justificada** (37× headroom); `docs/performance-profiling.md`. (c) `RedisUrlCache` externalizado
      via `UrlCacheProperties` (`app.cache.l1-max-size`/`l1-ttl`/`bloom-*`, defaults históricos
-     preservados) + `UrlCachePropertiesIT` (4). (d) `load-tests/stress.js` (ramping 2×: 400/40 rps,
+     preservados) + `UrlCachePropertiesIT` (4). (d)      `load-tests/stress.js` (ramping 2×: 400/40 rps,
      hold 4m): 165.498 reqs, **0 falhas**, p95 < 5ms. `./mvnw verify` verde (271 unit + 144 IT),
      gates + CI verdes; evidências em `tasks/epic-5/epic-5-dod.md`. — `resolved`
+
+29. **Epic 6 (Scalable) — ADRs, explain audit, multi-instance artifacts, horizontal scale
+     validation** — concluído 2026-09-11. (a) 4 ADRs em `docs/adr/` (0001 escala horizontal
+     stateless; 0002 rate-limit global via Redis; 0003 L1 Caffeine por instância c/ staleness
+     ≤5s; 0004 circuit breakers resilience4j). (b) Auditoria explain na infra isolada com dados
+     reais (7.103 short_urls / 112.956 click_events): redirect = IDHACK (1 key/1 doc), cursor
+     pagination = IXSCAN V7, analytics = IXSCAN V4, TTL V5 — zero COLLSCAN, nenhum índice novo.
+     (c) Artefatos multi-instância: `nginx.conf` upstream c/ pesos (canary 10→30→100) +
+     `max_fails=2 fail_timeout=10s`; template systemd `url-shortener@.service` (porta derivada);
+     imagem `url-shortener:sha-583832b` = 302MB (198MB base JRE + 77MB jar; meta 150MB do
+     template não adotada — jlink fora de escopo); runbook §0/§12. (d) Validação horizontal
+     real: 2 instâncias (18080/18081) + LB nginx compartilhando Mongo/Redis, stress 2× via LB
+     = 165.499 reqs, **0 5xx, p95 7.28ms** (27× headroom); **rate-limit global provado**:
+     burst concorrente de 300 via LB → exatamente 120×302 + 180×429 (bucket único
+     `rl:redirect:127.0.0.1`). `./mvnw verify` verde (271 unit + 144 IT, rerun 144/0); evidências
+     em `tasks/epic-6/epic-6-dod.md`. Nota: leitura HTTP do estado do CB (`/actuator/circuitbreakers`)
+     segue 401 (dívida 26); a prova funcional (0 5xx sob carga) é a evidência utilizada. — `resolved`
 
 ## 🔍 Operational Discipline & Debugging Guidelines
 

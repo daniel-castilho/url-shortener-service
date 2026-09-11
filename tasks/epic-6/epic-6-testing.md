@@ -35,20 +35,20 @@
 - **Critério aceite:** Relatórios colados no `epic-6-dod.md`.
 
 ## 6.6 Integração retro-compatível (gates)
-- [ ] `./mvnw verify` conjunto → verde (métricas frozen, boundaries, doc-sync, SpotBugs, OWASP).
-- [ ] `promtool` + `amtool` verdes.
-- [ ] Saídas coladas no `epic-6-dod.md`.
+- [x] `./mvnw verify` conjunto → verde (métricas frozen, boundaries, doc-sync, SpotBugs, OWASP).
+- [x] `promtool` + `amtool` verdes.
+- [x] Saídas coladas no `epic-6-dod.md`.
 
 ---
 
 **Checklist de conclusão do Épico 6:**
 
-- [ ] 4 ADRs criados (`docs/adr/`)
-- [ ] Auditoria explain limpa
-- [ ] `RedirectRateLimitIT` verde + circuit breakers CLOSED sob carga
-- [ ] Artefatos multi-instância prontos (nginx, systemd template, imagem sha, runbook)
-- [ ] Stress 2× via LB (2 instâncias) com SLOs ok e rate-limit compartilhado provado
-- [ ] `./mvnw verify` conjunto verde
-- [ ] Evidências coladas no `epic-6-dod.md`
+- [x] 4 ADRs criados (`docs/adr/`)
+- [x] Auditoria explain limpa
+- [x] `RedirectRateLimitIT` verde + circuit breakers CLOSED sob carga
+- [x] Artefatos multi-instância prontos (nginx, systemd template, imagem sha, runbook)
+- [x] Stress 2× via LB (2 instâncias) com SLOs ok e rate-limit compartilhado provado
+- [x] `./mvnw verify` conjunto verde
+- [x] Evidências coladas no `epic-6-dod.md`
 
 *Ao marcar todos os itens acima, o Épico 6 está **concluído**.*

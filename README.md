@@ -50,6 +50,11 @@ technologies used by the `infra` layer.
   MongoDB. A **Redisson Bloom Filter** short-circuits the Redis `get` for codes that certainly do not
   exist; a bloom-negative is treated as a lightweight cache-miss and resolved by `findById` (Policy B).
   The Bloom filter short-circuits **only the Redis `get`**, not the MongoDB lookup.
+- **Scale-out:** stateless instances behind nginx (`deploy/proxy/nginx.conf` weighted upstream +
+  systemd template `deploy/url-shortener@.service`); per-IP rate limiting is **global** via a Redis
+  token bucket shared across instances; L1 staleness bounded ≤5s. Decisions recorded in
+  `docs/adr/0001-0004`; horizontal scale validated with 2 instances + LB under 2× load
+  (`tasks/epic-6/epic-6-dod.md`).
 - **ID generation (locked identity model):** cryptographically random **Base62** codes
   (`SecureRandom`, alphabet `0-9A-Za-z`, default length **7** via `app.shortener.code-length`).
   Collisions retry on the unique `_id`. **No Hashids, no Redis counter, no sequential codes.**
