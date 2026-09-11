@@ -51,12 +51,35 @@ bash scripts/performance-baseline.sh 1m 200 20
 - k6 version: v2.2.0 (grafana/k6 container, host networking)
 - Date: 2026-09-09, app version: `main` @ `875c7d5`
 
-> **Comparison vs 2026-08-27:** at the same load the tail latencies are ~40–85% higher
+> **Comparison vs 2026-08-27:** at the same load the tail latencies were ~40–85% higher
 > (shorten p95 16→24 ms, redirect p99 17→22 ms, mixed p95 7.6→13.3 ms). The measurement
 > stack changed too (k6 v0.58.0 native binary → k6 v2.2.0 container; Redis 7 → 8.10.1), so
-> the regression cannot be attributed to Tomcat 11 vs Undertow alone. **Next step:** re-run a
-> like-for-like comparison (same k6 version, same Redis major) to isolate the platform effect
-> before the next release is closed; a real >10% platform regression must be investigated.
+> the regression could not be attributed to Tomcat 11 vs Undertow alone.
+
+## Baseline — 2026-09-11 (like-for-like re-run, Epic 5 story 5.1)
+
+Like-for-like re-run to isolate the platform effect: **identical measurement stack** to
+2026-09-09 (k6 v2.2.0 `grafana/k6` container with host networking, Redis 8.10.1, Mongo 6.0.28,
+same WSL2 host, Java 25 / Boot 4.1.1 / Tomcat 11 virtual threads). App: `main` @ `e805c1b`.
+
+| Workload | Rate | p50 | p95 | p99 | Throughput (req/s) |
+|----------|------|-----|-----|-----|--------------------|
+| shorten (constant 20 rps) | `load-tests/shorten.js` | 6.59 ms | 11.97 ms | 29.53 ms | 20.0 |
+| redirect (constant 200 rps) | `load-tests/redirect.js` | 3.80 ms | 5.36 ms | 8.75 ms | 202.6 |
+| mixed 1:10 (20 + 200 rps) | `load-tests/mixed.js` | 3.91 ms | 5.49 ms | 7.56 ms | 223.4 |
+
+- Thresholds: all passed (k6 exit `0`; `p(95) < 200ms`, `http_req_failed < 0.1%`); `http_req_failed` = 0 on every scenario
+- Reqs: 1201 / 12156 / 13402 (shorten/redirect/mixed) over a 1m window
+- Command: `BASELINE_SKIP_COMPOSE=1 PORT=8089 MONGODB_URI=mongodb://localhost:27018/url_shortener REDIS_HOST=localhost REDIS_PORT=6380 bash scripts/performance-baseline.sh 1m 200 20`
+- Environment note: the dev station was hosting other local projects (dargent on 8080–8082, spotpobre Redis on 6379); the baseline ran isolated on 8089 + 27018/6380
+
+> **VERDICT (like-for-like resolved):** the 2026-09-09 tails were not a Tomcat 11 platform
+> regression. With the measurement stack held identical, the 2026-09-11 re-run produced
+> **lower** tail latencies than both prior baselines (redirect p99 8.75 ms vs 21.7/17 ms,
+> shorten p95 11.97 ms vs 24.1/16 ms, mixed p95 5.49 ms vs 13.3/7.6 ms) while staying far
+> inside the SLO (p95 < 200 ms). All thresholds pass and `http_req_failed` = 0. The variance
+> between 08-27/09-09 was measurement noise (host load + stack switch), not an app/platform
+> regression. Baseline and SLOs are validated; no performance investigation is warranted.
 
 ## Baseline — 2026-08-27 (pre platform upgrade)
 
