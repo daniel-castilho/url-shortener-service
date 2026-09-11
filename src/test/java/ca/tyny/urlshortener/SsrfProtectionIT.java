@@ -10,9 +10,12 @@ import ca.tyny.urlshortener.config.BaseIntegrationTest;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.ShortenRequest;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.TestPropertySource;
 
@@ -135,5 +138,33 @@ class SsrfProtectionIT extends BaseIntegrationTest {
         .statusCode(200)
         .body("id", notNullValue())
         .body("shortUrl", notNullValue());
+  }
+
+  @ParameterizedTest
+  @MethodSource("privateIpLiterals")
+  @DisplayName("Rejects private/internal IP literal destinations (SSRF)")
+  void rejectsPrivateIpLiterals(String ip) {
+    given()
+        .contentType(ContentType.JSON)
+        .body(new ShortenRequest("https://" + ip + "/path", null))
+        .when()
+        .post("/api/v1/urls")
+        .then()
+        .statusCode(400)
+        .body("error", equalTo("Invalid Destination"))
+        .body(
+            "message",
+            anyOf(containsString("private/internal IP"), containsString("cloud metadata IP")));
+  }
+
+  private static Stream<String> privateIpLiterals() {
+    return Stream.of(
+        "127.0.0.1", // loopback
+        "10.0.0.1", // RFC1918 Class A
+        "172.16.0.1", // RFC1918 Class B
+        "192.168.0.1", // RFC1918 Class C
+        "169.254.169.254", // metadata + link-local
+        "[::1]" // IPv6 loopback
+        );
   }
 }

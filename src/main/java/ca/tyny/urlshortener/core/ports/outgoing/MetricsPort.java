@@ -25,4 +25,6 @@ public interface MetricsPort {
   void recordMigrationApplied();
 
   void recordMigrationFailed();
+
+  void recordSsrfBlocked();
 }

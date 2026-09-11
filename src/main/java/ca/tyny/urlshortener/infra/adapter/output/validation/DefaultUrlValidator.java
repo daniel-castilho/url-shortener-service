@@ -1,6 +1,7 @@
 package ca.tyny.urlshortener.infra.adapter.output.validation;
 
 import ca.tyny.urlshortener.core.exception.InvalidDestinationException;
+import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
 import ca.tyny.urlshortener.core.validation.UrlValidator;
 import ca.tyny.urlshortener.infra.config.properties.UrlValidationProperties;
 import java.net.InetAddress;
@@ -78,14 +79,16 @@ public class DefaultUrlValidator implements UrlValidator {
   private final int dnsTimeoutMs;
   private final boolean blockPrivateIps;
   private final long cacheTtlSeconds;
+  private final MetricsPort metricsPort;
 
   private final Map<String, DnsCacheEntry> dnsCache = new ConcurrentHashMap<>();
 
-  public DefaultUrlValidator(UrlValidationProperties properties) {
+  public DefaultUrlValidator(UrlValidationProperties properties, MetricsPort metricsPort) {
     this.allowHttp = properties.allowHttp();
     this.dnsTimeoutMs = properties.dnsTimeoutMs();
     this.blockPrivateIps = properties.blockPrivateIps();
     this.cacheTtlSeconds = properties.dnsCacheTtlSeconds();
+    this.metricsPort = metricsPort;
   }
 
   @Override
@@ -96,6 +99,7 @@ public class DefaultUrlValidator implements UrlValidator {
       // client-supplied, so it goes through the sink sanitizer (CWE-117).
       log.warn(
           "URL validation blocked: host={}; reason={}", logSafe(extractHost(url)), result.reason());
+      metricsPort.recordSsrfBlocked();
       throw new InvalidDestinationException(result.reason());
     }
   }
@@ -127,14 +131,16 @@ public class DefaultUrlValidator implements UrlValidator {
           null, List.of(), "URL must not contain user credentials");
     }
 
-    // 3. Host validation
+    // 3. Host validation. URI.getHost() returns an IPv6 literal as "[::1]"; strip the brackets
+    // so the private-IP checks below classify it correctly. Ports are never part of getHost().
     String host = uri.getHost();
     if (host == null || host.isBlank()) {
       return UrlValidator.ValidationResult.blocked(null, List.of(), "URL must have a valid host");
     }
 
-    // Remove port if present
-    if (host.contains(":")) {
+    if (host.startsWith("[") && host.endsWith("]")) {
+      host = host.substring(1, host.length() - 1);
+    } else if (host.contains(":")) {
       host = host.split(":")[0];
     }
 

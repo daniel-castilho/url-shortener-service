@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import ca.tyny.urlshortener.core.exception.InvalidDestinationException;
+import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
 import ca.tyny.urlshortener.core.validation.UrlValidator;
 import ca.tyny.urlshortener.infra.config.properties.UrlValidationProperties;
 import org.junit.jupiter.api.DisplayName;
@@ -17,8 +18,41 @@ class DefaultUrlValidatorTest {
 
   private UrlValidator createValidator(
       boolean allowHttp, boolean blockPrivateIps, int dnsTimeoutMs) {
+    // No-op metrics: the SSRF-blocked counter is asserted in the ITs, not in these unit tests.
+    MetricsPort noopMetrics =
+        new MetricsPort() {
+          @Override
+          public void recordUrlShortened() {}
+
+          @Override
+          public void recordCacheHit() {}
+
+          @Override
+          public void recordCacheMiss() {}
+
+          @Override
+          public void recordBloomFilterRejection() {}
+
+          @Override
+          public void recordIdGeneration(java.time.Duration duration) {}
+
+          @Override
+          public void recordUrlRetrieval(java.time.Duration duration) {}
+
+          @Override
+          public void recordUrlExpired() {}
+
+          @Override
+          public void recordMigrationApplied() {}
+
+          @Override
+          public void recordMigrationFailed() {}
+
+          @Override
+          public void recordSsrfBlocked() {}
+        };
     return new DefaultUrlValidator(
-        new UrlValidationProperties(allowHttp, 2000, blockPrivateIps, 300));
+        new UrlValidationProperties(allowHttp, 2000, blockPrivateIps, 300), noopMetrics);
   }
 
   @Test
@@ -88,9 +122,7 @@ class DefaultUrlValidatorTest {
     // The URL structure is valid; DNS resolution is attempted but not mocked here
     // The validator will attempt DNS resolution which may succeed or fail
     // We just verify format validation passes
-    var result =
-        new DefaultUrlValidator(new UrlValidationProperties(false, 2000, true, 300))
-            .doValidate("https://example.com");
+    var result = ((DefaultUrlValidator) validator).doValidate("https://example.com");
     assertThat(result.allowed()).isTrue();
   }
 
@@ -99,9 +131,7 @@ class DefaultUrlValidatorTest {
   void allowsHttpWhenEnabled() {
     UrlValidator validator = createValidator(true, true, 2000);
 
-    var result =
-        new DefaultUrlValidator(new UrlValidationProperties(true, 2000, true, 300))
-            .doValidate("http://example.com");
+    var result = ((DefaultUrlValidator) validator).doValidate("http://example.com");
     assertThat(result.allowed()).isTrue();
   }
 
@@ -112,6 +142,16 @@ class DefaultUrlValidatorTest {
 
     assertThatThrownBy(() -> validator.validate("https://invalid@host.com"))
         .isInstanceOf(InvalidDestinationException.class);
+  }
+
+  @Test
+  @DisplayName("Rejects IPv6 loopback literal as private/internal IP")
+  void rejectsIpv6LoopbackLiteral() {
+    UrlValidator validator = createValidator(false, true, 2000);
+
+    var result = ((DefaultUrlValidator) validator).doValidate("https://[::1]/path");
+    assertThat(result.allowed()).isFalse();
+    assertThat(result.reason()).contains("private/internal IP");
   }
 
   @Test

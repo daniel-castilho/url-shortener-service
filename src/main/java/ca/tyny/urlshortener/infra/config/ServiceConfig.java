@@ -144,8 +144,8 @@ public class ServiceConfig {
   }
 
   @Bean
-  public UrlValidator urlValidator(UrlValidationProperties properties) {
-    return new DefaultUrlValidator(properties);
+  public UrlValidator urlValidator(UrlValidationProperties properties, MetricsPort metricsPort) {
+    return new DefaultUrlValidator(properties, metricsPort);
   }
 
   @Bean

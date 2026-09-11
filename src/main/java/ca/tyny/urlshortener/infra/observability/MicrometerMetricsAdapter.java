@@ -23,6 +23,7 @@ public class MicrometerMetricsAdapter implements MetricsPort {
   private final Counter urlsExpiredCounter;
   private final Counter migrationsAppliedCounter;
   private final Counter migrationsFailedCounter;
+  private final Counter ssrfBlockedCounter;
 
   public MicrometerMetricsAdapter(io.micrometer.core.instrument.MeterRegistry registry) {
     this.idGenerationTimer =
@@ -80,6 +81,12 @@ public class MicrometerMetricsAdapter implements MetricsPort {
             .description("Total number of failed schema migrations")
             .tag("service", "url-shortener")
             .register(registry);
+
+    this.ssrfBlockedCounter =
+        Counter.builder("security.ssrf.blocked.total")
+            .description("Total number of destination URLs blocked by SSRF protection")
+            .tag("service", "url-shortener")
+            .register(registry);
   }
 
   @Override
@@ -125,5 +132,10 @@ public class MicrometerMetricsAdapter implements MetricsPort {
   @Override
   public void recordMigrationFailed() {
     migrationsFailedCounter.increment();
+  }
+
+  @Override
+  public void recordSsrfBlocked() {
+    ssrfBlockedCounter.increment();
   }
 }
