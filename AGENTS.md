@@ -411,9 +411,22 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     **Resolvido:** dependência adicionada (Rule 9 — aprovação explícita do owner 2026-09-11, versão
     gerida pelo BOM, jar 1.17.1). `MetricsIT.playbackExportsEpic2BusinessSeries` faz playback da
     scrape Prometheus (nomes normalizados `*_total`/`*_seconds`) das séries EP2 + `analytics_queue_depth`.
-    Aproveitado: corrigida regressão de ordenação no `SecurityConfig` (introduzida no 3.3) que fazia
-    `POST /api/v1/urls` (permitAll) cair no matcher `/api/v1/urls/**` (authenticated → 401 anônimo);
-    públicos reordenados antes dos gerenciados e `/actuator` → `ROLE_ADMIN` antes de `GET /{id}`. — `resolved`
+     Aproveitado: corrigida regressão de ordenação no `SecurityConfig` (introduzida no 3.3) que fazia
+     `POST /api/v1/urls` (permitAll) cair no matcher `/api/v1/urls/**` (authenticated → 401 anônimo);
+     públicos reordenados antes dos gerenciados e `/actuator` → `ROLE_ADMIN` antes de `GET /{id}`. — `resolved`
+
+28. **Epic 5 (Performance) — SLOs, like-for-like, profiling, cache config, stress** — concluído
+     2026-09-11. (a) Baseline k6 re-executada na stack idêntica à 2026-09-09 (k6 v2.2.0 container,
+     Redis 8.10.1, Mongo 6.0.28): tails **menores** que ambas as baselines (redirect p99 8.75ms vs
+     21.7/17ms; shorten p95 11.97ms vs 24.1/16ms) — veredito: ruído de medição, **não** regressão do
+     Tomcat 11; pendência like-for-like de `docs/load-test-baseline.md` resolvida. (b) Perfil JFR
+     (236s sob carga mixed, `jcmd`): GC saudável (155 pausas, mediana 3.43ms, 0.21% wall clock), zero
+     contenção, alocação dominada por observation-plumbing do framework — **nenhuma mitigação
+     justificada** (37× headroom); `docs/performance-profiling.md`. (c) `RedisUrlCache` externalizado
+     via `UrlCacheProperties` (`app.cache.l1-max-size`/`l1-ttl`/`bloom-*`, defaults históricos
+     preservados) + `UrlCachePropertiesIT` (4). (d) `load-tests/stress.js` (ramping 2×: 400/40 rps,
+     hold 4m): 165.498 reqs, **0 falhas**, p95 < 5ms. `./mvnw verify` verde (271 unit + 144 IT),
+     gates + CI verdes; evidências em `tasks/epic-5/epic-5-dod.md`. — `resolved`
 
 ## 🔍 Operational Discipline & Debugging Guidelines
 

@@ -41,11 +41,11 @@
 
 **Checklist de conclusão do Épico 5:**
 
-- [ ] k6 scripts gerados/validados (p95 dentro dos limites; like-for-like resolvido)
-- [ ] Perfil JFR concluído e mitigações aplicadas (se justificadas)
-- [ ] Cache L1 externalizado e evidenciado
-- [ ] `metrics-frozen-check` PASS + `promtool test rules` verde + `amtool check-config` verde
-- [ ] `./mvnw verify` conjunto verde
-- [ ] Evidências coladas no `epic-5-dod.md`
+- [x] k6 scripts gerados/validados (p95 dentro dos limites; like-for-like resolvido)
+- [x] Perfil JFR concluído e mitigações avaliadas (nenhuma justificada pelos dados)
+- [x] Cache L1 externalizado e evidenciado
+- [x] `metrics-frozen-check` PASS + `promtool test rules` verde + `amtool check-config` verde
+- [x] `./mvnw verify` conjunto verde
+- [x] Evidências coladas no `epic-5-dod.md`
 
 *Ao marcar todos os itens acima, o Épico 5 está **concluído**.*

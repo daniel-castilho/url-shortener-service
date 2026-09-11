@@ -45,7 +45,8 @@ technologies used by the `infra` layer.
 - **Web:** Spring Web + **Tomcat 11** with **Virtual Threads** enabled.
 - **Data:** Spring Data MongoDB (`auto-index-creation: false`; schema managed by versioned in-code
   migrations via `MongoSchemaMigrator`) and Spring Data Redis.
-- **Cache:** **Caffeine** local (L1, 100 items / 5s TTL) → **Redis** (L2, 24h TTL + jitter) →
+- **Cache:** **Caffeine** local (L1, default 100 items / 5s TTL — configurable via `app.cache.l1-*`)
+  → **Redis** (L2, 24h TTL + jitter) →
   MongoDB. A **Redisson Bloom Filter** short-circuits the Redis `get` for codes that certainly do not
   exist; a bloom-negative is treated as a lightweight cache-miss and resolved by `findById` (Policy B).
   The Bloom filter short-circuits **only the Redis `get`**, not the MongoDB lookup.
