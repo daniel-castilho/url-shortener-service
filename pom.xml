@@ -61,6 +61,13 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- Prometheus exposition for /actuator/prometheus + the frozen-metrics/SLO stack
+             (Epic 3 story 3.7, owner-approved Rule 9). Without the registry the actuator
+             endpoint is a 404 and recording-rules/alerts/Grafana have no data source. -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.github.resilience4j</groupId>
             <artifactId>resilience4j-spring-boot4</artifactId>

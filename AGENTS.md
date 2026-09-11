@@ -405,6 +405,16 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     `management.endpoint.health.show-details`). Decidir identidade de operador (usuário BasicAuth
     escopado, role no JWT ou allowlist de IP) e wirear `health-detail-enabled` ou removê-lo. — `open`
 
+27. **Prometheus registry ausente no pom (Epic 3 story 3.7)** — após o upgrade Boot 4.1.1
+    (dívida 21), `micrometer-registry-prometheus` não estava no `pom.xml`; sem o artifact o Actuator
+    não monta `/actuator/prometheus` (sem data source para scrape/SLOs/alertas/Grafana).
+    **Resolvido:** dependência adicionada (Rule 9 — aprovação explícita do owner 2026-09-11, versão
+    gerida pelo BOM, jar 1.17.1). `MetricsIT.playbackExportsEpic2BusinessSeries` faz playback da
+    scrape Prometheus (nomes normalizados `*_total`/`*_seconds`) das séries EP2 + `analytics_queue_depth`.
+    Aproveitado: corrigida regressão de ordenação no `SecurityConfig` (introduzida no 3.3) que fazia
+    `POST /api/v1/urls` (permitAll) cair no matcher `/api/v1/urls/**` (authenticated → 401 anônimo);
+    públicos reordenados antes dos gerenciados e `/actuator` → `ROLE_ADMIN` antes de `GET /{id}`. — `resolved`
+
 ## 🔍 Operational Discipline & Debugging Guidelines
 
 - **Investigate before trial-and-error:** when a compile or test fails, read the full stack trace and
