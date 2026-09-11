@@ -1,26 +1,25 @@
-# Epic 5 – Stories (Aceitação)
+# Epic 5 – Stories (Aceitação) [aterrado]
 
-| # | Story | Critérios de Aceitação | Referência Ágil / Âncora |
+| # | Story | Critérios de Aceitação (aterrados) | Referência Real |
 |---|-------|------------------------|--------------------------|
-| **5.1** | **Validação de SLO de latência p95** – confirmar que a rota `GET /{id}` tem p95 ≤ 200 ms sob carga normal (sem chaos). | • `k6` script `GET /{id}` com carga de 500 req/s durante 5 min → p95 medido no relatório ≤ 200 ms. <br>• `metrics-frozen-check` PASS – série `dargent_redirect_latency_seconds` p95 dentro do limite. <br>• Relatório `k6` colado no `epic-5-dod.md`. | Histórias 2‑3 do `slos.md` |
-| **5.2** | **Validação de SLO de latência p95 (shorten)** – confirmar que a rota `POST /v1/urls` tem p95 ≤ 300 ms sob carga normal. | • `k6` script `POST /v1/urls` com carga de 300 req/s durante 5 min → p95 medido no relatório ≤ 300 ms. <br>• Série `dargent_url_shortened_total` e `dargent_redirect_latency_seconds` dentro dos limites. <br>• Relatório `k6` colado no `epic-5-dod.md`. | Histórias 2‑3 do `slos.md` |
-| **5.3** | **Perfil de JVM e redução de gargalos** – identificar e mitigar no mínimo dois gargalos (ex.: coleta de GC, contention de threads, queries MongoDB sem índice). | • Perfil via `async-profiler` ou `jvm‑perf‑collector`; relatório listando os dois gargalos e a mitigação aplicada. <br>• Após a mitigação, `mvn verify` permanece verde e o p95 dos SLOs não se degrada (≥ 5 % de melhoria ou manutenção dentro do limite). <br>• Mitigação documentada em `docs/performance-profiling.md`. | Boas práticas de profiling Java |
-| **5.4** | **Cache‑aside com Caffeine + Bloom filter** – garantir que o lookup de código curto tenha latência < 5 ms na maior parte das requisições. | • Benchmark `Caffeine` cache lookup vs MongoDB `findOne`; latência média de cache ≤ 5 ms. <br>• `dargent_cache_hits_total` e `dargent_cache_misses_total` refletem o comportamento esperado. <br>• Configurações de TTL e tamanho máximo definidas em `application.yml`. | Padrão de cache‑aside (EP3) |
-| **5.5** | **Teste de carga e estresse (k6)** – validar que o sistema mantém estabilidade sob carga acima do esperado (pico 2× SLO). | • Script `k6` com carga ascendente (até 2 × SLO throughput) por 10 min. <br>• Nenhum `5xx`; latência p95 mantém‑se dentro dos SLOs ou degradação esperada é documentada. <br>• Relatório `k6` anexado ao `epic-5-dod.md`. | Testes de carga e estresse (EP4) |
+| **5.1** | **Validação de SLO de latência p95 (redirect) + pendência like-for-like** – confirmar que `GET /{id}` tem p95 ≤ 200ms sob carga nominal e resolver a nota de `docs/load-test-baseline.md` (tails 40–85% acima da baseline 08-27, stack de medição mudou junto). | • Re-executar `load-tests/redirect.js` via `scripts/performance-baseline.sh` na checkpoint de main atual (mesma stack: k6 v2.2.0 container, Redis 8.10.1, Mongo 6.0.28) → p95 ≤ 200ms no summary export. <br>• Comparação das 3 baselines (08-27, 09-09, nova) com veredito sobre regressão real vs variância. <br>• `docs/load-test-baseline.md` atualizado. <br>• Relatório k6 colado no `epic-5-dod.md`. | `slos.md` (p99 < 200ms via k6 `p95 < 200ms`); `docs/load-test-baseline.md` |
+| **5.2** | **Validação de SLO de latência p95 (shorten)** – confirmar que `POST /api/v1/urls` tem p95 ≤ 200ms sob carga nominal. | • Re-executar `load-tests/shorten.js` (thresholds k6 `p95 < 200ms`, `http_req_failed < 0.1%`) → p95 dentro do limite. <br>• Relatório k6 colado no `epic-5-dod.md`. | `slos.md` (alvo único p99 < 200ms; **não existe** "S3 = 300ms" no repo) |
+| **5.3** | **Perfil JVM e mitigação de gargalos** – identificar ≥2 gargalos no hot-path e aplicar mitigação se justificada pelos dados. | • Perfil **JFR** (built-in JDK 25 via `jcmd`; async-profiler **não instalado** e não necessário) de 30s durante carga k6 nas rotas `GET /{id}` e `POST /api/v1/urls`. <br>• ≥2 achados (ex.: GC pause, contention, alocação no caminho crítico) documentados em `docs/performance-profiling.md`. <br>• Mitigações aplicadas **somente** se os dados justificarem; `./mvnw verify` permanece verde; p95 não se degrada. | Boas práticas de profiling Java; JFR no JDK 25 |
+| **5.4** | **Cache-aside externalizado + evidência** – garantir lookup de código curto com hit de cache rápido e config externalizada. | • `maximumSize(100)`/`expireAfterWrite(5s)` (hardcoded em `RedisUrlCache`) externalizados para `@ConfigurationProperties` (`app.cache.l1.*`), env-overridable. <br>• IT validando override e comportamento do L1+bloom. <br>• Evidência sob carga: hit-ratio e latência (séries frozen `cache.hits.total`, `cache.misses.total`, `bloomfilter.rejections.total`, timer `url.retrieval.duration` + `redirect.latency`). | Padrão de cache-aside (EP3); métricas frozen `slos.md` §2 |
+| **5.5** | **Teste de carga e estresse (k6)** – validar estabilidade sob carga acima da nominal (pico 2× SLO). | • Novo `load-tests/stress.js` com ramping até 2× rps nominal (redirect 400 / shorten 40 por 10min) e thresholds. <br>• Run documentado: `5xx`, degradação de p95, comportamento do rate-limiter/cache; degradação esperada documentada (não "consertar" thresholds). <br>• Relatório k6 anexado ao `epic-5-dod.md`. | Testes de carga e estresse (k6) |
 
 ---
 
 **Rastreabilidade rápida:**
 
-| Story | Doc referência | Aspecto chave |
+| Story | Doc referência | Aspecto chave |
 |-------|----------------|---------------|
-| 5.1 | `slos.md` S2 | Latência p95 GET /{id} |
-| 5.2 | `slos.md` S3 | Latência p95 POST /v1/urls |
-| 5.2 | `k6` scripts + `MetricsIT` | Throughput e estabilidade |
-| 5.3 | Perfil JVM + `async‑profiler` | Gargaros identificados e mitigados |
-| 5.4 | Cache‑aside com Caffeine + Bloom filter | Latência de lookup < 5 ms |
-| 5.5 | `k6` + SLOs | Estabilidade under load |
+| 5.1 | `slos.md` + `docs/load-test-baseline.md` | Latência p95 GET /{id}; like-for-like resolvido |
+| 5.2 | `slos.md` + `load-tests/shorten.js` | Latência p95 POST /api/v1/urls |
+| 5.3 | Perfil JFR via `jcmd` | Gargalos identificados e mitigados |
+| 5.4 | `RedisUrlCache` + métricas frozen | Cache L1/bloom externalizado e evidenciado |
+| 5.5 | `load-tests/stress.js` + `slos.md` | Estabilidade under load (2×/ramping) |
 
---- 
+---
 
-*Próximo passo: criar as tasks técnicas (5.1‑5.5) e a estratégia de teste (epic-5-testing.md).*
+*Executar as stories 5.1–5.5 na ordem do `epic-5-technical-tasks.md`.*

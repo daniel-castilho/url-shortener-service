@@ -1,49 +1,47 @@
 # Epic 5: Performance – Latência e Throughput
 
-**Projeto:** url-shortener-service  
-**Contexto:** Java 21, Spring Boot 3.5.7, Arquitetura Hexagonal, MongoDB, Redis, Undertow  
-**Objetivo:** Validar e melhorar a performance dos caminhos críticos (encurtamento e redirecionamento), garantindo que os SLOs de latência (S2/S3 do slos.md) sejam consistentemente atendidos e que o sistema mantenha stable throughput sob carga.
+**Projeto:** url-shortener-service
+**Contexto:** Java 25, Spring Boot 4.1.1, Arquitetura Hexagonal, MongoDB, Redis, Tomcat 11 (virtual threads)
+**Objetivo:** Validar a performance dos caminhos críticos (encurtamento e redirecionamento), resolver a pendência "like-for-like" da baseline (isolar efeito da plataforma Tomcat 11 vs Undertow) e provar que os SLOs de latência do `slos.md` (p99 < 200ms) são atendidos sob carga nominal e de estresse.
 
 ---
 
-## Por que este épico em quinto lugar?
+## Estado do repo (pré-existente, não é novo trabalho)
 
-- **EP1 (Maintainable)** fornece o código limpo e padrões necessários para medição e otimização confiáveis.
-- **EP2 (Secure)** garante que as otimizações de performance não abram brechas de segurança (ex.: validações de SSRF, logs sanitizados).
-- **EP3 (Observable)** fornece as métricas e logs fundamentais para medir latência, throughput e identificar gargaros.
-- **EP4 (Testes)** traz a base de testes automatizados (unitários, IT, k6) que validam que as mudanças de performance não causam regressões.
-- **EP6 (Scalable)** depende de performance estável para definir horizontes de escalonamento (horizontal vs vertical).
+O repo **já possui** o núcleo que este épico imaginava construir:
 
-**Relação com outros épicos:**
+- **Harness k6 real:** `load-tests/{shorten,redirect,mixed}.js` (thresholds-as-code `p95 < 200ms`, `http_req_failed < 0.1%`) + `scripts/performance-baseline.sh` (boot do app com rate limits relaxados, executa os 3 cenários, exporta summary JSON e imprime tabela p50/p95/p99). k6 resolve para binário nativo se presente, senão container `grafana/k6` (host networking). Script aceita `[duration] [redirect-rps] [shorten-rps]` e modo isolated `BASELINE_SKIP_COMPOSE=1` com `PORT`/`MONGODB_URI`/`REDIS_HOST`/`REDIS_PORT`.
+- **Baseline publicada:** `docs/load-test-baseline.md` — 2026-09-09 post-platform-upgrade (shorten p95 24.1 ms @ 20 rps, redirect p95 12.8 ms @ 200 rps, mixed p95 13.3 ms). Todos os thresholds passaram (k6 exit 0).
+- **Cache-aside em produção:** `RedisUrlCache` = Caffeine L1 (100 itens / 5s TTL, **hardcoded**) + bloom filter Redisson (100M / 1% fpp) + Redis L2. Caffeine já é dependência no `pom.xml`.
+- **Índices MongoDB migrados:** `MongoSchemaMigrator` V1–V7 (short code É o `_id` — não existe campo `short_code`; V3 `userId`, V4 `click_events` composto `(shortCode, timestamp)` + `(timestamp)`, V5 TTL `expiresAt`, V6 `users` (email único, plan, n), V7 `(userId, createdAt DESC)` para cursor pagination).
+- **Métricas frozen:** 24 séries reais via `MetricsPort` → `MicrometerMetricsAdapter` (nomes SEM prefixo `dargent_`), gate `scripts/check-metrics-frozen.sh` (CI + self-test). SLO real: p99 < 200ms (enforced por k6 `p95 < 200ms`).
 
-| Epico | Dependência direta |
-|--------|-------------------|
-| EP1 – Maintainable | Código limpo, convenções de nomeação que facilitam profiling e otimização. |
-| EP2 – Secure | Validações de entrada e sanitização que não devem ser removidas em nome de performance. |
-| EP3 – Observable | Métricas Prometheus (`dargent_*`) e health checks que definem e medem os SLOs. |
-| EP4 – Testes | Suite de testes (unitários + IT + k6) que impede regressões de performance. |
-| EP6 – Escalável | Resultados de performance norteiam decisões de escalonamento (máquinas, containers, sharding). |
-| EP7 – Reliable | Comportamento consistente sob carga influencia a tolerância a falhas e circuit‑breaker thresholds. |
-| EP8 – Deployable | Resultados de benchmark podem impactar a escolha de imagem Docker, flags JVM e configuração de threads. |
+## Por que este épico agora?
 
-**Critério de Aceitação Elevado:**
+- **EP3 (Observable)** forneceu as métricas (`shorten.latency`, `redirect.latency`, `url.retrieval.duration`, `cache.hits.total`/`cache.misses.total`, `bloomfilter.rejections.total`) que permitem medir latência e hit-ratio sob carga.
+- **EP4 (Testes)** trouxe os *IT* (incl. `ReadPathIT`) que impedem regressões nas mudanças de performance.
+- **Pendência como pauta:** `docs/load-test-baseline.md` declara que os tails 40–85% acima da baseline 2026-08-27 **não podem ser atribuídos** ao Tomcat 11 vs Undertow, porque a stack de medição mudou junto (k6 v0.58.0 → v2.2.0, Redis 7 → 8.10.1). O Épico 5 resolve isso re-executando a mesma stack atual e comparando run-to-run.
 
-1. `mvn verify` → **verde** com todos os gates (unit, IT, JaCoCo, SpotBugs, ArchUnit, OWASP).
-2. **SLOs de latência** comprovados pelo `metrics-frozen-check` e por benchmarks `k6` (p95 da rota `GET /{id}` ≤ 200 ms; p95 da rota `POST /v1/urls` ≤ 300 ms, conforme `slos.md` S2/S3).
-3. **Benchmarks JMH** ou `k6` relatório anexado ao `epic-5-dod.md` mostrando throughput mínimo aceitável (ex.: ≥ 1 000 req/s no caminho de encurtamento).
-4. **Zero regressão** de performance: `mvn verify` em `main` (flip atual) continua verde; quaisquer mudanças de performance são acompanhadas de novo benchmark e documentação.
-5. **Rule zero — zero‑from‑memory:** todo número, sha ou contagem nas evidências é colado de output de comando real.
+## Critério de Aceitação (aterrado)
+
+1. `./mvnw verify` → **verde** com todos os gates (unit, IT, JaCoCo, SpotBugs, OWASP, check-doc-sync, check-boundaries).
+2. **SLOs de latência comprovados** pelo harness k6 real (p95 `GET /{id}` ≤ 200ms e p95 `POST /api/v1/urls` ≤ 200ms — o alvo global do `slos.md` é p99 < 200ms; não existe "S3 = 300ms" no repo).
+3. **Pendência like-for-like resolvida:** baseline re-executada na mesma stack (k6 v2.2.0, Redis 8.10.1, Mongo 6.0.28) e comparada com 2026-09-09; veredito documentado (regressão real da plataforma vs variância de medição).
+4. **Caffeine L1 externalizado** para `@ConfigurationProperties` (hoje `maximumSize(100)`/`expireAfterWrite(5s)` hardcoded em `RedisUrlCache`), com IT validando override.
+5. **Profiling JFR** (built-in JDK 25 via `jcmd`; async-profiler não está instalado e não é necessário) do hot-path sob carga; ≥2 achados documentados em `docs/performance-profiling.md`, mitigações aplicadas se justificadas pelos dados.
+6. **Stress 2× SLO:** novo `load-tests/stress.js` (ramping até 2× rps nominal) rodando 10min; degradação/5xx documentada.
+7. **Rule zero — zero‑from‑memory:** todo número, sha ou contagem nas evidências é colado de output de comando real.
 
 **Rastreabilidade rápida:**
 
-| Story | Doc referência | Aspecto chave |
+| Story | Doc referência | Aspecto chave |
 |-------|----------------|---------------|
-| 5.1 | `slos.md` S2/S3 | Latência p95 nas rotas críticas |
-| 5.2 | `k6` scripts + `MetricsIT` | Throughput e estabilidade under load |
-| 5.3 | Perfil JVM + `java -XX:...` | Gargaros identificados e mitigados |
-| 5.4 | Queries MongoDB/Redis otimizadas | Redução de latência de I/O |
-| 5.5 | `mvn verify` verde + SLOs validados | Nenhuma regressão de performance |
+| 5.1 | `slos.md` + `docs/load-test-baseline.md` | Latência p95 GET /{id} + like-for-like |
+| 5.2 | `slos.md` + `load-tests/shorten.js` | Latência p95 POST /api/v1/urls |
+| 5.3 | JFR via `jcmd` | Gargalos identificados e mitigados |
+| 5.4 | `RedisUrlCache` + métricas frozen | Cache-aside L1/bloom externalizado e evidenciado |
+| 5.5 | `load-tests/stress.js` + `slos.md` | Estabilidade sob carga 2× / ramping |
 
---- 
+---
 
-*Próximo passo: criar as stories detalhadas (5.1‑5.5) e as tasks técnicas correspondentes.*
+*Próximo passo: executar as stories 5.1–5.5 (definição no `epic-5-stories.md`) e as tasks correspondentes (`epic-5-technical-tasks.md`).*
