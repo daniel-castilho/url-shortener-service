@@ -10,6 +10,8 @@ public interface MetricsPort {
 
   void recordUrlShortened();
 
+  void recordRedirect();
+
   void recordCacheHit();
 
   void recordCacheMiss();
@@ -19,6 +21,10 @@ public interface MetricsPort {
   void recordIdGeneration(Duration duration);
 
   void recordUrlRetrieval(Duration duration);
+
+  void recordShortenLatency(Duration duration);
+
+  void recordRedirectLatency(Duration duration);
 
   void recordUrlExpired();
 

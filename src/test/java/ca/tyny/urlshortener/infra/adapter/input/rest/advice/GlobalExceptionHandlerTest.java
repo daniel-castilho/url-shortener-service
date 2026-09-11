@@ -46,7 +46,7 @@ class GlobalExceptionHandlerTest {
 
   @MockitoBean private RateLimiterPort rateLimiter;
 
-  @MockitoBean private ca.tyny.urlshortener.infra.observability.MetricsService metricsService;
+  @MockitoBean private ca.tyny.urlshortener.core.ports.outgoing.MetricsPort metricsPort;
 
   @MockitoBean private ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort userRepository;
 

@@ -25,6 +25,9 @@ class DefaultUrlValidatorTest {
           public void recordUrlShortened() {}
 
           @Override
+          public void recordRedirect() {}
+
+          @Override
           public void recordCacheHit() {}
 
           @Override
@@ -38,6 +41,12 @@ class DefaultUrlValidatorTest {
 
           @Override
           public void recordUrlRetrieval(java.time.Duration duration) {}
+
+          @Override
+          public void recordShortenLatency(java.time.Duration duration) {}
+
+          @Override
+          public void recordRedirectLatency(java.time.Duration duration) {}
 
           @Override
           public void recordUrlExpired() {}

@@ -16,7 +16,10 @@ public class MicrometerMetricsAdapter implements MetricsPort {
 
   private final Timer idGenerationTimer;
   private final Timer urlRetrievalTimer;
+  private final Timer shortenLatencyTimer;
+  private final Timer redirectLatencyTimer;
   private final Counter urlsShortenedCounter;
+  private final Counter redirectsCounter;
   private final Counter cacheHitsCounter;
   private final Counter cacheMissesCounter;
   private final Counter bloomFilterRejectionsCounter;
@@ -40,9 +43,29 @@ public class MicrometerMetricsAdapter implements MetricsPort {
             .publishPercentiles(0.5, 0.95, 0.99)
             .register(registry);
 
+    this.shortenLatencyTimer =
+        Timer.builder("shorten.latency")
+            .description("End-to-end latency for URL shortening operation")
+            .publishPercentiles(0.5, 0.95, 0.99)
+            .tag("operation", "shorten")
+            .register(registry);
+
+    this.redirectLatencyTimer =
+        Timer.builder("redirect.latency")
+            .description("End-to-end latency for redirect operation")
+            .publishPercentiles(0.5, 0.95, 0.99)
+            .tag("operation", "redirect")
+            .register(registry);
+
     this.urlsShortenedCounter =
         Counter.builder("urls.shortened.total")
             .description("Total number of URLs shortened")
+            .tag("service", "url-shortener")
+            .register(registry);
+
+    this.redirectsCounter =
+        Counter.builder("redirects.total")
+            .description("Total number of redirects performed")
             .tag("service", "url-shortener")
             .register(registry);
 
@@ -95,6 +118,11 @@ public class MicrometerMetricsAdapter implements MetricsPort {
   }
 
   @Override
+  public void recordRedirect() {
+    redirectsCounter.increment();
+  }
+
+  @Override
   public void recordCacheHit() {
     cacheHitsCounter.increment();
   }
@@ -117,6 +145,16 @@ public class MicrometerMetricsAdapter implements MetricsPort {
   @Override
   public void recordUrlRetrieval(Duration duration) {
     urlRetrievalTimer.record(duration.toNanos(), TimeUnit.NANOSECONDS);
+  }
+
+  @Override
+  public void recordShortenLatency(Duration duration) {
+    shortenLatencyTimer.record(duration.toNanos(), TimeUnit.NANOSECONDS);
+  }
+
+  @Override
+  public void recordRedirectLatency(Duration duration) {
+    redirectLatencyTimer.record(duration.toNanos(), TimeUnit.NANOSECONDS);
   }
 
   @Override

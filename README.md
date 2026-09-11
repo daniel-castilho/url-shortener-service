@@ -189,12 +189,16 @@ With the application running, open the API docs:
 - **Metrics:** `GET /actuator/metrics` and `GET /actuator/prometheus` (Micrometer / Prometheus)
 - **Circuit breakers:** `GET /actuator/circuitbreakers` (Resilience4j state)
 
-Custom business metrics exposed via Micrometer (registered in `MicrometerMetricsAdapter`) include
-`urls.shortened.total`, `urls.expired.total`, `schema.migrations.applied.total`,
-`schema.migrations.failed.total`, `security.ssrf.blocked.total`, `cache.hits.total` /
-`cache.misses.total`, `bloomfilter.rejections.total`, `id.generation.duration` (p50/p95/p99) and
-`url.retrieval.duration` (p50/p95/p99). Security headers
-(`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+Custom business metrics exposed via Micrometer form a **frozen contract** enforced by
+`scripts/check-metrics-frozen.sh` (bound at `verify` + CI; see `docs/observability.md` for the
+full table): shorten/redirect counters and timers (`urls.shortened.total`, `redirects.total`,
+`shorten.latency`, `redirect.latency`), cache (`cache.hits.total` / `cache.misses.total`,
+`bloomfilter.rejections.total`), retrieval and ID-generation timing (`url.retrieval.duration`,
+`id.generation.duration`, p50/p95/p99), `urls.expired.total`, `security.ssrf.blocked.total`,
+`schema.migrations.*`, and the analytics pipeline series (`analytics.events.*`,
+`analytics.queue.depth`, `analytics.rollup.*`, `analytics.retention.*`). Every request carries a
+`request_id` MDC correlation id echoed as `X-Request-Id` (`RequestCorrelationFilter`).
+Security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
 `Referrer-Policy: strict-origin-when-cross-origin`) are applied globally via Spring Security.
 
 ## Current State

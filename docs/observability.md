@@ -7,20 +7,57 @@ How the service reports metrics, traces, and SLOs. Companion: `docs/slos.md`.
 Spring Boot Actuator exposes Micrometer metrics at `/actuator/prometheus`
 (your Prometheus scrapes `deploy/monitoring/prometheus.yml`).
 
-Business metrics recorded behind `MetricsPort` (`core/` stays framework-free):
+Business metrics are recorded behind `MetricsPort` (`core/` stays framework-free) and
+wired to Micrometer in `infra/observability/MicrometerMetricsAdapter`. The set of
+registered meters is **frozen** (Epic 3 story 3.2): `scripts/check-metrics-frozen.sh`
+(bound at `verify` + CI) fails if a new `Counter/Timer/Gauge` is registered outside the
+reviewed contract below, or if a frozen series disappears. Prometheus exposes the
+matching `*_total` / `*_seconds` series.
 
 | Metric | Source | Percentiles |
 |--------|--------|-------------|
-| `urls.shortened.total` | shorten path | — |
-| `security.ssrf.blocked.total` | SSRF protection (`DefaultUrlValidator.validate`) | — |
-| `cache.hits.total` / `cache.misses.total` | redirect path | — |
-| `bloomfilter.rejections.total` | bloom filter | — |
-| `id.generation.duration` | `MetricsPort.recordIdGeneration` (Base62 + vanity generation) | p50/p95/p99 |
+| `urls.shortened.total` | `POST /api/v1/urls` (shorten path) | — |
+| `shorten.latency` | shorten path, end-to-end | p50/p95/p99 |
+| `redirects.total` | `GET /{id}` (redirect path) | — |
+| `redirect.latency` | redirect path, end-to-end | p50/p95/p99 |
 | `url.retrieval.duration` | `MetricsPort.recordUrlRetrieval` (cache + DB lookup, single hot-path hit) | p50/p95/p99 |
+| `id.generation.duration` | `MetricsPort.recordIdGeneration` (Base62 + vanity generation) | p50/p95/p99 |
+| `cache.hits.total` / `cache.misses.total` | redirect path cache-aside | — |
+| `bloomfilter.rejections.total` | bloom filter | — |
+| `urls.expired.total` | expired short URL resolution | — |
+| `security.ssrf.blocked.total` | SSRF protection (`DefaultUrlValidator.validate`) | — |
+| `schema.migrations.applied.total` / `schema.migrations.failed.total` | `MongoSchemaMigrator` | — |
+| `analytics.events.enqueued.total` / `.persisted.total` / `.dropped.total` / `.failed.total` | analytics click-event pipeline | — |
+| `analytics.queue.depth` | Redis-Stream pending/length gauge (`RedisClickEventQueue`) | — |
+| `analytics.rollup.days.total` / `.errors.total` / `.groups.upserted.total` | analytics rollup job | — |
+| `analytics.retention.runs.total` / `.purged.total` / `.errors.total` | `ClickEventsRetentionPurge` | — |
 | `http.server.requests` | Spring Boot HTTP layer (auto) | histogram |
 
 The redirect hot path (Rule 5) still does a **single** DB hit; the retrieval
 timer wraps that lookup without adding any blocking I/O.
+
+> **Consolidation note (Epic 3, story 3.2):** the legacy
+> `infra/observability/MetricsService` (a second metrics bean wired directly into
+> `UrlController`, registering `urls.shortened.total`, `redirects.total`,
+> `cache.hits.total`, `cache.misses.total`, `bloomfilter.rejections.total`,
+> `shorten.latency`, `redirect.latency`) was folded into `MicrometerMetricsAdapter`
+> behind `MetricsPort`. Meter names, tags and descriptions are preserved **byte-for-byte**
+> (same series in Prometheus), so dashboards and alerts are unaffected.
+
+## Logging & request correlation
+
+Only the standard SLF4J/Logback stack is used (`%X{MDC}`), no tracing code in `core/`.
+
+- Every request is tagged with a `request_id` MDC key (plain console/file patterns and
+  the JSON encoder include it).
+- `infra/security/RequestCorrelationFilter` (highest precedence, runs before Spring
+  Security): accepts the inbound `X-Request-Id` only when it is a safe ASCII token
+  (`^[A-Za-z0-9._-]{1,64}$`), otherwise replaces it with a generated UUID. The resolved
+  id is echoed on the response header and present on every log line of the request.
+- OpenTelemetry: `%X{traceId}` / `%X{spanId}` populate from the active trace when tracing
+  is on (see below).
+
+Example (plain console): `2026-09-11 04:00:00 ... [a1b2c3d4-e5f6-...] WARN ... - URL not found`.
 
 ## Tracing
 
@@ -60,9 +97,9 @@ RATE_LIMITER_LIMIT=1000000 RATE_LIMITER_REDIRECT_LIMIT=1000000 ./mvnw spring-boo
 k6 run load-tests/mixed.js
 ```
 
-## Roadmap
+## Roadmap (Epic 3)
 
-- Expose the analytics Redis-Stream depth as a `analytics.queue.depth` gauge
-  (the Grafana overview panel is present but empty until then).
-- Publish the first real k6 baseline in `docs/load-test-baseline.md` and the
-  initial p50/p95/p99 numbers from a production-like run.
+- Alert rules validated with `promtool` / `amtool` in CI (story 3.4) and their
+  runbook annotations (`runbook-§SLO-*`) wired to the on-call docs.
+- Pinned `scripts/debug-health.sh` triage script + symptom → action table (story 3.5).
+- CI job that runs the full observability gate: metrics-frozen, promtool, amtool (story 3.6).

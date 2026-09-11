@@ -5,11 +5,11 @@ import ca.tyny.urlshortener.core.model.User;
 import ca.tyny.urlshortener.core.ports.incoming.GetUrlUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.ShortenUrlUseCase;
 import ca.tyny.urlshortener.core.ports.outgoing.AnalyticsPort;
+import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.RateLimiterPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.ShortenRequest;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.ShortenResponse;
-import ca.tyny.urlshortener.infra.observability.MetricsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -38,7 +38,7 @@ public class UrlController {
   private final AnalyticsPort analyticsPort;
   private final RateLimiterPort rateLimiter;
   private final HttpServletRequest request;
-  private final MetricsService metricsService;
+  private final MetricsPort metricsPort;
   private final UserRepositoryPort userRepository;
   private final ClientAddressResolver clientAddressResolver;
 
@@ -48,7 +48,7 @@ public class UrlController {
       AnalyticsPort analyticsPort,
       RateLimiterPort rateLimiter,
       HttpServletRequest request,
-      MetricsService metricsService,
+      MetricsPort metricsPort,
       UserRepositoryPort userRepository,
       ClientAddressResolver clientAddressResolver) {
     this.shortenUrlUseCase = shortenUrlUseCase;
@@ -56,7 +56,7 @@ public class UrlController {
     this.analyticsPort = analyticsPort;
     this.rateLimiter = rateLimiter;
     this.request = request;
-    this.metricsService = metricsService;
+    this.metricsPort = metricsPort;
     this.userRepository = userRepository;
     this.clientAddressResolver = clientAddressResolver;
   }
@@ -121,10 +121,11 @@ public class UrlController {
               .build()
               .toUriString();
 
-      metricsService.recordUrlShortened();
+      metricsPort.recordUrlShortened();
       return ResponseEntity.ok(new ShortenResponse(shortUrl.id(), baseUrl + "/" + shortUrl.id()));
     } finally {
-      metricsService.recordShortenLatency(System.currentTimeMillis() - startTime);
+      metricsPort.recordShortenLatency(
+          java.time.Duration.ofMillis(System.currentTimeMillis() - startTime));
     }
   }
 
@@ -175,12 +176,13 @@ public class UrlController {
               null,
               null));
 
-      metricsService.recordRedirect();
+      metricsPort.recordRedirect();
       return ResponseEntity.status(HttpStatus.FOUND)
           .location(java.net.URI.create(originalUrl))
           .build();
     } finally {
-      metricsService.recordRedirectLatency(System.currentTimeMillis() - startTime);
+      metricsPort.recordRedirectLatency(
+          java.time.Duration.ofMillis(System.currentTimeMillis() - startTime));
     }
   }
 

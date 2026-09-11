@@ -19,8 +19,8 @@ class BoundaryRulesSelfTestTest {
   /** Touches an infra type and a Spring type — a planted Rule 1 violation. */
   @SuppressWarnings("unused")
   private static final class PlantedViolation {
-    private final Object metricsService =
-        new ca.tyny.urlshortener.infra.observability.MetricsService(null);
+    private final Object infraComponent =
+        new ca.tyny.urlshortener.infra.security.RequestCorrelationFilter();
   }
 
   /** Plain JDK-only class — must pass every boundary rule. */

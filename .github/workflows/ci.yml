@@ -27,6 +27,12 @@ jobs:
         run: bash scripts/check-doc-sync.sh
       - name: Doc-sync gate self-test
         run: bash scripts/check-doc-sync.sh --self-test
+      # Epic 3 story 3.2: the registered Micrometer meters are a frozen contract (docs/slos.md §2).
+      # Run here (fast, no Docker) on every push/PR; any new/removed series blocks merge.
+      - name: Metrics freeze gate
+        run: bash scripts/check-metrics-frozen.sh
+      - name: Metrics freeze gate self-test
+        run: bash scripts/check-metrics-frozen.sh --self-test
 
   integration-tests:
     name: Integration Tests

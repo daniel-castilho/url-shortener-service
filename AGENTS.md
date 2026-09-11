@@ -371,6 +371,20 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     casando com upstream #7431/#8435; o mirror sync completo em ~2min (verificado local) e check em
     ~15s; a secret `NVD_API_KEY` permanece no org mas **não** é wired (datafeed a ignora). — `resolved`
 
+24. **Métricas duplicadas fora do port (Epic 3 story 3.2)** — `infra/observability/MetricsService`
+    registrava `urls.shortened.total`, `redirects.total`, `cache.hits.total`, `cache.misses.total`,
+    `bloomfilter.rejections.total`, `shorten.latency`, `redirect.latency` e era wired diretamente no
+    `UrlController` (infra→infra, fora do `MetricsPort`); o `MicrometerMetricsAdapter` registrava as
+    mesmas séries de forma sobreposta. README chegou a rotular `redirects.total`/`shorten.latency`/
+    `redirect.latency` como "phantom" — afirmação incorreta: `MetricsService` era usado ativamente pelo
+    `UrlController`. **Resolvido:** `MetricsService` + `MetricsServiceTest` removidos; os 7 meters
+    foram foldados no `MicrometerMetricsAdapter` via 3 novos métodos no `MetricsPort`
+    (`recordRedirect`, `recordShortenLatency`, `recordRedirectLatency`); `UrlController` agora depende
+    do `MetricsPort`. Nomes/tags/descrições preservados byte-for-byte (séries Prometheus idênticas).
+    Novo gate `scripts/check-metrics-frozen.sh` (+ `--self-test`) congela as **24 séries de negócio**
+    registradas (lista em `docs/slos.md` §2) e roda no CI; AC "gate no `verify`" implementado por step
+    de CI (precedente do Epic 2 / Regra 9 — sem nova dependência pom). — `resolved`
+
 ## 🔍 Operational Discipline & Debugging Guidelines
 
 - **Investigate before trial-and-error:** when a compile or test fails, read the full stack trace and
