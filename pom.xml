@@ -22,6 +22,11 @@
         <lombok.version>1.18.46</lombok.version>
         <spotbugs.version>4.10.4.1</spotbugs.version>
         <jacoco.version>0.8.15</jacoco.version>
+        <!-- 12.2.2, not 13.x: dependency-check 13 keyless mode is broken upstream
+             (empty string passed as the NVD key, dependency-check#8715). Dependabot PRs
+             receive NO repo secrets, so the gate must work keyless (throttled-but-working).
+             Pin the last 12.x until a fixed 13.x ships. (Epic 2 story 2.5, approved Rule 9.) -->
+        <dependency-check.version>12.2.2</dependency-check.version>
         <testcontainers.version>2.0.5</testcontainers.version>
         <spotless.version>3.10.2</spotless.version>
         <archunit.version>1.5.0</archunit.version>
@@ -69,13 +74,11 @@
             <version>9.0</version>
         </dependency>
 
-        <!-- Developer Tools -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-devtools</artifactId>
-            <scope>runtime</scope>
-            <optional>true</optional>
-        </dependency>
+        <!-- Developer Tools: spring-boot-devtools removed (owner-approved, Rule 9, Epic 2 story
+             2.5) — a dev-restart/reload tool that has no place in the packaged production jar;
+             its presence also matched the spring-boot-devtools -> vmware:spring_tools CPE of
+             CVE-2022-31691 (a Spring Tools IDE/VS Code snakeyaml-editor RCE, not a runtime flaw).
+             Removing the dependency removes the finding at the root instead of suppressing it. -->
         <dependency>
             <groupId>org.redisson</groupId>
             <artifactId>redisson-spring-boot-starter</artifactId>
@@ -198,6 +201,23 @@
             <artifactId>opentelemetry-sdk-extension-autoconfigure</artifactId>
         </dependency>
     </dependencies>
+
+    <!-- Explicit overrides on top of the spring-boot-starter-parent BOM. -->
+    <dependencyManagement>
+        <dependencies>
+            <!-- kotlin-stdlib 2.3.21 (pulled at runtime by okio -> okhttp -> OTel exporter) is in
+                 the affected range of CVE-2026-53914 per the jetbrains:kotlin CPE. The vulnerable
+                 path is the Kotlin compiler build-cache (GHSA r937-wjx7-w2jp classifies the
+                 affected package as kotlin-gradle-plugin, CVSS 6.7, AV:L/PR:H) — not reachable by
+                 this service's runtime — but the honest fix is a bump, not a suppression: 2.4.20
+                 is the first patched stable. (Epic 2 story 2.5) -->
+            <dependency>
+                <groupId>org.jetbrains.kotlin</groupId>
+                <artifactId>kotlin-stdlib</artifactId>
+                <version>2.4.20</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <build>
         <plugins>
@@ -332,6 +352,40 @@
                 <executions>
                     <execution>
                         <id>spotbugs</id>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
+                <version>${dependency-check.version}</version>
+                <configuration>
+                    <!-- Epic 2 story 2.5: fail on CVSS >= 7. Suppressions carry rationale + review
+                         date per entry (owasp-suppressions.xml); a real vulnerability gets a
+                         dependency bump, never a suppression line. Here the empty file maps to
+                         "no known >= 7 vulns for the current dependency set". -->
+                    <failBuildOnCVSS>7</failBuildOnCVSS>
+                    <suppressionFile>${project.basedir}/owasp-suppressions.xml</suppressionFile>
+                    <!-- NVD key: passed as -DnvdApiKey ONLY when the CI secret exists (keyless =
+                         throttled-but-working; dependency-check 13 rejects an empty-string key).
+                         Data dir is cached on CI so delta-syncs dominate. -->
+                    <dataDirectory>${user.home}/.m2/dependency-check-data</dataDirectory>
+                    <nvdApiDelay>6000</nvdApiDelay>
+                    <retentionJsHours>24</retentionJsHours>
+                    <formats>
+                        <format>HTML</format>
+                        <format>JSON</format>
+                        <format>XML</format>
+                    </formats>
+                </configuration>
+                <executions>
+                    <execution>
+                        <!-- Bound to verify so the full gate includes OWASP; NVD data cached
+                             under ~/.m2/dependency-check-data makes repeat runs delta-only. -->
+                        <phase>verify</phase>
                         <goals>
                             <goal>check</goal>
                         </goals>

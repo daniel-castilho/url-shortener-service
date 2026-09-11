@@ -48,8 +48,53 @@ jobs:
           java-version: '25'
           distribution: 'temurin'
           cache: maven
+      # OWASP dependency-check is bound to the verify phase; prime the NVD data cache so this
+      # verify hit (and the dedicated security-check job) runs a delta sync, not a cold one.
+      - name: Cache OWASP NVD data
+        uses: actions/cache@v7
+        with:
+          path: ~/.m2/dependency-check-data
+          key: owasp-nvd-v1
+          restore-keys: owasp-nvd-
       - name: Run integration tests
         run: ./mvnw verify -DfailIfNoTests=false
+
+  security-check:
+    name: Security Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+      - name: Cache OWASP NVD data
+        uses: actions/cache@v7
+        with:
+          path: ~/.m2/dependency-check-data
+          key: owasp-nvd-v1
+          restore-keys: owasp-nvd-
+      - name: Static security gate
+        run: bash scripts/check-security.sh
+      - name: Static security gate self-test
+        run: bash scripts/check-security.sh --self-test
+      # Epic 2 story 2.5: the NVD key is passed ONLY when the secret exists (dependabot PRs
+      # receive NO repo secrets; keyless = documented throttled-but-working). A tool outage
+      # fails the job — never silent-pass (2 retries, then fail).
+      - name: OWASP Dependency-Check (NVD keyed, cached)
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          set -euo pipefail
+          KEY_ARGS=()
+          if [[ -n "${NVD_API_KEY:-}" ]]; then KEY_ARGS+=(-DnvdApiKey="$NVD_API_KEY"); fi
+          attempt() { ./mvnw -B dependency-check:check -DskipTests "${KEY_ARGS[@]}" "$@"; }
+          if ! attempt; then
+            echo "OWASP attempt 1 failed — retrying once in 60s (NVD sync flakiness, documented P2 policy)"
+            sleep 60
+            attempt || { echo "OWASP attempt 2 failed — FAILING THE JOB (never silent-pass)"; exit 1; }
+          fi
 
   build:
     name: Build
