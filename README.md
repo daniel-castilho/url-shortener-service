@@ -189,11 +189,13 @@ With the application running, open the API docs:
 - **Metrics:** `GET /actuator/metrics` and `GET /actuator/prometheus` (Micrometer / Prometheus)
 - **Circuit breakers:** `GET /actuator/circuitbreakers` (Resilience4j state)
 
-Custom business metrics exposed via Micrometer include `urls.shortened.total`, `redirects.total`,
-`urls.expired.total`, `schema.migrations.applied.total`, `schema.migrations.failed.total`,
-`shorten.latency` (p50/p95/p99), `redirect.latency`, `cache.hits.total` / `cache.misses.total`,
-`bloomfilter.rejections.total`, `id.generation.duration` (p50/p95/p99) and
-`url.retrieval.duration` (p50/p95/p99).
+Custom business metrics exposed via Micrometer (registered in `MicrometerMetricsAdapter`) include
+`urls.shortened.total`, `urls.expired.total`, `schema.migrations.applied.total`,
+`schema.migrations.failed.total`, `security.ssrf.blocked.total`, `cache.hits.total` /
+`cache.misses.total`, `bloomfilter.rejections.total`, `id.generation.duration` (p50/p95/p99) and
+`url.retrieval.duration` (p50/p95/p99). Security headers
+(`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+`Referrer-Policy: strict-origin-when-cross-origin`) are applied globally via Spring Security.
 
 ## Current State
 
@@ -229,7 +231,7 @@ Implemented on `main`:
   collection and increments the per-link `clickCount` atomically (`$inc`). Analytics failure never
   blocks or fails a redirect (fail-open).
 - **Rate limiting** — per-IP token-bucket over Redis on **both shorten and redirect endpoints**, independent scopes (SHORTEN/REDIRECT), configurable via `rate-limiter.limit` / `rate-limiter.window` and `rate-limiter.redirect-limit` / `rate-limiter.redirect-window`. Trusted-proxy CIDR IP resolution; fails open (does not block) if Redis is unavailable. 429 responses include `Retry-After`, `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` headers.
-- **Security hardening** — Actuator endpoints tiered: liveness/readiness/info public; health detail requires ADMIN; metrics/prometheus require ADMIN or METRICS_VIEWER; other actuator endpoints require ADMIN. Swagger enabled only when `app.security.swagger.enabled=true` (default false). Health detail defaults to `when-authorized`. Swagger conditionally loaded via `@ConditionalOnProperty`.
+- **Security hardening** — Actuator endpoints tiered: liveness/readiness/info public; health detail requires ADMIN; metrics/prometheus require ADMIN or METRICS_VIEWER; other actuator endpoints require ADMIN. Swagger enabled only when `app.security.swagger.enabled=true` (default false). Health detail defaults to `when-authorized`. Swagger conditionally loaded via `@ConditionalOnProperty`. **SSRF protection** rejects destinations resolving to private/internal/link-local/metadata IPs — including IPv6 literals (`[::1]`) — with a `security.ssrf.blocked.total` metric; blocked destinations log **host + reason**, never the full URL (CWE-117 sink sanitizer in every client-controlled log site). **Security headers** (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`) applied globally via Spring Security. **OWASP Dependency-Check** gate bound to `verify` (fail CVSS ≥ 7) with a versioned empty suppression file; `scripts/check-security.sh` (+ self-test) enforces the invariants in CI (`security-check` job).
 - **Branded domains (Phase C) — landed.** Authenticated users can **claim** a custom domain, prove ownership via a DNS TXT record (`verify`), and the domain is **activated** once verified. Shortening under a claimed domain (`POST /api/v1/urls` with `domain` or `PATCH /api/v1/urls/{id}`) is allowed only for the owner; the redirect path enforces a **strict mirror**: a link bound to `brand.example.com` resolves **only** when the `Host` header matches that domain — never under the default host, never under another user's domain. Links without a custom domain still resolve under the default host. Owner-scoped CRUD on `/api/v1/urls` supports setting/clearing the `domain` field. See `docs/data-model-decisions.md` → *Branded Domains*.
 - **Rich click analytics (Phase C) — landed.** Click events capture `referrer`, `device` (mobile/desktop/tablet/bot) and `country` (GeoIP2, opt-in via `app.analytics.geo.enabled`). A scheduled **`click_daily` rollup** (migration V9) pre-aggregates per `(shortCode, UTC day)` with clicks, breakdown maps (device/country/referrer value counts) and **approximate unique visitors** via Redis HyperLogLog (PFADD in worker, PFCOUNT in query, on by default). The endpoint `GET /api/v1/urls/{id}/clicks?unit=day|hour&from=&to=` returns a time series + breakdown, owner-guarded (401/403/404). Hourly series derives from raw events (bounded to 30 days). All enrichment is worker-side; the redirect path stays fast (no enrichment, no HLL). See `docs/data-model-decisions.md` → *Analytics*.
 - **Fault tolerance** — Resilience4j circuit breakers (`databaseCb` fail-fast for Mongo,

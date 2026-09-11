@@ -12,6 +12,7 @@ Business metrics recorded behind `MetricsPort` (`core/` stays framework-free):
 | Metric | Source | Percentiles |
 |--------|--------|-------------|
 | `urls.shortened.total` | shorten path | — |
+| `security.ssrf.blocked.total` | SSRF protection (`DefaultUrlValidator.validate`) | — |
 | `cache.hits.total` / `cache.misses.total` | redirect path | — |
 | `bloomfilter.rejections.total` | bloom filter | — |
 | `id.generation.duration` | `MetricsPort.recordIdGeneration` (Base62 + vanity generation) | p50/p95/p99 |
