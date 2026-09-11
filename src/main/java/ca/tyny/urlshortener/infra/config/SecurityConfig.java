@@ -60,14 +60,6 @@ public class SecurityConfig {
         .authorizeHttpRequests(
             auth ->
                 auth
-                    // Public Endpoints
-                    .requestMatchers("/api/v1/auth/**")
-                    .permitAll() // Login & Register
-                    .requestMatchers(HttpMethod.GET, "/{id}")
-                    .permitAll() // Redirect
-                    .requestMatchers(HttpMethod.POST, "/api/v1/urls")
-                    .permitAll() // Create Short URL (Anonymous allowed)
-
                     // Links as Resource — authenticated (owner guard at application layer)
                     .requestMatchers("/api/v1/urls/**")
                     .authenticated()
@@ -75,6 +67,22 @@ public class SecurityConfig {
                     // Custom Domains — authenticated (owner guard at application layer)
                     .requestMatchers("/api/v1/domains/**")
                     .authenticated()
+
+                    // Actuator - tiered access.
+                    // The bare /actuator index must be guarded BEFORE the GET /{id}
+                    // (redirect) permitAll below, which otherwise matches any single-segment
+                    // path such as "/actuator" itself. "actuator" is a reserved word, so no
+                    // vanity alias can ever collide with it.
+                    .requestMatchers("/actuator")
+                    .hasRole("ADMIN")
+
+                    // Public Endpoints
+                    .requestMatchers("/api/v1/auth/**")
+                    .permitAll() // Login & Register
+                    .requestMatchers(HttpMethod.GET, "/{id}")
+                    .permitAll() // Redirect
+                    .requestMatchers(HttpMethod.POST, "/api/v1/urls")
+                    .permitAll() // Create Short URL (Anonymous allowed)
 
                     // Actuator - tiered access
                     .requestMatchers("/actuator/health/liveness", "/actuator/health/readiness")

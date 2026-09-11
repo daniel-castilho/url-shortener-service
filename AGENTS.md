@@ -385,6 +385,26 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     registradas (lista em `docs/slos.md` §2) e roda no CI; AC "gate no `verify`" implementado por step
     de CI (precedente do Epic 2 / Regra 9 — sem nova dependência pom). — `resolved`
 
+25. **Actuator index tocável anonimamente via catch-all `GET /{id}` (Epic 3 story 3.3)** — o
+    `SecurityConfig` permitia `GET /{id}` (redirect) como permitAll; como o matcher de `/{id}`
+    era declarado ANTES do bloco actuator, o índice `/actuator` (1 segmento) caía no permitAll e
+    retornava 200 anônimo, listando os endpoints expostos. **Resolvido:** matcher
+    `.requestMatchers("/actuator").hasRole("ADMIN")` movido para antes de `/{id}` ("actuator" é
+    palavra reservada por `ReservedWordsValidator`, então nenhum vanity alias colide). Novo
+    `ProductionLockdownIT` (7 testes): liveness 200, readiness 200 (Mongo+Redis up, body sem
+    components/redis/mongo), `/actuator/health` sem vazamento de detail (401 anônimo, 403
+    autenticado sem role), `/actuator/prometheus`/`/actuator/metrics` + outros endpoints role-gated,
+    `/actuator/info` público. — `resolved`
+
+26. **Tier actuator efetivamente hard-lock: sem role de operador (Epic 3 story 3.3, follow-up)** —
+    `CustomUserDetailsService` retorna `Collections.emptyList()` como authorities e o modelo `User`
+    não tem campos de role; nenhum principal alcança `ROLE_ADMIN`/`METRICS_VIEWER`, então
+    `/actuator/health` (components), `/actuator/metrics` e `/actuator/prometheus` são inacessíveis
+    por HTTP até para operadores (401/403 sempre). Além disso `security.actuator.health-detail-enabled`
+    está bound em `SecurityProperties` mas nunca consumido (o switch real é
+    `management.endpoint.health.show-details`). Decidir identidade de operador (usuário BasicAuth
+    escopado, role no JWT ou allowlist de IP) e wirear `health-detail-enabled` ou removê-lo. — `open`
+
 ## 🔍 Operational Discipline & Debugging Guidelines
 
 - **Investigate before trial-and-error:** when a compile or test fails, read the full stack trace and
