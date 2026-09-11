@@ -19,9 +19,9 @@ the expiry feature and the migration mechanism.
 3. `docs/coding-standards.md`
 4. `docs/testing-playbook.md`
 5. `pom.xml` and `src/main/resources/application.yaml`
-6. `tasks/link-expiry-spec.md`
-7. `tasks/link-expiry-backlog.md`
-8. `tasks/link-expiry-implementation-sequence.md`
+6. `tasks/link-expiry/link-expiry-spec.md`
+7. `tasks/link-expiry/link-expiry-backlog.md`
+8. `tasks/link-expiry/link-expiry-implementation-sequence.md`
 9. `ShortUrl`/`ShortUrlEntity`, `ShortUrlMapper`, `UrlShortenerService` (read path), `UrlController`
    (redirect), `RedisUrlCache`, `MongoCollections`, `IndexMigration`, `GlobalExceptionHandler`
 

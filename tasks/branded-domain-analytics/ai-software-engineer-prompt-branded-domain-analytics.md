@@ -17,9 +17,9 @@ You implement the complete **Branded Domain & Rich Analytics** epic. Phase A (re
 2. `docs/data-model-decisions.md` (custom-domain + analytics)
 3. `docs/coding-standards.md` (host-aware redirect; enrichment in worker, not redirect)
 4. `docs/testing-playbook.md`
-5. `tasks/branded-domain-analytics-spec.md`
-6. `tasks/branded-domain-analytics-backlog.md`
-7. `tasks/branded-domain-analytics-implementation-sequence.md`
+5. `tasks/branded-domain-analytics/branded-domain-analytics-spec.md`
+6. `tasks/branded-domain-analytics/branded-domain-analytics-backlog.md`
+7. `tasks/branded-domain-analytics/branded-domain-analytics-implementation-sequence.md`
 8. `core/model/ShortUrl`, `core/model/ClickEvent`, `infra/adapter/output/persistence/entity/ClickEventDocument`,
    `core/ports/outgoing/*`, `MongoClickEventRepository`, `ClickBatchWorker`, `UrlController` (redirect),
    `infra/.../migration/*`, `infra/config/SecurityConfig`, `MongoCollections`

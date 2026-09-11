@@ -53,4 +53,4 @@ determinísticos e feedback rápido.
 
 ---
 
-*Próximo passo: executar as stories (4.1‑4.5) conforme aterradas em \`tasks/epic-4-stories.md\`.*
+*Próximo passo: executar as stories (4.1‑4.5) conforme aterradas em \`tasks/epic-4/epic-4-stories.md\`.*

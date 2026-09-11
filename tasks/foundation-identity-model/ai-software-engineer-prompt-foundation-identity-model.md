@@ -19,9 +19,9 @@ over new features, cosmetic refactors and premature abstraction.
 3. `docs/coding-standards.md`
 4. `docs/testing-playbook.md`
 5. `docs/data-model-decisions.md` and `docs/lessons.md`
-6. `tasks/foundation-identity-model-spec.md`
-7. `tasks/foundation-identity-model-backlog.md`
-8. `tasks/foundation-identity-model-implementation-sequence.md`
+6. `tasks/foundation-identity-model/foundation-identity-model-spec.md`
+7. `tasks/foundation-identity-model/foundation-identity-model-backlog.md`
+8. `tasks/foundation-identity-model/foundation-identity-model-implementation-sequence.md`
 9. Current production code and colocated `*Test` / `*IT` classes
 
 If documentation disagrees with executable configuration, stop, report the mismatch and resolve it in

@@ -22,9 +22,9 @@ operational layer.
 4. `docs/coding-standards.md`
 5. `docs/testing-playbook.md`
 6. `pom.xml`, `src/main/resources/application.yaml`, `src/main/resources/logback-spring.xml`
-7. `tasks/operational-excellence-spec.md`
-8. `tasks/operational-excellence-backlog.md`
-9. `tasks/operational-excellence-implementation-sequence.md`
+7. `tasks/operational-excellence/operational-excellence-spec.md`
+8. `tasks/operational-excellence/operational-excellence-backlog.md`
+9. `tasks/operational-excellence/operational-excellence-implementation-sequence.md`
 10. `infra/observability/MetricsService.java`, `MicrometerMetricsAdapter.java`, `InfraConfig`/`config`,
     `docker-compose.yaml`, `Dockerfile`, `.github/workflows/ci.yml`, `scripts/check-boundaries.sh`
 

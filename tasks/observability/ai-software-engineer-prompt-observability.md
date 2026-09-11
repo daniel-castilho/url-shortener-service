@@ -39,9 +39,9 @@ Implement the complete observability stack to close debt item 12:
 
 ## Reference Documents
 
-- **Spec:** `tasks/observability-spec.md`
-- **Backlog:** `tasks/observability-backlog.md`
-- **Sequence:** `tasks/observability-implementation-sequence.md`
+- **Spec:** `tasks/observability/observability-spec.md`
+- **Backlog:** `tasks/observability/observability-backlog.md`
+- **Sequence:** `tasks/observability/observability-implementation-sequence.md`
 
 ---
 

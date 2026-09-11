@@ -312,7 +312,7 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     verifying the behaviour. Corrected "bloom avoids DB" claim in docs. `ReadPathIT` + k6 baseline
     published. — `resolved`
 
-20. **Links as Resource (Phase B) — link management endpoints** — implemented per `tasks/links-as-resource-*.md`:
+20. **Links as Resource (Phase B) — link management endpoints** — implemented per `tasks/links-as-resource/links-as-resource-*.md`:
     ISP port split (`LinkQueryPort` + `LinkMutationPort`, `MongoUrlRepository` implements both;
     `UrlRepositoryPort` for the shortening/redirect port unchanged), 4 use cases (`ListUserLinks`,
     `GetLink`, `UpdateLink`, `ArchiveLink`), REST endpoints `GET/PATCH/DELETE /api/v1/urls[/{id}]`

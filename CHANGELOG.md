@@ -322,4 +322,4 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
   resolved).
 - Updated `README.md`, `AGENTS.md`, `docs/data-model-decisions.md`, `docs/coding-standards.md`,
   `docs/testing-playbook.md`, `docs/lessons.md`, `docs/twelve-factor.md`.
-- `tasks/foundation-identity-model-backlog.md` status updated to completed.
+- `tasks/foundation-identity-model/foundation-identity-model-backlog.md` status updated to completed.

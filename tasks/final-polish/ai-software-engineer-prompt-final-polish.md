@@ -18,9 +18,9 @@ done and tagged (v0.1.0–v0.9.0). Your job is the remaining closing items.
 3. `docs/coding-standards.md`
 4. `docs/testing-playbook.md`
 5. `src/main/resources/application.yaml` (`spring.data.mongodb.auto-index-creation`)
-6. `tasks/final-polish-spec.md`
-7. `tasks/final-polish-backlog.md`
-8. `tasks/final-polish-implementation-sequence.md`
+6. `tasks/final-polish/final-polish-spec.md`
+7. `tasks/final-polish/final-polish-backlog.md`
+8. `tasks/final-polish/final-polish-implementation-sequence.md`
 9. `infra/.../migration/*` (`MongoSchemaMigrator`, `SchemaMigration`, V1–V5), `MongoCollections`,
    `UserEntity`, `MongoUserRepository`, `UserService`, `UrlController`, `UrlShortenerService`,
    `ShortenRequest`/`ShortenUrlUseCase`

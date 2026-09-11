@@ -26,4 +26,4 @@
 
 ---
 
-*Execução: `tasks/epic-4-technical-tasks.md`; evidências no `tasks/epic-4-dod.md`.*
+*Execução: `tasks/epic-4/epic-4-technical-tasks.md`; evidências no `tasks/epic-4/epic-4-dod.md`.*

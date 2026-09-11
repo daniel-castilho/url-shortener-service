@@ -81,9 +81,9 @@ These were verified against the code at `main` and are binding:
 2. `docs/data-model-decisions.md` (additive metadata, soft-archive, index V7)
 3. `docs/coding-standards.md` (owner guard, cursor pagination, PATCH semantics)
 4. `docs/testing-playbook.md`
-5. `tasks/links-as-resource-spec.md`
-6. `tasks/links-as-resource-backlog.md`
-7. `tasks/links-as-resource-implementation-sequence.md`
+5. `tasks/links-as-resource/links-as-resource-spec.md`
+6. `tasks/links-as-resource/links-as-resource-backlog.md`
+7. `tasks/links-as-resource/links-as-resource-implementation-sequence.md`
 8. `core/model/ShortUrl`, `core/ports/outgoing/UrlRepositoryPort`, `core/service/UrlShortenerService`,
    `infra/adapter/input/rest/UrlController`, `infra/adapter/output/persistence/MongoUrlRepository`,
    `infra/.../migration/*`, `infra/config/SecurityConfig`, `core/service/UserService`,

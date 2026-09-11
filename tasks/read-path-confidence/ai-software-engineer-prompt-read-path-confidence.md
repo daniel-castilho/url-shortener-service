@@ -18,9 +18,9 @@ domain, analytics rollup, API keys, webhooks) here — those are later phases.
 2. `docs/data-model-decisions.md` (cache/bloom read-path)
 3. `docs/coding-standards.md` (read path, no blocking in redirect)
 4. `docs/load-test-baseline.md` (currently only `shorten`)
-5. `tasks/read-path-confidence-spec.md`
-6. `tasks/read-path-confidence-backlog.md`
-7. `tasks/read-path-confidence-implementation-sequence.md`
+5. `tasks/read-path-confidence/read-path-confidence-spec.md`
+6. `tasks/read-path-confidence/read-path-confidence-backlog.md`
+7. `tasks/read-path-confidence/read-path-confidence-implementation-sequence.md`
 8. `core/service/UrlShortenerService` (`getOriginalUrl`), `core/ports/outgoing/UrlCachePort`,
    `core/model/CachedUrlValue`, `infra/adapter/output/redis/RedisUrlCache`,
    `infra/.../migration/*`, `load-tests/*.js`, `scripts/performance-baseline.sh`,

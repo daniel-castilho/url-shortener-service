@@ -18,9 +18,9 @@ analytics is a decoupled, out-of-band, at-least-once pipeline.
 3. `docs/coding-standards.md`
 4. `docs/testing-playbook.md`
 5. `pom.xml` (Spring Data Redis + Lettuce already present) and `src/main/resources/application.yaml`
-6. `tasks/real-analytics-spec.md`
-7. `tasks/real-analytics-backlog.md`
-8. `tasks/real-analytics-implementation-sequence.md`
+6. `tasks/real-analytics/real-analytics-spec.md`
+7. `tasks/real-analytics/real-analytics-backlog.md`
+8. `tasks/real-analytics/real-analytics-implementation-sequence.md`
 9. Current `ClickEvent`, `AnalyticsPort`, `AsyncAnalyticsAdapter`, `ClickBatchWorker`, `UrlController`
    (redirect path), `ShortUrl`/`ShortUrlEntity`, `MongoCollections`, `IndexMigration`
 
