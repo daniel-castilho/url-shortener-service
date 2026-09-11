@@ -12,19 +12,26 @@ Sources of truth: `README.md`, `docker-compose.yaml`, `Dockerfile`, `src/main/re
 ## 0. Topology and entry points
 
 ```
-client ──► [NGINX/Caddy :443] ──► url-shortener-service :8080 (HTTP, no TLS)
-                                    ├── MongoDB (urlshortener-mongo) :27017
-                                    └── Redis    (redis)             :6379
+client ──► [NGINX/Caddy :443] ──► url-shortener instances (HTTP, no TLS, stateless — ADR 0001)
+                                     ├── url-shortener@1 :8080 ─┐
+                                     ├── url-shortener@2 :8081 ─┼── nginx upstream (weights)
+                                     └── ...                   │
+                                                              ┌──┴─── shared attached resources
+                                                              ▼
+                                   MongoDB (urlshortener-mongo) :27017 / Redis :6379
 ```
 
 - App routes: `POST /api/v1/urls` (shorten), `GET /{id}` (redirect), `/api/v1/auth/*`. All under
-  internal port `:8080`. Auth is `Authorization: Bearer <token>` for vanity/short-create; anonymous
-  shorten is also allowed.
+  internal ports `:8080+` (one per instance). Auth is `Authorization: Bearer <token>` for
+  vanity/short-create; anonymous shorten is also allowed.
 - Health: `GET /actuator/health`. Metrics/Prometheus: `/actuator/prometheus`.
 - Working directory for all commands: repository root.
 - Either run from a built jar (`./mvnw package`) or via Docker (`Dockerfile`). The repo bundles the
   **Maven wrapper** (`./mvnw`, 3.9.16) — no system Maven required.
 - TLS termination is handled by a reverse proxy (NGINX or Caddy) — see §8.
+- **Scale-out:** instances are stateless (12-factor §6/§8; per-IP rate limiting and the bloom/L2
+  cache live in Redis, shared across instances — ADR 0002/0003). Add capacity by starting another
+  instance and listing it in the nginx upstream (see §12).
 
 ---
 
@@ -301,4 +308,72 @@ Metrics:
 
 ---
 
-*Last updated: 2026-08-27 (Operational Excellence epic)*
+## 12. Multi-instance operation (scale-out, ADR 0001)
+
+Instances are **stateless**: JWT auth, shared Redis (rate limit, bloom, L2 cache, analytics
+stream) and shared MongoDB mean any instance can serve any request. The per-IP rate-limit
+budget is **global** (Redis token bucket — ADR 0002); the only per-instance state is the
+tiny Caffeine L1 (≤5s staleness — ADR 0003).
+
+### 12.1 Add an instance (scale-out)
+
+```sh
+# 1. Install the TEMPLATE unit (once) — instantiate per instance
+sudo cp deploy/url-shortener@.service /etc/systemd/system/url-shortener@.service
+sudo systemctl daemon-reload
+
+# 2. Start instance 2 (binds :8081 automatically: -Dserver.port=808%i -> 8080,8081,...)
+sudo systemctl enable --now url-shortener@2
+#    optional per-instance env: /etc/url-shortener/url-shortener@2.env (port override wins there)
+
+# 3. Add the peer to the nginx upstream (deploy/proxy/nginx.conf as reference)
+#      upstream url_shortener_backend {
+#          server 127.0.0.1:8080 weight=100 max_fails=2 fail_timeout=10s;
+#          server 127.0.0.1:8081 weight=100 max_fails=2 fail_timeout=10s;
+#      }
+sudo nginx -t && sudo systemctl reload nginx
+
+# 4. Verify: both instances healthy, LB round-robins
+curl -s http://localhost:8080/actuator/health/liveness
+curl -s http://localhost:8081/actuator/health/liveness
+sudo journalctl -u url-shortener@2 -f --no-pager | head
+```
+
+### 12.2 Canary release via weight flip (zero downtime)
+
+Deploy the new jar to **one** instance, then shift traffic gradually — `10 -> 30 -> 100`:
+
+```sh
+# 1. Roll instance 2 to the NEW artifact (instance 1 keeps serving old)
+sudo systemctl stop url-shortener@2
+sudo cp target/url-shortener-service-*.jar /opt/url-shortener/url-shortener.jar   # new
+sudo systemctl start url-shortener@2
+curl -s http://localhost:8081/actuator/health/readiness    # wait UP
+
+# 2. Flip weights in nginx upstream (10 -> 30 -> 100), reloading between steps
+#      server 127.0.0.1:8080 weight=90;   server 127.0.0.1:8081 weight=10;
+sudo nginx -t && sudo systemctl reload nginx
+#    watch: curl -s :443 metrics / Grafana; error budget burn OK? proceed; else flip back.
+
+# 3. Finish: instance 1 gets the new jar too, restore equal weights
+sudo systemctl stop url-shortener@1 && sudo cp ... && sudo systemctl start url-shortener@1
+```
+
+An unhealthy peer is dropped automatically after 2 failures in 10s
+(`max_fails=2 fail_timeout=10s`) — a down instance never blocks the flip.
+
+### 12.3 Docker image artifact
+
+```sh
+docker build -t url-shortener:sha-$(git rev-parse --short HEAD) .
+docker images | grep url-shortener    # tag by source sha; reference build (2026-09-11,
+                                      # sha-583832b): 302MB = JRE-alpine base (198MB)
+                                      # + fat jar (~77MB). <150MB requires a jlink custom
+                                      # runtime (not adopted — see epic-6-dod.md).
+```
+
+Shared-resource note: each instance adds one Mongo connection pool and one Redisson client
+to the backing services — watch connection counts as N grows.
+---
+
+*Last updated: 2026-09-11 (Epic 6 — Scalable: multi-instance topology §0/§12, ADRs 0001–0004)*
