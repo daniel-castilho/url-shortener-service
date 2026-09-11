@@ -27,8 +27,36 @@ jobs:
         run: bash scripts/check-doc-sync.sh
       - name: Doc-sync gate self-test
         run: bash scripts/check-doc-sync.sh --self-test
-      # Epic 3 story 3.2: the registered Micrometer meters are a frozen contract (docs/slos.md §2).
-      # Run here (fast, no Docker) on every push/PR; any new/removed series blocks merge.
+
+  observability:
+    name: Observability Gate (Epic 3)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Pinned promtool (Prometheus 3.3.0) and amtool (Alertmanager 0.28.1) — pinned so a
+      # Prometheus release can never silently change the rule/config grammar we validate against.
+      - name: Download pinned promtool
+        run: |
+          curl -sL -o /tmp/prom.tar.gz https://github.com/prometheus/prometheus/releases/download/v3.3.0/prometheus-3.3.0.linux-amd64.tar.gz
+          tar xzf /tmp/prom.tar.gz -C /tmp
+          echo "/tmp/prometheus-3.3.0.linux-amd64" >> "$GITHUB_PATH"
+      - name: Download pinned amtool
+        run: |
+          curl -sL -o /tmp/am.tar.gz https://github.com/prometheus/alertmanager/releases/download/v0.28.1/alertmanager-0.28.1.linux-amd64.tar.gz
+          tar xzf /tmp/am.tar.gz -C /tmp
+          echo "/tmp/alertmanager-0.28.1.linux-amd64" >> "$GITHUB_PATH"
+      - name: Tool versions
+        run: promtool --version | head -1 && amtool --version | head -1
+      # Epic 3 story 3.4: burn-rate rules must load and the triggered behaviour is pinned by tests.
+      - name: promtool check rules (syntax + expression)
+        run: promtool check rules deploy/monitoring/alerts.yml deploy/monitoring/recording-rules.yml
+      - name: promtool test rules (fast/slow burn fire; healthy traffic silent)
+        run: promtool test rules deploy/monitoring/rules_tests.yml
+      - name: promtool check config
+        run: promtool check config deploy/monitoring/prometheus.yml
+      - name: amtool check-config
+        run: amtool check-config deploy/monitoring/alertmanager.yml
+      # Epic 3 story 3.2: registered Micrometer meters are a frozen contract (docs/slos.md §2).
       - name: Metrics freeze gate
         run: bash scripts/check-metrics-frozen.sh
       - name: Metrics freeze gate self-test

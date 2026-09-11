@@ -89,17 +89,42 @@ k6 scripts in `load-tests/` (`shorten.js`, `redirect.js`, `mixed.js`), manual
 dispatch via `.github/workflows/load-test.yml`. Baselines tracked in
 `docs/load-test-baseline.md`.
 
+## Diagnóstico (quick triage)
+
+`scripts/debug-health.sh [base_url]` probes `/actuator/health/liveness`+
+`/actuator/health/readiness` and, when the scrape is reachable,
+`/actuator/prometheus` (error ratio, cache hits/misses, analytics queue depth), then
+prints the recommended action. It is a triage aid, not a gate.
+
+| Symptom | Check | Action |
+|---|---|---|
+| Readiness DOWN / Mongo or Redis unreachable | `/actuator/health/readiness` body; `docker compose ps`; service logs | `docker-compose up -d`, verify network/replicaset, re-check readiness (UP requires both Mongo **and** Redis) |
+| Liveness DOWN / app unresponsive | `systemctl status url-shortener`; tail `logging/application.log` | restart the unit; on recurrence run `scripts/verify-graceful-shutdown.sh`, inspect shutdown logs (crash/OOM/blocked migration) |
+| Sustained 5xx / fast-burn alert | `error5xx` line + `SLOAvailabilityFastBurn` status in Alertmanager | `docs/slos.md` §Response runbook — **Fast burn** (critical) row |
+| `analytics.queue.depth` growing (>100s of events) | queue gauge + `click_events` insert stats | consumer (`ClickBatchWorker`) backed up/failing: check its logs; queue is bounded (`XADD MAXLEN`) and fail-open — watch for drops |
+| Cache hit ratio collapsing | `hits/(hits+misses)` from the cache counters | verify Redis reachable + L1/bloom reset; a single DB hit per redirect is by design (Rule 5), ratios must stay high |
+| Redirect latency p99 > 200ms | `url_retrieval_duration_seconds` + `redirect_latency_seconds` p99 panels | MongoDB/Redis latency + network; correlate with the k6 baseline (`docs/load-test-baseline.md`) |
+
 ## Run scripts
 
 ```bash
 # Run k6 load tests against a locally started app (relaxed per-IP budgets):
 RATE_LIMITER_LIMIT=1000000 RATE_LIMITER_REDIRECT_LIMIT=1000000 ./mvnw spring-boot:run &
 k6 run load-tests/mixed.js
+
+# Quick health triage (Epic 3 story 3.5):
+bash scripts/debug-health.sh http://localhost:8080
+
+# Validate alert rules and configs (matches the CI observability job):
+promtool check rules deploy/monitoring/alerts.yml deploy/monitoring/recording-rules.yml
+promtool test rules deploy/monitoring/rules_tests.yml
+promtool check config deploy/monitoring/prometheus.yml
+amtool check-config deploy/monitoring/alertmanager.yml
 ```
 
-## Roadmap (Epic 3)
+## Roadmap (Epic 3, follow-ups)
 
-- Alert rules validated with `promtool` / `amtool` in CI (story 3.4) and their
-  runbook annotations (`runbook-§SLO-*`) wired to the on-call docs.
-- Pinned `scripts/debug-health.sh` triage script + symptom → action table (story 3.5).
-- CI job that runs the full observability gate: metrics-frozen, promtool, amtool (story 3.6).
+- Operator identity for the actuator tier (AGENTS.md debt 26): decide a scoped operator
+  identity (BasicAuth user, JWT role, or IP allowlist) so `/actuator/health` (components),
+  `/actuator/metrics` and `/actuator/prometheus` become operator-readable over HTTP; wire or
+  drop `security.actuator.health-detail-enabled`.

@@ -1,0 +1,53 @@
+# Unit tests for the SLO burn-rate alert rules (deploy/monitoring/alerts.yml).
+# Ran by `promtool test rules` in the CI observability job (Epic 3 stories 3.4/3.6).
+#
+# Window note: the fast-burn rule needs a 1h rate window, the slow-burn rule a 6h window,
+# so each test seeds enough linearly-increasing counter samples before the eval_time.
+# The 30d budget-exhausted rule depends on a 30d rate window (recording rule
+# slo:url_shortener:error_ratio_30d) which is impractical to seed sample-by-sample;
+# it is covered by `promtool check rules` (syntax + expression validation) on every push.
+rule_files:
+  - alerts.yml
+  - recording-rules.yml
+
+evaluation_interval: 1m
+
+tests:
+  - name: Availability SLO fast burn fires on sustained 14.4x burn
+    input_series:
+      # 50% of requests are 5xx, sustained for ~2h (120 samples @ 1m).
+      - series: 'http_server_requests_seconds_count{status="200"}'
+        values: '10+10x119'
+      - series: 'http_server_requests_seconds_count{status="500"}'
+        values: '10+10x119'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="SLOAvailabilityFastBurn"}'
+        eval_time: 110m
+        exp_samples:
+          - labels: 'ALERTS{alertname="SLOAvailabilityFastBurn",alertstate="firing",severity="critical",slo="availability"}'
+            value: 1
+
+  - name: Availability SLO slow burn fires on sustained 6h window
+    input_series:
+      # Same 50% 5xx ratio, sustained for ~6h20m (380 samples @ 1m).
+      - series: 'http_server_requests_seconds_count{status="200"}'
+        values: '10+10x379'
+      - series: 'http_server_requests_seconds_count{status="500"}'
+        values: '10+10x379'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="SLOAvailabilitySlowBurn"}'
+        eval_time: 370m
+        exp_samples:
+          - labels: 'ALERTS{alertname="SLOAvailabilitySlowBurn",alertstate="firing",severity="warning",slo="availability"}'
+            value: 1
+
+  - name: No alert on healthy traffic (1% 5xx, long enough for fast-burn window)
+    input_series:
+      - series: 'http_server_requests_seconds_count{status="200"}'
+        values: '990+990x119'
+      - series: 'http_server_requests_seconds_count{status="500"}'
+        values: '10+10x119'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="SLOAvailabilityFastBurn"}'
+        eval_time: 110m
+        exp_samples: []

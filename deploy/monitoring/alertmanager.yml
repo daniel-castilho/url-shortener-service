@@ -1,0 +1,23 @@
+# Alertmanager configuration for the URL shortener SLO burn-rate alerts.
+# Validated on every push via `amtool check-config` (Epic 3 stories 3.4/3.6).
+#
+# The default receiver is a webhook placeholder — set ALERTMANAGER_WEBHOOK_URL or wire a
+# real receiver (email/opsgenie/slack) here before production. Alerts reference runbooks:
+# every rule carries a `runbook-§X` annotation pointing back to docs/slos.md §Response runbook.
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: "default"
+  group_by: ["alertname", "severity", "slo"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: "default"
+    webhook_configs:
+      # Placeholder receiver — replace with a real webhook/email receiver before production
+      # (amtool check-config and the alertmanager daemon accept only a resolvable static URL).
+      - url: "http://localhost:5000/hook"
+        send_resolved: true

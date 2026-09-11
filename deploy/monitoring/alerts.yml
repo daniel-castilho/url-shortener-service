@@ -26,6 +26,8 @@ groups:
         annotations:
           summary: "Availability SLO fast burn — error budget being consumed at 14.4x rate (>2% of the 30d budget in 1h)"
           description: "Error ratio over 1h ({{ $value | humanizePercentage }}) exceeds the fast-burn threshold. Investigate immediately."
+          runbook: "docs/slos.md §Response runbook"
+          runbook-§Fast-burn: "docs/slos.md — 'Fast burn' row: check p50/p95/p99 + error-rate panels, inspect logging/application.log, health-check MongoDB/Redis, consider rollback."
 
       - alert: SLOAvailabilitySlowBurn
         expr: |
@@ -46,6 +48,8 @@ groups:
         annotations:
           summary: "Availability SLO slow burn — error budget being consumed at 6x rate (>5% of the 30d budget in 6h)"
           description: "Error ratio over 6h ({{ $value | humanizePercentage }}) exceeds the slow-burn threshold. Plan investigation."
+          runbook: "docs/slos.md §Response runbook"
+          runbook-§Slow-burn: "docs/slos.md — 'Slow burn' row: scheduled investigation; correlate with deploy timeline (CHANGELOG) and k6 baseline (docs/load-test-baseline.md)."
 
       - alert: SLOErrorBudgetExhausted
         expr: |
@@ -57,3 +61,5 @@ groups:
         annotations:
           summary: "Availability SLO error budget exhausted for the 30d window"
           description: "The 99.9% availability SLO cannot be met this window. Execute the response runbook (docs/slos.md)."
+          runbook: "docs/slos.md §Response runbook"
+          runbook-§Budget-exhausted: "docs/slos.md — 'Budget exhausted' row: emergency, treat as incident, freeze deploys, add capacity or fix defect."
