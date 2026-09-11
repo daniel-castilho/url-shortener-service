@@ -53,7 +53,14 @@ class RedisUrlCacheTest {
     when(bloomFilter.tryInit(anyLong(), anyDouble())).thenReturn(true);
     when(redisTemplate.opsForValue()).thenReturn(valueOperations);
 
-    cache = new RedisUrlCache(redisTemplate, redisson, metrics, objectMapper);
+    cache =
+        new RedisUrlCache(
+            redisTemplate,
+            redisson,
+            metrics,
+            objectMapper,
+            new ca.tyny.urlshortener.infra.config.properties.UrlCacheProperties(
+                100, java.time.Duration.ofSeconds(5), 100_000_000L, 0.01));
   }
 
   @Test

@@ -29,6 +29,13 @@ app:
     # Maximum ttlSeconds accepted on shorten (server-side cap); over-cap is rejected with 400.
     max-ttl-seconds: ${SHORTENER_MAX_TTL_SECONDS:31536000}   # 1 year
     # salt: removed (SHORTENER_SALT no longer used once Hashids is dropped)
+  cache:
+    # L1 Caffeine front cache of the cache-aside stack (defaults: 100 items / 5s TTL)
+    l1-max-size: ${APP_CACHE_L1_MAX_SIZE:100}
+    l1-ttl: ${APP_CACHE_L1_TTL:PT5S}
+    # Bloom filter guarding cache penetration (defaults: 100M expected / 1% fpp)
+    bloom-expected-insertions: ${APP_CACHE_BLOOM_EXPECTED_INSERTIONS:100000000}
+    bloom-false-positive-probability: ${APP_CACHE_BLOOM_FPP:0.01}
   url:
     allow-http: false              # Reject http:// URLs (HTTPS-only by default)
     dns-timeout-ms: 2000           # DNS resolution timeout

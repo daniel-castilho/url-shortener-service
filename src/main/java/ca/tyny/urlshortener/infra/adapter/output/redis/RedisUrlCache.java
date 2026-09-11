@@ -4,6 +4,7 @@ import ca.tyny.urlshortener.core.model.CacheLookup;
 import ca.tyny.urlshortener.core.model.CachedUrlValue;
 import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
+import ca.tyny.urlshortener.infra.config.properties.UrlCacheProperties;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import java.time.Duration;
@@ -25,6 +26,7 @@ public class RedisUrlCache implements UrlCachePort {
   private final RedissonClient redisson;
   private final Cache<String, CachedUrlValue> localCache;
   private final RBloomFilter<String> bloomFilter;
+  private final UrlCacheProperties cacheProperties;
   private final MetricsPort metrics;
   private final ObjectMapper objectMapper;
 
@@ -37,25 +39,34 @@ public class RedisUrlCache implements UrlCachePort {
       StringRedisTemplate redisTemplate,
       RedissonClient redisson,
       MetricsPort metrics,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      UrlCacheProperties cacheProperties) {
     this.redisTemplate = redisTemplate;
     this.redisson = redisson;
     this.metrics = metrics;
     this.objectMapper = objectMapper;
+    this.cacheProperties = cacheProperties;
 
-    // Caffeine Local Cache: 100 items, 5 seconds TTL
+    // Caffeine Local Cache (L1) — tuned via app.cache.l1-* (defaults: 100 items / 5s TTL)
     this.localCache =
-        Caffeine.newBuilder().maximumSize(100).expireAfterWrite(Duration.ofSeconds(5)).build();
+        Caffeine.newBuilder()
+            .maximumSize(cacheProperties.l1MaxSize())
+            .expireAfterWrite(cacheProperties.l1Ttl())
+            .build();
 
-    // Bloom Filter: Expected 100M elements, 1% false positive probability
+    // Bloom Filter — tuned via app.cache.bloom-* (defaults: 100M expected / 1% fpp)
     this.bloomFilter = redisson.getBloomFilter("url_shortener:bloom_filter");
     try {
-      this.bloomFilter.tryInit(100_000_000L, 0.01);
+      this.bloomFilter.tryInit(
+          cacheProperties.bloomExpectedInsertions(),
+          cacheProperties.bloomFalsePositiveProbability());
     } catch (org.redisson.client.RedisException e) {
       if (e.getMessage().contains("Bloom filter config has been changed")) {
         log.warn("Bloom Filter config changed. Re-initializing...");
         this.bloomFilter.delete();
-        this.bloomFilter.tryInit(100_000_000L, 0.01);
+        this.bloomFilter.tryInit(
+            cacheProperties.bloomExpectedInsertions(),
+            cacheProperties.bloomFalsePositiveProbability());
       } else {
         throw e;
       }
@@ -179,7 +190,9 @@ public class RedisUrlCache implements UrlCachePort {
   public void resetBloomFilter() {
     try {
       this.bloomFilter.delete();
-      this.bloomFilter.tryInit(100_000_000L, 0.01);
+      this.bloomFilter.tryInit(
+          cacheProperties.bloomExpectedInsertions(),
+          cacheProperties.bloomFalsePositiveProbability());
     } catch (Exception e) {
       log.error("Failed to reset Bloom Filter", e);
     }
