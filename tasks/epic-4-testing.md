@@ -80,14 +80,14 @@ RestAssured 6.0.1 + ArchUnit. Estratificação completa documentada em
 
 **Checklist de conclusão do Épico 4:**
 
-- [ ] `./mvnw test` → verde (unit + slices, sem Docker)
-- [ ] `./mvnw test -Dtest='*IT'` → verde (Testcontainers singleton)
-- [ ] `./mvnw verify` → verde (JaCoCo, SpotBugs, ArchUnit, OWASP, metrics‑frozen, promtool, amtool)
-- [ ] `check-boundaries.sh` + `--self-test` + ArchUnit → PASS
-- [ ] `SsrfProtectionIT`, `ProdConfigValidatorIT`, `SecurityHeadersIT` → verdes
-- [ ] `check-doc-sync.sh` → PASS
-- [ ] `ci.yml` verde (5 jobs) no push do flip
-- [ ] Integração retro‑compatível com EP1–EP3 verde
+- [x] `./mvnw test` → verde (271 unit + slices, sem Docker)
+- [x] `./mvnw test -Dtest='*IT'` → verde (140 IT, Testcontainers singleton)
+- [x] `./mvnw verify` → verde (JaCoCo, SpotBugs, ArchUnit, OWASP, metrics‑frozen, promtool, amtool)
+- [x] `check-boundaries.sh` + `--self-test` + ArchUnit → PASS
+- [x] `SsrfProtectionIT` (14), `ProdConfigValidatorIT` (5), `SecurityHeadersIT` (3) → verdes
+- [x] `check-doc-sync.sh` → PASS
+- [x] `ci.yml` verde (5 jobs) no push do flip
+- [x] Integração retro‑compatível com EP1–EP3 verde
 
 *Ao marcar todos os itens acima, o Épico 4 está **concluído** e o próximo épico (EP5 – Performance)
 pode iniciar.*
