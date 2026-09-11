@@ -11,13 +11,13 @@ Marcos `[x]` preenchidos durante a execução; evidências coladas no `epic-6-do
 - [ ] Colar `git log --oneline -- docs/adr/` no `epic-6-dod.md`.
 
 ## 6.2 Auditoria explain dos índices (sem criação às cegas)
-- [ ] Infra isolada (Mongo 27018) com dados reais (pool do stress).
-- [ ] mongosh: `db.short_urls.find({_id: "<code>"}).explain("executionStats")` → ID_SCAN, docs examined mínimo.
-- [ ] mongosh: explain do cursor pagination (`userId` + `createdAt DESC` + cursor) → IXSCAN em `userId_1_createdAt_-1` (V7).
-- [ ] mongosh: explain do rollup/aggregation (`shortCode`+`day`) e `click_events` (V4).
-- [ ] mongosh: `getIndexes()` de `short_urls`/`click_events` colado (prova do conjunto V1–V9).
-- [ ] `./mvnw verify` → verde.
-- [ ] Colar outputs no `epic-6-dod.md`.
+- [x] Infra isolada (Mongo 27018) com dados reais (pool do stress).
+- [x] mongosh: `db.short_urls.find({_id: "<code>"}).explain("executionStats")` → ID_SCAN, docs examined mínimo.
+- [x] mongosh: explain do cursor pagination (`userId` + `createdAt DESC` + cursor) → IXSCAN em `userId_1_createdAt_-1` (V7).
+- [x] mongosh: explain do rollup/aggregation (`shortCode`+`day`) e `click_events` (V4).
+- [x] mongosh: `getIndexes()` de `short_urls`/`click_events` colado (prova do conjunto V1–V9).
+- [x] `./mvnw verify` → verde.
+- [x] Colar outputs no `epic-6-dod.md`.
 
 ## 6.3 Rate-limit + circuit breakers (evidência do existente)
 - [ ] `./mvnw test -Dtest='RedirectRateLimitIT'` → verde (5 testes), output colado.
