@@ -33,4 +33,14 @@ public interface MetricsPort {
   void recordMigrationFailed();
 
   void recordSsrfBlocked();
+
+  void recordRateLimitExceeded();
+
+  void recordVanityUrlCreated();
+
+  void recordDomainClaimed();
+
+  void recordDomainVerified();
+
+  void recordCustomDomainCreated();
 }
