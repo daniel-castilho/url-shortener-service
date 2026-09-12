@@ -99,6 +99,10 @@ jobs:
         with:
           name: url-shortener-jar
           path: target/
+        # retry: artifacts may take a few seconds to become available after gates job completes
+        continue-on-error: false
+        retries: 3
+        retry-delay: 10
 
       - name: Start app (relaxed rate limits)
         run: |
@@ -157,6 +161,10 @@ jobs:
         with:
           name: url-shortener-jar
           path: target/
+        # retry: artifacts may take a few seconds to become available after gates job completes
+        continue-on-error: false
+        retries: 3
+        retry-delay: 10
 
       - name: Start app
         run: |
