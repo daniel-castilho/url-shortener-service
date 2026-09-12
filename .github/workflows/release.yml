@@ -188,15 +188,18 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Debug - list files after checkout
+      - name: Extract semver from tag
+        id: extract-tag
         run: |
-          echo "=== Files in workspace ==="
-          pwd
-          ls -la
-          echo "=== scripts/ directory ==="
-          ls -la scripts/ 2>/dev/null || echo "No scripts dir"
-          echo "=== Looking for ci-restore-drill.sh ==="
-          find . -name "ci-restore*" -type f 2>/dev/null || echo "Not found"
+          TAG="${GITHUB_REF_NAME}"
+          SEMVER="${TAG#v}"
+          echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
+          echo "DEBUG: TAG=$TAG, SEMVER=$SEMVER, GITHUB_OUTPUT=$GITHUB_OUTPUT"
+
+      - name: Debug semver output
+        run: |
+          echo "DEBUG: extract-tag output = '${{ steps.extract-tag.outputs.semver }}'"
+          echo "DEBUG: GITHUB_REF_NAME = $GITHUB_REF_NAME"
 
       - uses: actions/setup-java@v6
         with:
@@ -205,9 +208,10 @@ jobs:
           cache: maven
 
       - name: Build jar with semver
-        run: ./mvnw -B clean package -DskipTests -Drevision="${{ needs.gates.outputs.semver }}"
-        # This produces the exact same jar as the gates job (deterministic build with same revision)
-        # We rebuild in each job to avoid artifact download timing issues
+        run: |
+          SEMVER="${{ steps.extract-tag.outputs.semver }}"
+          echo "Building with revision: $SEMVER"
+          ./mvnw -B clean package -DskipTests -Drevision="$SEMVER"
 
       - name: Run ci-restore-drill.sh
         run: bash scripts/ci-restore-drill.sh
