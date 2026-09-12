@@ -187,6 +187,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+
+      - name: Debug - list files after checkout
+        run: |
+          echo "=== Files in workspace ==="
+          pwd
+          ls -la
+          echo "=== scripts/ directory ==="
+          ls -la scripts/ 2>/dev/null || echo "No scripts dir"
+          echo "=== Looking for ci-restore-drill.sh ==="
+          find . -name "ci-restore*" -type f 2>/dev/null || echo "Not found"
+
       - uses: actions/setup-java@v6
         with:
           java-version: '25'
