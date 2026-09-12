@@ -27,6 +27,11 @@ public class MicrometerMetricsAdapter implements MetricsPort {
   private final Counter migrationsAppliedCounter;
   private final Counter migrationsFailedCounter;
   private final Counter ssrfBlockedCounter;
+  private final Counter rateLimitExceededCounter;
+  private final Counter vanityUrlsCreatedCounter;
+  private final Counter domainsClaimedCounter;
+  private final Counter domainsVerifiedCounter;
+  private final Counter customDomainsCreatedCounter;
 
   public MicrometerMetricsAdapter(io.micrometer.core.instrument.MeterRegistry registry) {
     this.idGenerationTimer =
@@ -110,6 +115,36 @@ public class MicrometerMetricsAdapter implements MetricsPort {
             .description("Total number of destination URLs blocked by SSRF protection")
             .tag("service", "url-shortener")
             .register(registry);
+
+    this.rateLimitExceededCounter =
+        Counter.builder("rate.limit.exceeded.total")
+            .description("Total number of requests rejected by rate limiter")
+            .tag("service", "url-shortener")
+            .register(registry);
+
+    this.vanityUrlsCreatedCounter =
+        Counter.builder("vanity.urls.created.total")
+            .description("Total number of vanity URLs created")
+            .tag("service", "url-shortener")
+            .register(registry);
+
+    this.domainsClaimedCounter =
+        Counter.builder("domains.claimed.total")
+            .description("Total number of custom domains claimed")
+            .tag("service", "url-shortener")
+            .register(registry);
+
+    this.domainsVerifiedCounter =
+        Counter.builder("domains.verified.total")
+            .description("Total number of custom domains verified")
+            .tag("service", "url-shortener")
+            .register(registry);
+
+    this.customDomainsCreatedCounter =
+        Counter.builder("custom.domains.created.total")
+            .description("Total number of links created under custom domains")
+            .tag("service", "url-shortener")
+            .register(registry);
   }
 
   @Override
@@ -175,5 +210,30 @@ public class MicrometerMetricsAdapter implements MetricsPort {
   @Override
   public void recordSsrfBlocked() {
     ssrfBlockedCounter.increment();
+  }
+
+  @Override
+  public void recordRateLimitExceeded() {
+    rateLimitExceededCounter.increment();
+  }
+
+  @Override
+  public void recordVanityUrlCreated() {
+    vanityUrlsCreatedCounter.increment();
+  }
+
+  @Override
+  public void recordDomainClaimed() {
+    domainsClaimedCounter.increment();
+  }
+
+  @Override
+  public void recordDomainVerified() {
+    domainsVerifiedCounter.increment();
+  }
+
+  @Override
+  public void recordCustomDomainCreated() {
+    customDomainsCreatedCounter.increment();
   }
 }
