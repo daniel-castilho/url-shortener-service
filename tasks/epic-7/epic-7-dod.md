@@ -203,7 +203,9 @@ All coverage checks have been met.
 BUILD SUCCESS
 ```
 
-Sha de fechamento do Épico: `git rev-parse --short HEAD` (colar no commit final).
+Sha de fechamento do Épico: `1286f1a` (gates 7.6); commits do épico: `29dfd57` (7.4 PEL),
+`59bdc70` (7.5 drill/HEAD fix), `1286f1a` (7.6 gates + promtool fix). CI verde no push final
+(jobs Unit, Integration, Build, Security Gate, Observability Gate — todos `success`).
 
 ## 2. Checklist de conclusão
 
