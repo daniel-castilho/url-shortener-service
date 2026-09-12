@@ -24,43 +24,45 @@ for arg in "$@"; do
   esac
 done
 
-fail() { echo "FAIL: $*" >&2; return 1; }
-pass() { echo "PASS: $*" ; return 0; }
+fail() { echo "FAIL: $*" >&2; exit 1; }
+pass() { echo "PASS: $*" ; exit 0; }
 
 # Extract the Unreleased section (from `## [Unreleased]` up to the next `## ` header,
 # exclusive) and decide whether it carries entries.
 unreleased_dirty() {
-  local f="$1"
   awk '
     /^## \[Unreleased\]/ { in_unreleased = 1; next }
     in_unreleased && /^## / { in_unreleased = 0; next }
     in_unreleased { print }
-  ' "$f"
+  ' "$1"
 }
 
 unreleased_missing() {
-  local f="$1"
-  ! grep -q '^## \[Unreleased\]' "$f"
+  ! grep -q '^## \[Unreleased\]' "$1"
 }
 
 gate() {
   local f="$1"
-  if [ ! -f "$f" ]; then fail "changelog not found: $f"; return; fi
-  if unreleased_missing "$f"; then
-    fail "## [Unreleased] section is MISSING from $f (keep-a-changelog: the section header must exist)"
-    return
+  [ -f "$f" ] || { echo "FAIL: changelog not found: $1" >&2; exit 1; }
+  if ! grep -q '^## \[Unreleased\]' "$f"; then
+    echo "FAIL: ## [Unreleased] section is MISSING from $f (keep-a-changelog: the section header must exist)" >&2
+    exit 1
   fi
   local content
-  content="$(unreleased_dirty "$f")"
-  # Entries are subsection headers (###) or content lines. Comments are ignored.
+  content=$(awk '
+    /^## \[Unreleased\]/ { in_unreleased = 1; next }
+    in_unreleased && /^## / { in_unreleased = 0; next }
+    in_unreleased { print }
+  ' "$f")
   if printf '%s' "$content" | grep -qvE '^\s*(#.*)?$'; then
-    fail "## [Unreleased] contains entries at $f — promote them to a version section before tagging"
-    return
+    echo "FAIL: ## [Unreleased] contains entries at $f — promote them to a version section before tagging" >&2
+    exit 1
   fi
-  pass "changelog gate — [Unreleased] exists and is empty (promotion happened)"
+  echo "PASS: changelog gate — [Unreleased] exists and is empty (promotion happened)"
+  exit 0
 }
 
-if $SELF_TEST; then
+if [ "$SELF_TEST" = true ]; then
   echo "=== CHANGELOG Gate Self-Test ==="
   TMP="$(mktemp -d)"
   trap 'rm -rf "$TMP"' EXIT
@@ -81,7 +83,8 @@ EOF
   if gate "$TMP/clean.md" >/dev/null 2>&1; then
     echo "case 1 OK: clean Unreleased passes"
   else
-    fail "self-test: clean Unreleased must pass"
+    echo "FAIL: self-test: clean Unreleased must pass" >&2
+    exit 1
   fi
 
   # Case 2: dirty Unreleased (entries) -> FAIL
@@ -96,7 +99,8 @@ EOF
 ## [1.2.3] - 2026-09-12
 EOF
   if gate "$TMP/dirty.md" >/dev/null 2>&1; then
-    fail "self-test: dirty Unreleased must fail the gate"
+    echo "FAIL: self-test: dirty Unreleased must fail the gate" >&2
+    exit 1
   else
     echo "case 2 OK: dirty Unreleased is caught"
   fi
@@ -111,18 +115,17 @@ EOF
 - something
 EOF
   if gate "$TMP/missing.md" >/dev/null 2>&1; then
-    fail "self-test: missing Unreleased must fail the gate"
+    echo "FAIL: self-test: missing Unreleased must fail the gate" >&2
+    exit 1
   else
     echo "case 3 OK: missing Unreleased is caught"
   fi
 
   echo "OK: planted violations detected and clean changelog passes."
-  pass "self-test verified — gate detects violations."
+  echo "PASS: self-test verified — gate detects violations."
+  exit 0
 fi
 
 # Regular run (no args -> repo default)
-[ -n "$FILE" ] || FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/CHANGELOG.md"
-if ! gate "$FILE"; then
-  exit 1
-fi
-exit 0
+[ -n "$FILE" ] || FILE="$(cd "$(dirname "$0")/.." && pwd)/CHANGELOG.md"
+gate "$FILE"
