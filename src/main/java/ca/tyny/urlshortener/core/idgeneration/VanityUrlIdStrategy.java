@@ -4,6 +4,39 @@ import ca.tyny.urlshortener.core.model.User;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
 
+/**
+ * Generates custom vanity URL codes for authenticated users.
+ *
+ * <p>This strategy is selected when a custom alias is provided (non-null, non-blank).
+ * It enforces the following constraints:</p>
+ *
+ * <ul>
+ *   <li><b>Authentication required:</b> User must be authenticated (non-null userId)</li>
+ *   <li><b>Plan validation:</b> User must have a subscription plan that allows vanity URLs
+ *       (checked via {@link User#canCreateVanityUrls()})</li>
+ *   <li><b>Format validation:</b> Alias must match regex {@code ^[a-zA-Z0-9-_]+$}
+ *       (alphanumeric plus hyphen and underscore only)</li>
+ *   <li><b>Uniqueness:</b> Alias must not already exist in the URL repository
+ *       (atomic check via {@link UrlRepositoryPort#existsById})</li>
+ * </ul>
+ *
+ * <p><b>Error handling:</b> Throws {@link IllegalArgumentException} with descriptive
+ * messages for each validation failure:</p>
+ * <ul>
+ *   <li>Missing authentication</li>
+ *   <li>Plan limit reached or inactive subscription</li>
+ *   <li>Invalid character format</li>
+ *   <li>Alias already in use</li>
+ * </ul>
+ *
+ * <p><b>Concurrency:</b> Relies on database unique constraint on {@code short_urls._id}
+ * for atomicity; the {@code existsById} check is a best-effort pre-check.</p>
+ *
+ * @see UrlIdGenerationStrategy
+ * @see UrlRepositoryPort
+ * @see UserRepositoryPort
+ * @see User#canCreateVanityUrls()
+ */
 public class VanityUrlIdStrategy implements UrlIdGenerationStrategy {
 
   private final UserRepositoryPort userRepository;
@@ -16,7 +49,7 @@ public class VanityUrlIdStrategy implements UrlIdGenerationStrategy {
 
   @Override
   public boolean supports(String customAlias) {
-    // Suporta quando HÁ um alias customizado
+    // Supports when there IS a custom alias
     return customAlias != null && !customAlias.isBlank();
   }
 
