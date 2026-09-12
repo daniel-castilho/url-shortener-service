@@ -101,7 +101,14 @@ jobs:
           path: target/
 
       - name: Wait for artifact availability
-        run: sleep 10
+        run: |
+          sleep 30
+          echo "Checking for artifact..."
+          ls -la target/
+          if [ ! -f target/url-shortener-service-*.jar ]; then
+            echo "ERROR: No jar found in target/"
+            exit 1
+          fi
 
       - name: Start app (relaxed rate limits)
         run: |
@@ -164,7 +171,14 @@ jobs:
         # Note: retry logic handled by wait step below
 
       - name: Wait for artifact availability
-        run: sleep 10
+        run: |
+          sleep 10
+          echo "Checking for artifact..."
+          ls -la target/
+          if [ ! -f target/url-shortener-service-*.jar ]; then
+            echo "ERROR: No jar found in target/"
+            exit 1
+          fi
 
       - name: Start app
         run: |
@@ -190,6 +204,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+
+      - name: Wait for artifact availability
+        run: |
+          sleep 30
+          echo "Checking for artifact..."
+          ls -la target/
+          if [ ! -f target/url-shortener-service-*.jar ]; then
+            echo "ERROR: No jar found in target/"
+            exit 1
+          fi
 
       - name: Run ci-restore-drill.sh
         run: bash scripts/ci-restore-drill.sh
