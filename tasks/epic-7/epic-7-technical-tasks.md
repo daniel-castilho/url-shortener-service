@@ -31,11 +31,13 @@ Marcos `[x]` preenchidos durante a execução; evidências coladas no `epic-7-do
 - [ ] Colar outputs no DoD.
 
 ## 7.4 Pipeline de analytics sob falha
-- [ ] Documentar stream name, group, ack, PEL em `docs/reliability.md` (valores lidos do código, não inventados).
-- [ ] Estender `ClickPipelineIT` (ou irmão): publish N → interrupt worker → restart → assert coleção + `clickCount` sob contrato at-least-once.
-- [ ] Caso poison: evento inválido não bloqueia o group; métrica/log de drop; eventos válidos seguintes persistem.
-- [ ] Reconfirmar fail-open do enqueue no redirect (`RedisClickEventQueueFailOpenTest`) — output colado.
-- [ ] `./mvnw test -Dtest='ClickPipelineIT,ClickDailyRollupIT,RedisClickEventQueueFailOpenTest,RedisClickEventQueueTest'` → verde.
+- [x] Documentar stream name, group, ack, PEL em `docs/reliability.md` (valores lidos do código, não inventados).
+- [x] Estender `ClickPipelineIT` (ou irmão): publish N → interrupt worker → restart → assert coleção + `clickCount` sob contrato at-least-once.
+      **Fix real do PEL:** o worker lia apenas `>` (`ReadOffset.lastConsumed()`), que entrega só mensagens NUNCA entregues — batch não-ackado ficava órfão no PEL e NUNCA era re-entregue (redelivery e o finalize de 3 falhas eram código morto). Agora faz o padrão de crash-recovery do Redis: drena o PEL com offset `0` ANTES de ler `>` (`readGroup` compartilhado com self-heal NOGROUP). Red/green: IT novo `ClickPipelineRedeliveryIT` falha com o código antigo (`expected: 5L but was: 0L` no PEL) e passa com o fix.
+- [x] Caso poison: evento inválido não bloqueia o group; métrica/log de drop; eventos válidos seguintes persistem.
+      `poisonBatchIsFinalizedAndGroupKeepsProcessing`: batch injetado com `databaseCb` aberto → 3 tentativas consecutivas → finaliza (acked, `analytics.events.failed.total` +6) → evento válido posterior persiste.
+- [x] Reconfirmar fail-open do enqueue no redirect (`RedisClickEventQueueFailOpenTest`) — output colado.
+- [x] `./mvnw test -Dtest='ClickPipelineIT,ClickDailyRollupIT,RedisClickEventQueueFailOpenTest,RedisClickEventQueueTest'` → verde.
 
 ## 7.5 DR drill + fault injection sob carga
 - [ ] Subir infra isolada (portas fora de 27017/6379/8080 — padrão Épico 5/6: 27018 / 6380 / 18080).
@@ -64,7 +66,7 @@ Marcos `[x]` preenchidos durante a execução; evidências coladas no `epic-7-do
 - [ ] `docs/reliability.md` + ADR 0005 + ADR 0006
 - [ ] Inventário CB/timeout/retry + ITs de Mongo/Redis down
 - [ ] Shutdown script verde + liveness ≠ readiness evidenciado (ou corrigido)
-- [ ] Worker recupera PEL; poison não trava o group
+- [x] Worker recupera PEL; poison não trava o group
 - [ ] Backup/restore isolado verde + dois fault-injections com números
 - [ ] Runbook de incidente atualizado
 - [ ] `./mvnw verify` verde (todos os gates)

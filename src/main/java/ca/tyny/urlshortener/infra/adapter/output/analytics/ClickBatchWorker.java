@@ -129,30 +129,43 @@ public class ClickBatchWorker {
 
   @Scheduled(fixedDelayString = "${app.analytics.poll-interval-ms:5000}")
   public void processBatch() {
-    List<MapRecord<String, Object, Object>> records;
+    // At-least-once reclaim: XREADGROUP only delivers PENDING entries when the ID is a concrete
+    // one, never with the special ">" (which returns only NEW, never-delivered messages). The
+    // Redis crash-recovery pattern is therefore: drain the PEL with ID 0 first, then read ">".
+    // A batch rejected by persistence stays un-acked in the PEL and is reclaimed here on the
+    // next tick — this is what makes the documented redelivery real instead of dead code.
+    List<MapRecord<String, Object, Object>> records = new ArrayList<>();
+    records.addAll(readGroup(ReadOffset.from("0")));
+    records.addAll(readGroup(ReadOffset.lastConsumed()));
+    if (records.isEmpty()) {
+      return;
+    }
+    processRecords(records);
+  }
+
+  /**
+   * Reads one batch of records at the given group offset, self-healing a missing group (NOGROUP) so
+   * a flushed Redis does not wedge the pipeline.
+   */
+  private List<MapRecord<String, Object, Object>> readGroup(ReadOffset offset) {
     try {
-      records =
+      List<MapRecord<String, Object, Object>> records =
           redisTemplate
               .opsForStream()
               .read(
                   Consumer.from(groupName, consumerName),
                   StreamReadOptions.empty().count(batchSize),
-                  StreamOffset.create(streamKey, ReadOffset.lastConsumed()));
+                  StreamOffset.create(streamKey, offset));
+      return records != null ? records : List.of();
     } catch (Exception e) {
-      // Self-heal: if the group/stream vanished (e.g. Redis flushed),
-      // recreate it so the pipeline resumes on the next tick.
       if (String.valueOf(e.getMessage()).contains("NOGROUP")) {
         log.warn("Consumer group '{}' missing on '{}', recreating", groupName, streamKey);
         ensureConsumerGroup();
-        return;
+      } else {
+        log.warn("Could not read click events from stream '{}': {}", streamKey, e.getMessage());
       }
-      log.warn("Could not read click events from stream '{}': {}", streamKey, e.getMessage());
-      return;
+      return List.of();
     }
-    if (records == null || records.isEmpty()) {
-      return;
-    }
-    processRecords(records);
   }
 
   void processRecords(List<MapRecord<String, Object, Object>> records) {

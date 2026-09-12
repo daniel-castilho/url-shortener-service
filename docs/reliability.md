@@ -66,10 +66,11 @@ Evidence under real `docker stop` injection: `tasks/epic-7/epic-7-dod.md` §7.3.
   `click-worker` (`APP_ANALYTICS_GROUP`), consumer `worker-1`; batch ≤500
   (`APP_ANALYTICS_BATCH_SIZE`), poll every 5s (`APP_ANALYTICS_POLL_INTERVAL_MS`).
 - **Enqueue:** fire-and-forget, fail-open; `track()` never throws on the redirect path.
-- **Delivery:** **at-least-once** — a batch that fails to persist stays un-acked in the PEL and
-  is redelivered; retries can duplicate click rows; `clickCount` (`$inc`) is best-effort and
-  may run slightly ahead of `click_events` under redelivery. Exactly-once/distributed
-  transactions **rejected** (ADR 0006).
+- **Delivery:** **at-least-once** — the worker runs the Redis crash-recovery pattern: it drains
+  the consumer-group PEL with `XREADGROUP` offset `0` **before** reading new messages with `>`, so
+  a batch that fails to persist stays un-acked in the PEL and is reclaimed on a later tick.
+  Retries can duplicate click rows; `clickCount` (`$inc`) is best-effort and may run slightly ahead
+  of `click_events` under redelivery. Exactly-once/distributed transactions **rejected** (ADR 0006).
 - **Bounded failure:** after **3 consecutive** batch failures the batch is finalized (acked) and
   counted in `analytics.events.failed.total` — a prolonged outage degrades to bounded loss
   instead of an unbounded wedge.
