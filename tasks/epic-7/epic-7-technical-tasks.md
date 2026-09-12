@@ -3,12 +3,12 @@
 Marcos `[x]` preenchidos durante a execução; evidências coladas no `epic-7-dod.md`.
 
 ## 7.1 Contrato de falha + ADRs
-- [ ] Criar `docs/reliability.md` com matriz componente × falha × efeito cliente × efeito dado × detecção × recuperação × RTO/RPO alvo.
-- [ ] Cobrir: Mongo, Redis cache/rate-limit, Redis Stream, `ClickBatchWorker`, OTel collector, nginx, volume Mongo.
-- [ ] ADR `docs/adr/0005-fail-open-vs-fail-closed.md` (status/date/context/decision/consequences + rejeitados).
-- [ ] ADR `docs/adr/0006-analytics-at-least-once.md` (duplicata de click vs perda; por que não transação distribuída).
-- [ ] Ligar a matriz às séries frozen relevantes (`resilience4j.*`, `analytics.queue.depth`, `http.server.requests`, `cache.*`).
-- [ ] Colar `git log --oneline -- docs/adr/ docs/reliability.md` no `epic-7-dod.md`.
+- [x] Criar `docs/reliability.md` com matriz componente × falha × efeito cliente × efeito dado × detecção × recuperação × RTO/RPO alvo.
+- [x] Cobrir: Mongo, Redis cache/rate-limit, Redis Stream, `ClickBatchWorker`, OTel collector, nginx, volume Mongo.
+- [x] ADR `docs/adr/0005-fail-open-vs-fail-closed.md` (status/date/context/decision/consequences + rejeitados).
+- [x] ADR `docs/adr/0006-analytics-at-least-once.md` (duplicata de click vs perda; por que não transação distribuída).
+- [x] Ligar a matriz às séries frozen relevantes (`resilience4j.*`, `analytics.queue.depth`, `http.server.requests`, `cache.*`).
+- [x] Colar `git log --oneline -- docs/adr/ docs/reliability.md` no `epic-7-dod.md`.
 
 ## 7.2 Isolamento (CB + timeout + retry budget)
 - [ ] Inventariar adapters de saída: anotação Resilience4j, timeout, retry. Tabela no DoD.
@@ -19,16 +19,21 @@ Marcos `[x]` preenchidos durante a execução; evidências coladas no `epic-7-do
 - [x] IT Redis down no redirect: rate-limit fail-open + fallback Mongo. Nome sugerido: `RedirectRedisFailureIT` (estender `RedisUrlCache` tests se já cobrirem o essencial).
 - [x] **Nota técnica (singleton containers):** as ITs de falha sobem containers **dedicados à própria classe** (start/stop no ciclo de vida delas) — os singleton de `BaseIntegrationTest` são compartilhados por todas as ITs e não podem ser parados no meio da suíte.
       `RedirectMongoFailureIT` (4/4: CB open→503, CB closed→404, half-open probe, hot code via L2 / cold→503) e `RedirectRedisFailureIT` (2/2: cache-miss→Mongo degrades, rate-limiter fail-open além do limite) — **verdes juntos** (6/6, ~40s).
-- [ ] `./mvnw test -Dtest='RedirectMongoFailureIT,RedirectRedisFailureIT,RedisClickEventQueueFailOpenTest,TracingFailOpenIT'` → verde; output colado.
-- [ ] Não depender de `GET /actuator/circuitbreakers` autenticado como prova primária (métrica `resilience4j.circuitbreaker.*` / log). Nota: a dívida #26 foi resolvida em `c0fbb9c` (operator BasicAuth) — o endpoint está acessível ao operator como evidência secundária opcional.
+- [x] `./mvnw test -Dtest='RedirectMongoFailureIT,RedirectRedisFailureIT,RedisClickEventQueueFailOpenTest,TracingFailOpenIT'` → verde; output colado.
+- [x] Não depender de `GET /actuator/circuitbreakers` autenticado como prova primária (métrica `resilience4j.circuitbreaker.*` / log). Nota: a dívida #26 foi resolvida em `c0fbb9c` (operator BasicAuth) — o endpoint está acessível ao operator como evidência secundária opcional.
 
 ## 7.3 Shutdown + semântica de health
-- [ ] Rodar `./scripts/verify-graceful-shutdown.sh` contra uma instância local; colar stdout/stderr relevante (in-flight ok; recusa após SIGTERM).
-- [ ] Mapear o que o `HealthEndpoint` realmente agrega hoje (Mongo, Redis, disk, CB). Output de `GET /actuator/health` **em perfil de teste/dev** colado (prod esconde details).
-- [ ] Experimento: app healthy → `docker stop` da dependência crítica → `curl` liveness vs readiness (HTTP code + body resumido).
-- [ ] Se liveness e readiness caem juntos: ajustar indicators (readiness inclui Mongo; liveness é processo/event loop apenas) + IT `HealthProbeSemanticsIT`.
-- [ ] Documentar no `docs/reliability.md` o papel do nginx `max_fails=2 fail_timeout=10s`.
-- [ ] Colar outputs no DoD.
+- [x] Rodar `./scripts/verify-graceful-shutdown.sh` contra uma instância local; colar stdout/stderr relevante (in-flight ok; recusa após SIGTERM).
+      Executado na infra isolada (18081/Mongo 27018/Redis 6380): in-flight completou no grace period, novas requisições recusadas pós-SIGTERM — output colado no DoD §7.3.
+- [x] Mapear o que o `HealthEndpoint` realmente agrega hoje (Mongo, Redis, disk, CB). Output de `GET /actuator/health` **em perfil de teste/dev** colado (prod esconde details).
+      Via operator (dev): components = circuitBreakers, diskSpace, livenessState, mongo, ping, readinessState, redis, ssl — colado no DoD §7.3.
+- [x] Experimento: app healthy → `docker stop` da dependência crítica → `curl` liveness vs readiness (HTTP code + body resumido).
+      Redis stop: liveness 200 / readiness DOWN; Redis start: ambos 200 — colado no DoD §7.3.
+- [x] Se liveness e readiness caem juntos: ajustar indicators (readiness inclui Mongo; liveness é processo/event loop apenas) + IT `HealthProbeSemanticsIT`.
+      Não caiam juntos — semântica já distinta por design (liveness = processo; readiness = mongo/redis/cb/disk/ping). Nenhuma correção necessária; evidência real no DoD §7.3.
+- [x] Documentar no `docs/reliability.md` o papel do nginx `max_fails=2 fail_timeout=10s`.
+      `docs/reliability.md` §3 (readiness DOWN tira a instância da rotação) + matriz §1 (nginx down).
+- [x] Colar outputs no DoD.
 
 ## 7.4 Pipeline de analytics sob falha
 - [x] Documentar stream name, group, ack, PEL em `docs/reliability.md` (valores lidos do código, não inventados).

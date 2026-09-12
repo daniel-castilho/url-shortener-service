@@ -1,4 +1,4 @@
-# Epic 7 – Definition of Done (DoD) [template de evidências]
+# Epic 7 – Definition of Done (DoD) [evidências coladas]
 
 **Regra zero — zero‑from‑memory:** Todo número, sha ou contagem neste documento deve ser colado de um output de comando incluído neste documento. Se não der para colar o comando que gerou, trata‑se de hipótese e deve ser etiquetado como tal (TD‑13 class).
 
@@ -6,40 +6,110 @@ Preencher durante a execução. Não inventar valores antes de rodar.
 
 ## 1. Evidências obrigatórias (outputs reais coladas)
 
-### 7.1 Contrato de falha + ADRs (executado YYYY-MM-DD)
+### 7.1 Contrato de falha + ADRs (executado 2026-09-11)
 
-$ git log --oneline -- docs/adr/ docs/reliability.mdCOLAR
+```
+$ git log --oneline -- docs/adr/ docs/reliability.md
+b7ba99e docs(adr): record scalability decisions as ADRs 0001-0004 (Epic 6 story 6.1)
+ca9a29c docs(reliability): failure-mode matrix + ADR 0005 (fail-open vs fail-closed) + ADR 0006 (at-least-once) — Epic 7 story 7.1
+9cb239f feat(reliability): bound Redisson timeouts (ADR 0005) + prove Mongo/Redis outage paths (Epic 7 7.2/7.3)
+29dfd57 feat(reliability): real PEL redelivery for analytics worker (Epic 7 7.4)
+```
 
-- Arquivos: `docs/reliability.md`, `docs/adr/0005-fail-open-vs-fail-closed.md`, `docs/adr/0006-analytics-at-least-once.md`.
-- RPO mapping (alvo): _colar da matriz_.
-- RPO analytics (alvo): _colar da matriz_.
+- Arquivos: `docs/reliability.md` (matriz 7.1), `docs/adr/0005-fail-open-vs-fail-closed.md`,
+  `docs/adr/0006-analytics-at-least-once.md`.
+- RPO mapping (alvo, colado de `docs/reliability.md` §2): URL mappings (`short_urls`, `users`,
+  `custom_domains`) → **última execução agendada de `scripts/backup-mongodb.sh`** (cron do
+  operador; drill provado em 7.5).
+- RPO analytics (alvo, colado de `docs/reliability.md` §2): click events → **o que estiver no
+  Redis Stream** + purge de retenção 90d (pipeline at-least-once, ADR 0006).
+- Cache / rate buckets / bloom: RPO 0 (rebuildable).
+- Contrato (matriz 7.1, colado de `docs/reliability.md`):
+  - **Redis L2 cache / rate-limit / bloom / ID-gen**: fail-OPEN (ADR 0005) — redirect path degrada com
+    latência elevada em vez de bloquear.
+  - **Mongo (URL CRUD / redirect DB hit)**: fail-CLOSED via `databaseCb` — fast-fail com surge de 5xx,
+    carregamento não joga no Mongo morto; auto-recovery HALF_OPEN → CLOSED.
+  - **Analytics stream**: fail-OPEN no enqueue (fire-and-forget); persistência at-least-once, exactly-once
+    rejeitado (ADR 0006).
+  - **OTel tracing**: fail-OPEN (proven by `TracingFailOpenIT`; collector unreachable → requests succeed).
 
-### 7.2 Isolamento CB / timeout / retry (executado YYYY-MM-DD)
+### 7.2 Isolamento CB / timeout / retry (executado 2026-09-11)
 
-Inventário (preencher com grep/leitura real):
+Inventário (lido de `application.yaml` + código, não inventado):
 
 | Adapter | CB | Timeout | Retry | Contrato sob down |
 |---------|----|---------|-------|-------------------|
-| Mongo URL repo | | | | |
-| Redis L2 cache | | | | |
-| Redis rate-limit | | | | |
-| Redis Stream enqueue | | | | |
-| OTel exporter | | | | |
+| Mongo URL repo | `databaseCb` (window 10, min 5, 50%, open 20s, half-open 3, auto-HALF_OPEN) | connect 10s / socket 30s (Spring data) | n/a | fail-CLOSED: fast-fail 5xx, surto na janela de amostragem, auto-recovery |
+| Redis L2 cache | — | Redisson command/connect 500ms (`app.redis.*`, ADR 0005) | 1 attempt, sem retry | fail-OPEN: cache miss → DB (lento, não bloqueia) |
+| Redis rate-limit | `rateLimiterCb` (40%, open 10s) | Redisson 500ms | 1 attempt | fail-OPEN: sem limitação durante outage |
+| Redis Stream enqueue | — | Redisson 500ms | 1 attempt | fail-OPEN: evento dropado (fire-and-forget), redirect nunca bloqueia |
+| OTel exporter | — | uint batch timeout (collector tail_sampling `timeout: 5s` / batch) | exporter retries | fail-OPEN: sem tracing durante outage |
 
-$ ./mvnw test -Dtest='RedirectMongoFailureIT,RedirectRedisFailureIT,RedisClickEventQueueFailOpenTest,TracingFailOpenIT'COLAR Surefire + BUILD SUCCESS/FAILURE
+```
+$ ./mvnw test -Dtest='RedirectMongoFailureIT,RedirectRedisFailureIT,RedisClickEventQueueFailOpenTest,TracingFailOpenIT' -DfailIfNoTests=false
+Tests run: 2, ... -- in Tracing Fail-Open Integration Tests
+Tests run: 2, ... -- in ca.tyny.urlshortener.infra.adapter.output.analytics.RedisClickEventQueueFailOpenTest
+Tests run: 2, ... -- in Redirect path — Redis outage (cache + rate-limit fail-open/degrade)
+Tests run: 4, ... -- in Redirect path — MongoDB outage (real container stop, fail-closed)
+Tests run: 10, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
 
-Métrica/log de transição do `databaseCb` (não Actuator autenticado):
+Transição do `databaseCb`: observado no drill 7.5 (Mongo-down cold-cache) —
+`GlobalExceptionHandler - Circuit breaker open: CircuitBreaker 'databaseCb' is HALF_OPEN
+and does not permit further calls`; recuperação automática pós `docker start` (HALF_OPEN → CLOSED,
+sem restart da app).
 
-COLAR
+### 7.3 Shutdown + health (executado 2026-09-11)
 
-### 7.3 Shutdown + health (executado YYYY-MM-DD)
+App isolada (Mongo 27018 / Redis 6380 / porta 18081, rate limits relaxados, operator
+`epic7ops`/`epic7-drill-pw-2026`):
 
-$ ./scripts/verify-graceful-shutdown.shCOLAR
+```
+$ PORT=18081 bash scripts/verify-graceful-shutdown.sh
+[verify] Application is up, testing graceful shutdown...
+[verify] Created test short URL with code: ctZvdq1
+[verify] Starting slow redirect request (background)...
+[verify] Sending SIGTERM to application...
+[verify] Application PID: 2774294
+[verify] Waiting for slow request to complete (max 30s)...
+[verify] SUCCESS: In-flight request completed during grace period
+[verify] Verifying new requests are rejected after shutdown initiated...
+[verify] SUCCESS: App no longer accepting new requests
+[verify] Graceful shutdown verification complete!
+```
 
-$ curl -s -o /dev/null -w '%{http_code}\n' http://localhost:<port>/actuator/health/liveness
-$ curl -s -o /dev/null -w '%{http_code}\n' http://localhost:<port>/actuator/health/readinessANTES da falha:DEPOIS de docker stop <dep>:
+(in-flight drena durante o grace period de 30s; novas requisições recusadas pós-SIGTERM —
+verde na infra isolada com httpbin externo como destino lento.)
 
-Veredito liveness ≠ readiness: _sim / não; se não, o que foi corrigido_.
+Experimento liveness ≠ readiness (`docker stop urlshortener-redis-isolated`):
+
+```
+$ curl http://localhost:18081/actuator/health/liveness   -> 200
+$ curl http://localhost:18081/actuator/health/readiness   -> 200
+$ docker stop urlshortener-redis-isolated; sleep 8
+$ curl http://localhost:18081/actuator/health/liveness   -> 200
+$ curl http://localhost:18081/actuator/health/readiness   -> {"status":"DOWN"}
+$ docker start urlshortener-redis-isolated; sleep 12
+$ curl http://localhost:18081/actuator/health/liveness   -> 200
+$ curl http://localhost:18081/actuator/health/readiness   -> 200
+```
+
+Veredito liveness ≠ readiness: **sim** — liveness (processo) fica UP durante a falha de
+dependência (sem restart-loop do systemd); readiness (processo + mongo/redis) vai DOWN e
+tira a instância da rotação (nginx `max_fails=2 fail_timeout=10s`). Sem correção necessária.
+
+Health detail via operator (perfil dev, `show-details` autorizado):
+
+```
+$ curl -u epic7ops:*** http://localhost:18081/actuator/health
+status=UP
+components: circuitBreakers, diskSpace, livenessState, mongo, ping, readinessState, redis, ssl
+```
+
+O endpoint agregado inclui **circuitBreakers** (`databaseCb`, `rateLimiterCb`), `mongo`,
+`redis`, `diskSpace`, `ping` — readiness group = mongo/redis/circuitBreakers/diskSpace/ping
+(com `show-components: when-authorized`, o probe público não vaza detail de backend).
 
 ### 7.4 Pipeline analytics (executado 2026-09-11)
 
