@@ -1,0 +1,56 @@
+# URL Shortener — BLUE instance (deploy plane, ADR 0007).
+#
+# Concrete unit (not the @.template): the blue color owns ITS OWN jar at
+# /opt/url-shortener/blue/url-shortener.jar — cutover stops blue but never deletes
+# its jar, which is what makes rollback a weight flip (scripts/rollback.sh),
+# never a rebuild. Port 8080. Green is the mirror unit on 8081.
+#
+# The template url-shortener@.service remains for scale-out >= 3 instances
+# (runbook §12) — the deploy plan itself is blue+green only (ADR 0007).
+
+[Unit]
+Description=URL Shortener Service (BLUE, deploy plane)
+Documentation=https://github.com/daniel-castilho/url-shortener-service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=notify
+User=urlshortener
+Group=urlshortener
+WorkingDirectory=/opt/url-shortener/blue
+EnvironmentFile=-/etc/url-shortener/url-shortener.env
+EnvironmentFile=-/etc/url-shortener/url-shortener-blue.env
+ExecStart=/usr/bin/java \
+    -XX:+UseZGC \
+    -XX:+ZGenerational \
+    -Dspring.profiles.active=prod \
+    -Dserver.port=8080 \
+    -jar /opt/url-shortener/blue/url-shortener.jar
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=mixed
+KillSignal=SIGTERM
+# Graceful shutdown: SIGTERM drains in-flight requests (application.yaml:
+# server.shutdown=graceful, 30s phase) — deploy.sh waits out this budget when
+# draining the retired color (Epic 7 verified).
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=10
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Security hardening (mirrors the template unit)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/url-shortener/blue/logs
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=url-shortener-blue
+
+[Install]
+WantedBy=multi-user.target

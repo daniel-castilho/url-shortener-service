@@ -59,6 +59,21 @@ class DefaultUrlValidatorTest {
 
           @Override
           public void recordSsrfBlocked() {}
+
+          @Override
+          public void recordRateLimitExceeded() {}
+
+          @Override
+          public void recordVanityUrlCreated() {}
+
+          @Override
+          public void recordDomainClaimed() {}
+
+          @Override
+          public void recordDomainVerified() {}
+
+          @Override
+          public void recordCustomDomainCreated() {}
         };
     return new DefaultUrlValidator(
         new UrlValidationProperties(allowHttp, 2000, blockPrivateIps, 300), noopMetrics);

@@ -25,6 +25,10 @@ WORKDIR /app
 
 # Release identity (Epic 8 story 8.2): consumed by the release job (Trivy/SBOM read it too)
 LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.title="URL Shortener Service"
+LABEL org.opencontainers.image.description="High-performance link-shortening API with hexagonal architecture"
+LABEL org.opencontainers.image.source="https://github.com/daniel-castilho/url-shortener-service"
+LABEL org.opencontainers.image.licenses="MIT"
 
 # Create non-root user for security
 RUN addgroup -S spring && adduser -S spring -G spring
@@ -36,9 +40,9 @@ COPY --from=build /app/target/*.jar app.jar
 # Expose port
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1
+# Health check - use curl which is available in the base image
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD curl -fsS http://localhost:8080/actuator/health/liveness || exit 1
 
 # JVM optimization flags
 ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"

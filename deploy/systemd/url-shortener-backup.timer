@@ -1,0 +1,19 @@
+# URL Shortener — backup timer (Epic 8 story 8.5).
+#
+# 03:30 LOCAL TIME, deliberately AFTER the nightly maintenance windows so the dump never
+# races them (all times below are the rationale, from application.yaml + docs):
+#   - 01:10 UTC  click_daily rollup (click analytics aggregation job)
+#   - 02:00 UTC  click_events retention purge (ClickEventsRetentionPurge, 90d)
+#   The host runs UTC-4, so 02:00 UTC = 22:00 local and 01:10 UTC = 21:10 local the day
+#   before; 03:30 local (07:30 UTC) sits comfortably after both and before morning traffic.
+# Persistent=true: a missed run (host down at 03:30) is caught up on next boot.
+
+[Unit]
+Description=URL Shortener nightly backup timer (03:30 local, after rollup/retention windows)
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,32 @@
+# URL Shortener — nightly MongoDB backup (Epic 8 story 8.5).
+#
+# Runs backup-mongodb.sh (mongodump + manifest with per-collection row counts) into
+# /var/backups/url-shortener. The companion .timer schedules it at 03:30 local time.
+#
+# Tool fallback: the script runs mongodump/mongosh through `docker exec
+# urlshortener-mongo …` when the binaries are not on PATH (Epic 7 drill pattern), so
+# this unit works on hosts that run MongoDB purely as a container.
+
+[Unit]
+Description=URL Shortener nightly MongoDB backup (mongodump + manifest)
+Documentation=file:///opt/url-shortener/docs/release-runbook.md
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+User=urlshortener
+Group=urlshortener
+WorkingDirectory=/opt/url-shortener
+# Backups land under /var/backups/url-shortener (rotated 30d by the script itself)
+ExecStart=/opt/url-shortener/scripts/backup-mongodb.sh /var/backups/url-shortener
+Nice=10
+# Hardening: the backup only reads Mongo over the network and writes the backup dir
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/backups/url-shortener
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,51 +1,49 @@
 package ca.tyny.urlshortener.infra.config;
 
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.HealthIndicator;
-import org.springframework.boot.actuate.health.Status;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.stereotype.Component;
-
 import java.time.Instant;
-import java.util.concurrent.TimeUnit;
+import org.bson.Document;
+import org.springframework.boot.health.contributor.HealthIndicator;
+import org.springframework.stereotype.Component;
 
 /**
  * Custom health indicator for the URL Shortener service.
  *
  * <p>Provides detailed health information including MongoDB connectivity, Redis connectivity,
- * application uptime, and memory usage. This information is exposed via the
- * {@code /actuator/health} endpoint when details are enabled.</p>
+ * application uptime, and memory usage. This information is exposed via the {@code
+ * /actuator/health} endpoint when details are enabled.
  *
  * <p>Components checked:
+ *
  * <ul>
- *   <li><b>MongoDB</b>: Verifies database connectivity via a ping command</li>
- *   <li><b>Redis</b>: Verifies Redis connectivity via ping command</li>
- *   <li><b>Memory</b>: Reports JVM heap usage and GC activity</li>
- *   <li><b>Uptime</b>: Application uptime in seconds</li>
+ *   <li><b>MongoDB</b>: Verifies database connectivity via a ping command
+ *   <li><b>Redis</b>: Verifies Redis connectivity via ping command
+ *   <li><b>Memory</b>: Reports JVM heap usage and GC activity
+ *   <li><b>Uptime</b>: Application uptime in seconds
  * </ul>
  *
- * <p>This health indicator is automatically registered with Spring Boot Actuator
- * and contributes to the overall health status available at {@code /actuator/health}.
+ * <p>This health indicator is automatically registered with Spring Boot Actuator and contributes to
+ * the overall health status available at {@code /actuator/health}.
  *
- * @see org.springframework.boot.actuate.health.HealthIndicator
+ * @see org.springframework.boot.health.contributor.HealthIndicator
  */
 @Component
 public class UrlShortenerHealthIndicator implements HealthIndicator {
 
-  private final MongoTemplate mongoTemplate;
-  private final StringRedisTemplate redisTemplate;
+  private final org.springframework.data.mongodb.core.MongoTemplate mongoTemplate;
+  private final org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
   private final Runtime runtime = Runtime.getRuntime();
   private final long startTime = Instant.now().toEpochMilli();
 
-  public UrlShortenerHealthIndicator(MongoTemplate mongoTemplate, StringRedisTemplate redisTemplate) {
+  public UrlShortenerHealthIndicator(
+      org.springframework.data.mongodb.core.MongoTemplate mongoTemplate,
+      org.springframework.data.redis.core.StringRedisTemplate redisTemplate) {
     this.mongoTemplate = mongoTemplate;
     this.redisTemplate = redisTemplate;
   }
 
   @Override
-  public Health health() {
-    Health.Builder builder = Health.up();
+  public org.springframework.boot.health.contributor.Health health() {
+    var builder = org.springframework.boot.health.contributor.Health.up();
 
     // Check MongoDB
     boolean mongoUp = checkMongo();
@@ -69,7 +67,7 @@ public class UrlShortenerHealthIndicator implements HealthIndicator {
 
   private boolean checkMongo() {
     try {
-      mongoTemplate.getDb().runCommand(new org.bson.Document("ping", 1));
+      mongoTemplate.getDb().runCommand(new Document("ping", 1));
       return true;
     } catch (Exception e) {
       return false;
@@ -84,7 +82,8 @@ public class UrlShortenerHealthIndicator implements HealthIndicator {
     }
   }
 
-  private void addSystemDetails(Health.Builder builder) {
+  private void addSystemDetails(
+      org.springframework.boot.health.contributor.Health.Builder builder) {
     Runtime rt = runtime;
     long totalMemory = rt.totalMemory();
     long freeMemory = rt.freeMemory();
@@ -92,19 +91,20 @@ public class UrlShortenerHealthIndicator implements HealthIndicator {
     long maxMemory = rt.maxMemory();
     long uptimeSeconds = (Instant.now().toEpochMilli() - startTime) / 1000;
 
-    builder.withDetail("jvm", java.lang.management.ManagementFactory.getRuntimeMXBean().getVmName())
+    builder
+        .withDetail("jvm", java.lang.management.ManagementFactory.getRuntimeMXBean().getVmName())
         .withDetail("uptimeSeconds", uptimeSeconds)
-        .withDetail("memory", new MemoryDetail(
-            totalMemory / 1024 / 1024,
-            usedMemory / 1024 / 1024,
-            freeMemory / 1024 / 1024,
-            maxMemory / 1024 / 1024))
+        .withDetail(
+            "memory",
+            new MemoryDetail(
+                totalMemory / 1024 / 1024,
+                usedMemory / 1024 / 1024,
+                freeMemory / 1024 / 1024,
+                maxMemory / 1024 / 1024))
         .withDetail("javaVersion", System.getProperty("java.version"))
         .withDetail("processors", Runtime.getRuntime().availableProcessors())
         .withDetail("pid", ProcessHandle.current().pid());
   }
 
   private record MemoryDetail(long totalMb, long usedMb, long freeMb, long maxMb) {}
-
-  private static long startTime = java.time.Instant.now().toEpochMilli();
 }

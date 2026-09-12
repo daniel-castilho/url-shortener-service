@@ -58,3 +58,10 @@ target/
 
 # Windows NTFS zone artifacts (WSL)
 *:Zone.Identifier
+
+# Maven flatten plugin output (Epic 8 story 8.2)
+.flattened-pom.xml
+
+# Blue-green deploy runtime (Epic 8, ADR 0007): rendered nginx conf + last-deploy.txt
+# are host state, never committed
+deploy/runtime/

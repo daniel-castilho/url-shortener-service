@@ -48,16 +48,16 @@ public class SecurityConfig {
                 headers
                     .contentTypeOptions(Customizer.withDefaults())
                     .frameOptions(frameOptions -> frameOptions.deny())
-                    .httpStrictTransportSecurity(hsts -> hsts
-                        .maxAgeInSeconds(31536000)
-                        .includeSubDomains(true)
-                        .preload(true))
+                    .httpStrictTransportSecurity(
+                        hsts ->
+                            hsts.maxAgeInSeconds(31536000).includeSubDomains(true).preload(true))
                     .referrerPolicy(
-                        referrer ->
-                            referrer.policy(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+                        referrer -> referrer.policy(ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
                     .xssProtection(Customizer.withDefaults())
-                    .contentSecurityPolicy(csp -> csp
-                        .policyDirectives("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'"))
+                    .contentSecurityPolicy(
+                        csp ->
+                            csp.policyDirectives(
+                                "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'"))
                     .xssProtection(Customizer.withDefaults()))
         .authenticationProvider(authenticationProvider())
         .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
