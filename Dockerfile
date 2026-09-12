@@ -1,7 +1,11 @@
-# Multi-stage build for optimized Docker image
+# Multi-stage build for optimized Docker image (multi-arch: linux/amd64, linux/arm64)
+# Build with: docker buildx build --platform linux/amd64,linux/arm64 -t url-shortener .
 
 # Stage 1: Build (Java 25 platform; Maven wrapper 3.9.16)
-FROM maven:3.9-eclipse-temurin-25 AS build
+# VERSION (Epic 8 story 8.2): release builds pass --build-arg VERSION=<semver> so the image
+# carries the release identity (org.opencontainers.image.version label). Default "local".
+FROM --platform=$BUILDPLATFORM maven:3.9-eclipse-temurin-25 AS build
+ARG VERSION=local
 WORKDIR /app
 
 # Copy wrapper + pom.xml and download dependencies (cached layer)
@@ -12,11 +16,15 @@ RUN ./mvnw dependency:go-offline -B
 
 # Copy source code and build
 COPY src ./src
-RUN ./mvnw package -DskipTests -B
+RUN ./mvnw package -DskipTests -B -Drevision=$VERSION
 
 # Stage 2: Runtime
-FROM eclipse-temurin:25-jre-alpine
+FROM --platform=$TARGETPLATFORM eclipse-temurin:25-jre-alpine
+ARG VERSION=local
 WORKDIR /app
+
+# Release identity (Epic 8 story 8.2): consumed by the release job (Trivy/SBOM read it too)
+LABEL org.opencontainers.image.version="${VERSION}"
 
 # Create non-root user for security
 RUN addgroup -S spring && adduser -S spring -G spring
