@@ -158,6 +158,19 @@ non-obvious failure or design decision cost real debugging time.
 - **Graceful shutdown teardown:** during drain, expect a mix of 200 (in-flight OK), 503/000
   (post-drain rejections) *and* 400 (keep-alive teardown mid-parse). Treat 400 during drain as expected
   teardown, not necessarily a defect.
+- **A leftover stack on a shared port makes a health-check lie.** A drill booted its app on a port
+  still held by a leftover nginx front from a manual exercise; the app died on the bind, the drill's
+  liveness wait succeeded against *nginx*, and every "seed" was served (and persisted) by a different
+  instance against a different database. Health-check-green proved nothing about *which* stack
+  answered. Two defenses: (1) drills/scripts must **pre-fail on any port they intend to own**
+  (`ss -tln` preflight) and (2) **prove data landed in the target store** (count docs there before
+  dumping) — a write path is only verified by the store that received it. Symptom fingerprint:
+  operations "succeed" suspiciously fast and against the wrong backend.
+- **`mongodump --db <name>` exits 0, silently, when the database does not exist.** No "0 collections"
+  warning, no non-zero status — just an empty dump directory. Any backup wrapper must treat
+  "dump dir missing/no `.bson` files" as a hard error (fail closed with a message naming the silent
+  exit-0 trap), never trust the exit code alone. The same class applies to `pg_dump`-style tools:
+  verify the artifact's shape, not just the tool's status.
 
 ## Architecture discipline
 
@@ -181,3 +194,12 @@ non-obvious failure or design decision cost real debugging time.
   with a one-line rationale), not a diagram; behavior-equality of the existing suite is part of the
   proof, never "looks equivalent". Routing/infrastructure state stays behind a port — infrastructure
   state masquerading as domain state is how hexagons rot. `[SEED · dargent]`
+
+## Badge Hunting Discipline
+
+- **Pair Extraordinaire**: Co-authored commits are valuable for knowledge sharing. Always use `Co-authored-by: Name <email@users.noreply.github.com>` in commit footers when pairing.
+- **Pull Shark**: Small, focused PRs merge faster and reduce review burden. Aim for single-purpose changes.
+- **Galaxy Brain**: Answering Discussions with accepted answers builds community knowledge. Document solutions for future reference.
+- **Starstruck**: Stars come from useful, well-documented projects. Invest in README, docs, and examples.
+- **Quickdraw**: Fast feedback loops accelerate development. Automate checks and respond fast.
+
