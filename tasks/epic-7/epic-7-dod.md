@@ -41,18 +41,52 @@ $ curl -s -o /dev/null -w '%{http_code}\n' http://localhost:<port>/actuator/heal
 
 Veredito liveness ≠ readiness: _sim / não; se não, o que foi corrigido_.
 
-### 7.4 Pipeline analytics (executado YYYY-MM-DD)
+### 7.4 Pipeline analytics (executado 2026-09-11)
 
-Contrato lido do código:
+Contrato lido do código (`ClickBatchWorker` + `application.yaml`, não inventado):
 
-- Stream: `_colar_`
-- Group: `_colar_`
-- Ack: `_colar_`
+- Stream: `urlshortener:clicks` (`app.analytics.stream-key`, default `${APP_ANALYTICS_STREAM_KEY:urlshortener:clicks}`)
+- Group: `click-worker` (`app.analytics.group`, default `${APP_ANALYTICS_GROUP:click-worker}`)
+- Consumer: `worker-1` (`app.analytics.consumer`)
+- Batch: `500` (`app.analytics.batch-size`), poll: `5000`ms (`app.analytics.poll-interval-ms`)
+- Ack: `redisTemplate.opsForStream().acknowledge(streamKey, groupName, ...)` por lote, no grupo `click-worker`
 
-$ ./mvnw test -Dtest='ClickPipelineIT,ClickDailyRollupIT,RedisClickEventQueueFailOpenTest,RedisClickEventQueueTest'COLAR
+$ ./mvnw test -Dtest='ClickPipelineIT,ClickDailyRollupIT,RedisClickEventQueueFailOpenTest,RedisClickEventQueueTest,ClickPipelineRedeliveryIT' -DfailIfNoTests=false
 
-Restart no meio do batch: publicados=_N_ persistidos=_M_ (`M >= N` ou justificativa ADR 0006).
-Poison: _comportamento colado_.
+```
+Tests run: 2, ... -- in Analytics pipeline — at-least-once PEL redelivery (Epic 7 7.4)
+Tests run: 2, ... -- in ca.tyny.urlshortener.infra.adapter.output.analytics.RedisClickEventQueueFailOpenTest
+Tests run: 2, ... -- in Click daily rollup integration tests
+Tests run: 2, ... -- in ca.tyny.urlshortener.infra.adapter.output.analytics.RedisClickEventQueueTest
+Tests run: 4, ... -- in Click Pipeline Integration Tests
+Tests run: 12, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
+**Descoberta (fix real):** o worker lia apenas `>` (`ReadOffset.lastConsumed()`), que entrega
+só mensagens NUNCA entregues — batch não-ackado ficava órfão no PEL para sempre (redelivery +
+finalize de 3 falhas eram código morto). Agora drena o PEL com offset `0` antes de ler `>`
+(padrão de crash-recovery do Redis). Red/green: `ClickPipelineRedeliveryIT#failedBatchIsReclaimedAfterRecovery`
+falha no código antigo (`expected: 5L but was: 0L` no PEL) e passa no novo.
+
+Restart no meio do batch: publicados=**5** persistidos=**5** (prova `M >= N`, ADR 0006):
+
+$ ./mvnw test -Dtest='ClickPipelineRedeliveryIT#failedBatchIsReclaimedAfterRecovery' -DfailIfNoTests=false
+
+```
+Tests run: 2, Failures: 0, Errors: 0, Skipped: 0 ... -- in Analytics pipeline — at-least-once PEL redelivery (Epic 7 7.4)
+Tests run: 2, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
+Poison (batch injetado com `databaseCb` aberto → 3 tentativas → finalizado/acked; evento válido
+posterior persiste), log real do worker:
+
+```
+ERROR c.t.u.i.a.o.a.ClickBatchWorker - Finalizing click batch of 2 events after 3 consecutive failures
+```
+
+$ ./mvnw test -Dtest='ClickPipelineRedeliveryIT#poisonBatchIsFinalizedAndGroupKeepsProcessing' -DfailIfNoTests=false → verde (parte dos 2 acima; PEL 2→0, métrica `analytics.events.failed.total` +6, `click_events` 0 para o poison, evento válido=1).
 
 ### 7.5 DR + injeção sob carga (executado YYYY-MM-DD)
 
