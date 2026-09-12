@@ -47,7 +47,11 @@ public abstract class BaseIntegrationTest {
               });
 
   public static final GenericContainer<?> redis =
-      new GenericContainer<>(DockerImageName.parse("redis:alpine")).withExposedPorts(6379);
+      new GenericContainer<>(DockerImageName.parse("redis:alpine"))
+          .withExposedPorts(6379)
+          .withHealthcheck(
+              org.testcontainers.containers.wait.strategy.HostPortWaitStrategy.forPort(6379)
+                  .withStartupTimeout(java.time.Duration.ofSeconds(30)));
 
   static {
     mongoDB.start();
