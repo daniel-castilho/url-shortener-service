@@ -6,6 +6,12 @@ Practical reference for solo and AI-assisted development. Goal: **consistency ov
 > framework-free `core/`). The codebase is mid-refactor; where the code does not yet conform, the gap
 > is tracked in `AGENTS.md` → *Known Technical Debt* and must not be silently ignored.
 
+**Language:** All code, comments, commit messages, documentation, DTOs, and error codes **must be in English**. This is a hard requirement — non-English content will be rejected by the check-doc-sync gate.
+
+> **Scope:** this documents the **target** state we are building toward (Hexagonal Architecture with a
+> framework-free `core/`). The codebase is mid-refactor; where the code does not yet conform, the gap
+> is tracked in `AGENTS.md` → *Known Technical Debt* and must not be silently ignored.
+
 **Relationship to other docs:**
 
 | Doc               | Wins when                                            |
