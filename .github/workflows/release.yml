@@ -1,0 +1,278 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    name: Gates
+    runs-on: ubuntu-latest
+    outputs:
+      semver: ${{ steps.extract-tag.outputs.semver }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v6
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Extract semver from tag
+        id: extract-tag
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          SEMVER="${TAG#v}"
+          echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
+          echo "Tag: $TAG, SemVer: $SEMVER"
+
+      - name: Run full verify with revision
+        run: |
+          ./mvnw -B verify -Drevision="${{ steps.extract-tag.outputs.semver }}"
+
+      - name: Bash gates (boundaries, doc-sync, security, metrics-frozen)
+        run: |
+          bash scripts/check-boundaries.sh && bash scripts/check-boundaries.sh --self-test
+          bash scripts/check-doc-sync.sh && bash scripts/check-doc-sync.sh --self-test
+          bash scripts/check-security.sh && bash scripts/check-security.sh --self-test
+          bash scripts/check-metrics-frozen.sh && bash scripts/check-metrics-frozen.sh --self-test
+
+      - name: Promtool/amtool checks
+        run: |
+          # promtool check
+          docker run --rm --entrypoint promtool -v "$(pwd)/deploy/monitoring:/mon" prom/prometheus:v2.53.0 check rules /mon/recording-rules.yml
+          docker run --rm --entrypoint promtool -v "$(pwd)/deploy/monitoring:/mon" prom/prometheus:v2.53.0 check rules /mon/alerts.yml
+          # promtool test rules
+          docker run --rm --entrypoint promtool -v "$(pwd)/deploy/monitoring:/mon" prom/prometheus:v2.53.0 test rules /mon/rules_tests.yml
+          # amtool check-config
+          docker run --rm --entrypoint amtool -v "$(pwd)/deploy/monitoring:/mon" prom/alertmanager:v0.27.0 check-config /mon/alertmanager.yml
+
+      - name: CHANGELOG gate
+        run: bash scripts/check-changelog.sh
+
+      - name: Build jar with semver
+        run: ./mvnw -B clean package -DskipTests -Drevision="${{ steps.extract-tag.outputs.semver }}"
+
+      - name: Upload jar artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: url-shortener-jar
+          path: target/url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar
+          retention-days: 30
+
+  k6-gate:
+    name: k6 Gate
+    needs: gates
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd="mongosh --eval 'db.runCommand({ping:1})'"
+          --health-interval=10s --health-timeout=5s --health-retries=5
+      redis:
+        image: redis:alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s --health-timeout=5s --health-retries=5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Download jar from gates artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: url-shortener-jar
+          path: target/
+
+      - name: Start app (relaxed rate limits)
+        run: |
+          JAR=$(ls target/url-shortener-service-*.jar | head -1)
+          MONGODB_URI='mongodb://localhost:27017/url_shortener' \
+          REDIS_HOST=localhost REDIS_PORT=6379 \
+          RATE_LIMITER_LIMIT=1000000 RATE_LIMITER_REDIRECT_LIMIT=1000000 \
+          nohup java -jar "$JAR" > app.log 2>&1 &
+          for i in {1..60}; do
+            sleep 2
+            code=$(curl -s -o /dev/null -w '%{http_code}' -m 3 http://localhost:8080/actuator/health/liveness 2>/dev/null || true)
+            [ "$code" = "200" ] && { echo "UP after $((i*2))s"; break; }
+          done
+          curl -s -o /dev/null -w 'liveness=%{http_code}\n' http://localhost:8080/actuator/health/liveness
+          curl -s -o /dev/null -w 'readiness=%{http_code}\n' http://localhost:8080/actuator/health/readiness
+
+      - name: Run k6 load test (mixed.js)
+        run: |
+          docker run --rm --network host \
+            -v "$(pwd)/load-tests:/scripts" \
+            --user "$(id -u):$(id -g)" \
+            grafana/k6:latest run /scripts/mixed.js
+        env:
+          K6_OUT: json=/tmp/k6-result.json
+
+      - name: Upload k6 result
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-result
+          path: /tmp/k6-result.json
+          retention-days: 30
+
+  runtime-smoke:
+    name: Runtime Smoke
+    needs: gates
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+      redis:
+        image: redis:alpine
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Download jar from gates artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: url-shortener-jar
+          path: target/
+
+      - name: Start app
+        run: |
+          JAR=$(ls target/url-shortener-service-*.jar | head -1)
+          MONGODB_URI='mongodb://localhost:27017/url_shortener' \
+          REDIS_HOST=localhost REDIS_PORT=6379 \
+          nohup java -jar "$JAR" > app.log 2>&1 &
+          for i in {1..60}; do
+            sleep 2
+            code=$(curl -s -o /dev/null -w '%{http_code}' -m 3 http://localhost:8080/actuator/health/liveness 2>/dev/null || true)
+            [ "$code" = "200" ] && { echo "UP after $((i*2))s"; break; }
+          done
+
+      - name: Run smoke.sh
+        run: bash scripts/smoke.sh http://localhost:8080
+
+      - name: Run verify-graceful-shutdown.sh
+        run: bash scripts/verify-graceful-shutdown.sh
+
+  restore-drill:
+    name: Restore Drill
+    needs: gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Run ci-restore-drill.sh
+        run: bash scripts/ci-restore-drill.sh
+
+  release:
+    name: Release
+    needs: [gates, k6-gate, runtime-smoke, restore-drill]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v6
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Download jar artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: url-shortener-jar
+          path: target/
+
+      - name: Extract semver from tag
+        id: extract-tag
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          SEMVER="${TAG#v}"
+          echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --build-arg VERSION="${{ steps.extract-tag.outputs.semver }}" \
+            -t url-shortener:"${{ steps.extract-tag.outputs.semver }}" \
+            -t url-shortener:latest .
+
+      - name: Non-root gate (image must not run as root)
+        run: |
+          docker run --rm --entrypoint id url-shortener:"${{ steps.extract-tag.outputs.semver }}" | grep -q '^uid=1000(' || exit 1
+
+      - name: Trivy scan (HIGH/CRITICAL, SHA-pinned)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: 'url-shortener:${{ steps.extract-tag.outputs.semver }}'
+          exit-code: '1'
+          severity: 'HIGH,CRITICAL'
+          ignore-unfixed: true
+          format: 'table'
+          scanners: 'vuln'
+
+      - name: Generate CycloneDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: 'url-shortener:${{ steps.extract-tag.outputs.semver }}'
+          format: 'cyclonedx'
+          output: 'sbom-url-shortener-${{ steps.extract-tag.outputs.semver }}.json'
+          scanners: 'vuln'
+
+      - name: Download jar artifact (again for release assets)
+        uses: actions/download-artifact@v4
+        with:
+          name: url-shortener-jar
+          path: target/
+
+      - name: Compute SHA256 of jar
+        id: sha
+        run: |
+          JAR=$(ls target/url-shortener-service-*.jar | head -1)
+          SHA=$(sha256sum "$JAR" | awk '{print $1}')
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+          echo "$SHA  $(basename "$JAR")" > SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body: |
+            Release ${{ github.ref_name }} — URL Shortener Service
+
+            See `CHANGELOG.md` for details.
+          files: |
+            target/url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar
+            SHA256SUMS
+            sbom-url-shortener-${{ steps.extract-tag.outputs.semver }}.json
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

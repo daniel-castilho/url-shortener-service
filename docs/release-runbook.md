@@ -40,7 +40,7 @@ client ──► [NGINX/Caddy :443] ──► url-shortener instances (HTTP, no 
 ### 1a. Build
 
 ```sh
-./mvnw clean package                 # JVM jar  -> target/url-shortener-service-0.0.1-SNAPSHOT.jar
+./mvnw clean package                 # JVM jar  -> target/url-shortener-service-<semver>.jar
 ./mvnw clean package -Pnative        # GraalVM native image (requires GraalVM + native-image)
 ```
 
@@ -50,7 +50,26 @@ client ──► [NGINX/Caddy :443] ──► url-shortener instances (HTTP, no 
 docker-compose up -d       # mongo + redis
 ```
 
-### 1c. Run / deploy the application
+### 1c. Deploy via blue-green (recommended for bare metal)
+
+The blue-green deploy script (`scripts/deploy.sh`) orchestrates a zero-downtime cutover:
+canary weights `10 -> 30 -> 100` with 30s dwell, smoke probe after each bump,
+fail-closed abort (old color restored to 100%, new color drained, exit non-zero
+naming the offending step).
+
+```sh
+# 1. Ensure backing services are up
+docker-compose up -d       # mongo + redis
+
+# 2. Deploy (blue-green, canary 10/30/100, 30s dwell)
+#    - downloads jar from GitHub Release, verifies sha256
+#    - stages idle color, waits readiness (90s budget)
+#    - canary bumps: render → nginx -t → reload → smoke → dwell
+#    - success: last-deploy.txt + drain old color + one-liner
+sudo bash scripts/deploy.sh vX.Y.Z
+```
+
+### 1d. Run / deploy the application (legacy single-instance)
 
 **As a systemd service (recommended for bare metal):**
 
@@ -96,19 +115,28 @@ curl -s -X POST http://localhost:8080/api/v1/urls \
 
 ## 2. Roll back
 
-- **Systemd / JVM process:** stop the new version and start the previous jar (keep the previous jar
-  archived at `/opt/url-shortener/url-shortener.jar.prev`).
-  Because it's in-process and stateless, a rollback is an immediate process swap with no data change:
-  ```sh
-  sudo systemctl stop url-shortener
-  sudo mv /opt/url-shortener/url-shortener.jar /opt/url-shortener/url-shortener.jar.new
-  sudo mv /opt/url-shortener/url-shortener.jar.prev /opt/url-shortener/url-shortener.jar
-  sudo systemctl start url-shortener
-  ```
-- **Container:** stop and remove the new container, then run the previous image tag. No traffic-shift
-  controller is required on a single host — restart the previous artifact.
-- A DB-level rollback is **not needed** for a code rollback (schema changes are additive by design —
-  see `data-model-decisions.md`).
+**Via rollback script (blue-green, one command):**
+
+```sh
+# Reads deploy/runtime/last-deploy.txt (written by deploy.sh before first weight flip)
+# Starts previous color, renders 100% weight to it, reloads nginx, runs smoke, prints incident one-liner
+sudo bash scripts/rollback.sh
+```
+
+**Systemd / JVM process (legacy single-instance):**
+
+```sh
+sudo systemctl stop url-shortener
+sudo mv /opt/url-shortener/url-shortener.jar /opt/url-shortener/url-shortener.jar.new
+sudo mv /opt/url-shortener/url-shortener.jar.prev /opt/url-shortener/url-shortener.jar
+sudo systemctl start url-shortener
+```
+
+**Container:** stop and remove the new container, then run the previous image tag. No traffic-shift
+controller is required on a single host — restart the previous artifact.
+
+A DB-level rollback is **not needed** for a code rollback (schema changes are additive by design —
+see `data-model-decisions.md`).
 
 Rollback is safe as long as the previous runnable artifact (jar or image) is retained.
 
@@ -320,6 +348,53 @@ failures" are non-issues: that collection was never dropped, so existing `_id`s 
 - [ ] Health probe returns UP after deploy; a smoke shorten + redirect works.
 - [ ] Previous artifact retained for rollback.
 - [ ] Secrets never appear in logs or Git.
+- [ ] Tag is annotated (`git tag -a vX.Y.Z -m "..."`); `## [Unreleased]` in `CHANGELOG.md` is **empty** at the tag commit (promoted in the same commit).
+- [ ] Schema migrations since the tag recorded in `last-deploy.txt` are **expand-only** (no destructive drops/renames) — the migrator is fail-fast, but a destructive migration would break the old color still serving during the cutover.
+- [ ] MongoDB backup is recent (< 26h); restore drill (`scripts/ci-restore-drill.sh`) passed in the release pipeline.
+- [ ] Health probe returns UP after deploy; a smoke shorten + redirect works.
+- [ ] Previous artifact retained for rollback.
+- [ ] Secrets never appear in logs or Git.
+
+- [ ] Secrets never appear in logs or Git.
+- [ ] Tag is annotated (`git tag -a vX.Y.Z -m "..."`); `## [Unreleased]` in `CHANGELOG.md` is **empty** at the tag commit (promoted in the same commit).
+- [ ] Schema migrations since the tag recorded in `last-deploy.txt` are **expand-only** (no destructive drops/renames) — the migrator is fail-fast, but a destructive migration would break the old color still serving during the cutover.
+- [ ] MongoDB backup is recent (< 26h); restore drill (`scripts/ci-restore-drill.sh`) passed in the release pipeline.
+- [ ] Health probe returns UP after deploy; a smoke shorten + redirect works.
+- [ ] Previous artifact retained for rollback.
+- [ ] Secrets never appear in logs or Git.
+
+---
+
+## Release artifacts & promotion
+
+The CI `release.yml` pipeline produces a GitHub Release on every tag `v*`:
+
+1. **gates** job: full `./mvnw verify -Drevision=<semver>` + all bash gates + promtool/amtool + CHANGELOG gate → uploads the built jar as artifact.
+2. **k6-gate** (needs gates): `k6 run load-tests/mixed.js` against the artifact (thresholds `p95 < 200ms`, `error < 0.1%`).
+3. **runtime-smoke** (needs gates): `scripts/smoke.sh` + `scripts/verify-graceful-shutdown.sh` against the artifact.
+4. **restore-drill** (needs gates): `scripts/ci-restore-drill.sh` (RTO ≤ 300s, RPO = last backup).
+5. **release** (needs all): builds Docker image (non-root + Trivy HIGH/CRITICAL SHA-pinned + CycloneDX SBOM), computes jar sha256, creates GitHub Release with assets:
+   - `url-shortener-service-<semver>.jar` (the exact jar from gates job)
+   - `SHA256SUMS` (sha256 of the jar)
+   - `sbom-url-shortener-<semver>.json` (CycloneDX SBOM, CycloneDX format via Trivy)
+
+Artifact promotion is **single-build**: the jar uploaded by `gates` is the exact byte-for-byte artifact consumed by `k6-gate`, `runtime-smoke`, `restore-drill`, and `release`. There is no second build. `deploy.sh <tag>` downloads the jar from the Release, verifies the sha256 against `SHA256SUMS`, and stages it — a local rebuild is never a deploy source.
+
+Tag immutability: a bad release is fixed forward with `vX.Y.Z+1`; a tag is never moved or deleted (moving a tag invalidates every recorded sha256 and the Release that references it). Auth is `GITHUB_TOKEN` only.
+
+---
+
+## Incidente: deploy falhou
+
+When `scripts/deploy.sh` aborts (fail-closed: old color restored to 100%, new color drained/stopped, exit non-zero naming the offending step):
+
+1. **Read the abort line** — it names the exact step (download, sha256, readiness, `nginx -t`, smoke).
+2. **Inspect the new color's log** (systemd journal: `journalctl -u url-shortener-<color>`) for the root cause.
+3. **Run the smoke probe manually** against the old color (still at 100%): `scripts/smoke.sh http://<front>` — must be all green.
+4. **Rollback if needed** — `scripts/rollback.sh` (reads `last-deploy.txt`, flips weights back, prints incident one-liner). This is a weight flip, no rebuild.
+5. **Post-mortem** — if the failure was infrastructure (Mongo/Redis down, network), follow the playbooks in §5b. If code, fix forward with a new tag (`vX.Y.Z+1`) and re-run the pipeline.
+
+**Do not** attempt to re-deploy the same tag after a failed deploy — the pipeline is fail-closed by design; a fix requires a new tag.
 
 ---
 
@@ -456,4 +531,4 @@ Shared-resource note: each instance adds one Mongo connection pool and one Redis
 to the backing services — watch connection counts as N grows.
 ---
 
-*Last updated: 2026-09-11 (Epic 6 — Scalable: multi-instance topology §0/§12, ADRs 0001–0004)*
+*Last updated: 2026-09-12 (Epic 8 — Release Engineering: release.yml + runbook + tag v0.14.0, ADRs 0007–0008, blue-green deploy/rollback, backup drill, artifacts promotion)*
