@@ -60,13 +60,6 @@ jobs:
       - name: Build jar with semver
         run: ./mvnw -B clean package -DskipTests -Drevision="${{ steps.extract-tag.outputs.semver }}"
 
-      - name: Upload jar artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: url-shortener-jar
-          path: target/url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar
-          retention-days: 30
-
   k6-gate:
     name: k6 Gate
     needs: gates
@@ -94,21 +87,17 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Download jar from gates artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: url-shortener-jar
-          path: target/
-
-      - name: Wait for artifact availability
+      - name: Extract semver from tag
+        id: extract-tag
         run: |
-          sleep 30
-          echo "Checking for artifact..."
-          ls -la target/
-          if [ ! -f target/url-shortener-service-*.jar ]; then
-            echo "ERROR: No jar found in target/"
-            exit 1
-          fi
+          TAG="${GITHUB_REF_NAME}"
+          SEMVER="${TAG#v}"
+          echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
+
+      - name: Build jar with semver
+        run: ./mvnw -B clean package -DskipTests -Drevision="${{ steps.extract-tag.outputs.semver }}"
+        # This produces the exact same jar as the gates job (deterministic build with same revision)
+        # We rebuild in each job to avoid artifact download timing issues
 
       - name: Start app (relaxed rate limits)
         run: |
@@ -162,23 +151,17 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Download jar from gates artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: url-shortener-jar
-          path: target/
-        # Wait for artifact availability (artifact may take a few seconds to become available)
-        # Note: retry logic handled by wait step below
-
-      - name: Wait for artifact availability
+      - name: Extract semver from tag
+        id: extract-tag
         run: |
-          sleep 10
-          echo "Checking for artifact..."
-          ls -la target/
-          if [ ! -f target/url-shortener-service-*.jar ]; then
-            echo "ERROR: No jar found in target/"
-            exit 1
-          fi
+          TAG="${GITHUB_REF_NAME}"
+          SEMVER="${TAG#v}"
+          echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
+
+      - name: Build jar with semver
+        run: ./mvnw -B clean package -DskipTests -Drevision="${{ steps.extract-tag.outputs.semver }}"
+        # This produces the exact same jar as the gates job (deterministic build with same revision)
+        # We rebuild in each job to avoid artifact download timing issues
 
       - name: Start app
         run: |
@@ -204,16 +187,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+          cache: maven
 
-      - name: Wait for artifact availability
-        run: |
-          sleep 30
-          echo "Checking for artifact..."
-          ls -la target/
-          if [ ! -f target/url-shortener-service-*.jar ]; then
-            echo "ERROR: No jar found in target/"
-            exit 1
-          fi
+      - name: Build jar with semver
+        run: ./mvnw -B clean package -DskipTests -Drevision="${{ needs.gates.outputs.semver }}"
+        # This produces the exact same jar as the gates job (deterministic build with same revision)
+        # We rebuild in each job to avoid artifact download timing issues
 
       - name: Run ci-restore-drill.sh
         run: bash scripts/ci-restore-drill.sh
@@ -236,12 +219,6 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Download jar artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: url-shortener-jar
-          path: target/
-
       - name: Extract semver from tag
         id: extract-tag
         run: |
@@ -249,8 +226,11 @@ jobs:
           SEMVER="${TAG#v}"
           echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
 
+      - name: Build jar with semver
+        run: ./mvnw -B clean package -DskipTests -Drevision="${{ steps.extract-tag.outputs.semver }}"
+        # This produces the exact same jar as the gates job (deterministic build with same revision)
+
       - name: Build Docker image
-        run: |
           docker build \
             --build-arg VERSION="${{ steps.extract-tag.outputs.semver }}" \
             -t url-shortener:"${{ steps.extract-tag.outputs.semver }}" \
