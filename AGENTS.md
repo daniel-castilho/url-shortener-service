@@ -67,8 +67,9 @@ Sources of truth: `README.md`, `pom.xml`, `src/main/resources/application.yaml`,
    check-then-put that races.
 
 8. **English Only in Codebase:** identifiers, comments, commit messages, documentation, DTOs and error
-   codes are **English** (the existing Portuguese prose in `MONGODB_ARCHITECTURE.md` is being
-   migrated).
+    codes are **English** (the existing Portuguese prose in `MONGODB_ARCHITECTURE.md` is being
+    migrated). All code, configuration, and documentation must be in English — this includes comments,
+    commit messages, documentation, DTOs, and error codes.
 
 9. **No Unapproved Dependencies:** do **not** add or remove dependencies in `pom.xml` (e.g. removing
    `hashids`, adding a migration library or a tracing SDK) without explicit human approval.
@@ -348,143 +349,143 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     `PORT`/`MONGODB_URI`/`REDIS_*`) and a k6 v2 summary-export parser fix.
     — `resolved`
 
-22. **Epic 1 (Maintainable — Fundação & Padrões): gates de manutenibilidade** — Spotless
-    3.10.2 + google-java-format 1.36.1 bound at `validate` (check-only; `spotless:apply` para
-    normalizar — base já normalizada em commit `style:` dedicado, 220 arquivos, suíte unit 269/269
-    verde após o reformat); ArchUnit 1.5.0 (test scope) com `BoundaryRulesTest` codificando a Regra 1
-    no bytecode + `BoundaryRulesSelfTestTest` (gate que morde — mesma disciplina do
-    `check-boundaries.sh --self-test`); promoção das lições recorrentes (≥3 ocorrências) para
-    `coding-standards.md` §14 ("Herde-de-Lições": §14.1 fail-open/fail-fast deliberado, §14.2
-    contadores atômicos) com marcação `→ coding-standards` nas lições de origem; novo gate
-    `scripts/check-doc-sync.sh` (+ `--self-test`) validando status da matriz de dívida e promoções
-    `lessons ↔ coding-standards`, wired no CI (job `doc-sync`). Aprovação humana para as adições no
-    `pom.xml` (Regra 9) registrada na sessão de planejamento do épico. — `resolved`
+22. **Epic 1 (Maintainable — Foundation & Patterns): maintainability gates** — Spotless
+    3.10.2 + google-java-format 1.36.1 bound at `validate` (check-only; `spotless:apply` to
+    normalize — base already normalized in dedicated `style:` commit, 220 files, unit suite 269/269
+    green after reformat); ArchUnit 1.5.0 (test scope) with `BoundaryRulesTest` encoding Rule 1
+    in bytecode + `BoundaryRulesSelfTestTest` (gate that bites — same discipline as
+    `check-boundaries.sh --self-test`); promotion of recurring lessons (≥3 occurrences) to
+    `coding-standards.md` §14 ("Inherit Lessons": §14.1 deliberate fail-open/fail-fast, §14.2
+    atomic counters) with marking `→ coding-standards` on source lessons; new gate
+    `scripts/check-doc-sync.sh` (+ `--self-test`) validating debt matrix status and promotions
+    `lessons ↔ coding-standards`, wired in CI (job `doc-sync`). Human approval for additions to
+    `pom.xml` (Rule 9) recorded in epic planning session. — `resolved`
 
-23. **Epic 2 (Secure by Design) — OWASP Dependency-Check no CI**: dependency-check-maven
-    12.2.2 bound ao `verify` (fail CVSS ≥ 7, `owasp-suppressions.xml` vazia com policy
-    rationale+review per line), `scripts/check-security.sh` (+ `--self-test`) e job CI `security-check`
-    (cache NVD + retry 2x + fail-open documentado). Corrigidos kotlin-stdlib CVE-2026-53914 (bump
-    2.4.20) e removido spring-boot-devtools (CVE-2022-31691 false positive de CPE; aprovação do owner);
-    `opentelemetry-api` CVE-2026-54285 = MEDIUM < 7 e CPE do opentelemetry-js, sem suppression.
-    **Fonte de dados NVD (2026-09-11): mirror nightly do ODC (`DependencyCheck_Builder`) via
-    `nvdDatafeedUrl`** — o cold sync direto da NVD API 2.0 ficou >1h travado no CI (keyed E keyless),
-    casando com upstream #7431/#8435; o mirror sync completo em ~2min (verificado local) e check em
-    ~15s; a secret `NVD_API_KEY` permanece no org mas **não** é wired (datafeed a ignora). — `resolved`
+23. **Epic 2 (Secure by Design) — OWASP Dependency-Check in CI**: dependency-check-maven
+    12.2.2 bound to `verify` (fail CVSS ≥ 7, `owasp-suppressions.xml` empty with policy
+    rationale+review per line), `scripts/check-security.sh` (+ `--self-test`) and CI job `security-check`
+    (cache NVD + retry 2x + fail-open documented). Fixed kotlin-stdlib CVE-2026-53914 (bump
+    2.4.20) and removed spring-boot-devtools (CVE-2022-31691 false positive from CPE; owner approval);
+    `opentelemetry-api` CVE-2026-54285 = MEDIUM < 7 and CPE from opentelemetry-js, no suppression.
+    **NVD data source (2026-09-11): nightly ODC mirror (`DependencyCheck_Builder`) via
+    `nvdDatafeedUrl`** — the cold sync directly from NVD API 2.0 hung >1h in CI (keyed and keyless),
+    matching upstream #7431/#8435; the mirror sync completes in ~2min (verified locally) and check in
+    ~15s; the secret `NVD_API_KEY` remains in the org but is **not** wired (datafeed ignores it). — `resolved`
 
-24. **Métricas duplicadas fora do port (Epic 3 story 3.2)** — `infra/observability/MetricsService`
-    registrava `urls.shortened.total`, `redirects.total`, `cache.hits.total`, `cache.misses.total`,
-    `bloomfilter.rejections.total`, `shorten.latency`, `redirect.latency` e era wired diretamente no
-    `UrlController` (infra→infra, fora do `MetricsPort`); o `MicrometerMetricsAdapter` registrava as
-    mesmas séries de forma sobreposta. README chegou a rotular `redirects.total`/`shorten.latency`/
-    `redirect.latency` como "phantom" — afirmação incorreta: `MetricsService` era usado ativamente pelo
-    `UrlController`. **Resolvido:** `MetricsService` + `MetricsServiceTest` removidos; os 7 meters
-    foram foldados no `MicrometerMetricsAdapter` via 3 novos métodos no `MetricsPort`
-    (`recordRedirect`, `recordShortenLatency`, `recordRedirectLatency`); `UrlController` agora depende
-    do `MetricsPort`. Nomes/tags/descrições preservados byte-for-byte (séries Prometheus idênticas).
-    Novo gate `scripts/check-metrics-frozen.sh` (+ `--self-test`) congela as **24 séries de negócio**
-    registradas (lista em `docs/slos.md` §2) e roda no CI; AC "gate no `verify`" implementado por step
-    de CI (precedente do Epic 2 / Regra 9 — sem nova dependência pom). — `resolved`
+24. **Metrics duplicated outside the port (Epic 3 story 3.2)** — `infra/observability/MetricsService`
+    recorded `urls.shortened.total`, `redirects.total`, `cache.hits.total`, `cache.misses.total`,
+    `bloomfilter.rejections.total`, `shorten.latency`, `redirect.latency` and was wired directly into
+    `UrlController` (infra→infra, outside `MetricsPort`); `MicrometerMetricsAdapter` registered the
+    same series in an overlapping way. README even labeled `redirects.total`/`shorten.latency`/
+    `redirect.latency` as "phantom" — incorrect claim: `MetricsService` was actively used by
+    `UrlController`. **Resolved:** `MetricsService` + `MetricsServiceTest` removed; the 7 meters
+    were folded into `MicrometerMetricsAdapter` via 3 new methods in `MetricsPort`
+    (`recordRedirect`, `recordShortenLatency`, `recordRedirectLatency`); `UrlController` now depends
+    on `MetricsPort`. Names/tags/descriptions preserved byte-for-byte (identical Prometheus series).
+    New gate `scripts/check-metrics-frozen.sh` (+ `--self-test`) freezes the **24 business series**
+    registered (list in `docs/slos.md` §2) and runs in CI; AC "gate at `verify`" implemented by CI
+    step (precedent from Epic 2 / Rule 9 — no new pom dependency). — `resolved`
 
-25. **Actuator index tocável anonimamente via catch-all `GET /{id}` (Epic 3 story 3.3)** — o
-    `SecurityConfig` permitia `GET /{id}` (redirect) como permitAll; como o matcher de `/{id}`
-    era declarado ANTES do bloco actuator, o índice `/actuator` (1 segmento) caía no permitAll e
-    retornava 200 anônimo, listando os endpoints expostos. **Resolvido:** matcher
-    `.requestMatchers("/actuator").hasRole("ADMIN")` movido para antes de `/{id}` ("actuator" é
-    palavra reservada por `ReservedWordsValidator`, então nenhum vanity alias colide). Novo
-    `ProductionLockdownIT` (7 testes): liveness 200, readiness 200 (Mongo+Redis up, body sem
-    components/redis/mongo), `/actuator/health` sem vazamento de detail (401 anônimo, 403
-    autenticado sem role), `/actuator/prometheus`/`/actuator/metrics` + outros endpoints role-gated,
-    `/actuator/info` público. — `resolved`
+25. **Actuator index accessible anonymously via catch-all `GET /{id}` (Epic 3 story 3.3)** — the
+    `SecurityConfig` permitted `GET /{id}` (redirect) as permitAll; since the matcher for `/{id}`
+    was declared BEFORE the actuator block, the index `/actuator` (1 segment) fell into the permitAll
+    and returned 200 anonymously, listing exposed endpoints. **Resolved:** matcher
+    `.requestMatchers("/actuator").hasRole("ADMIN")` moved before `/{id}` ("actuator" is
+    a reserved word by `ReservedWordsValidator`, so no vanity alias collides). New
+    `ProductionLockdownIT` (7 tests): liveness 200, readiness 200 (Mongo+Redis up, body without
+    components/redis/mongo), `/actuator/health` no detail leak (401 anonymous, 403 authenticated
+    without role), `/actuator/prometheus`/`/actuator/metrics` + other endpoints role-gated,
+    `/actuator/info` public. — `resolved`
 
-26. **Tier actuator efetivamente hard-lock: sem role de operador (Epic 3 story 3.3, follow-up)** —
-     `CustomUserDetailsService` retornava `Collections.emptyList()` como authorities e o modelo `User`
-     não tem campos de role; nenhum principal alcançava `ROLE_ADMIN`/`METRICS_VIEWER`, então
-     `/actuator/health` (components), `/actuator/metrics` e `/actuator/prometheus` eram inacessíveis
-     por HTTP até para operadores (401/403 sempre). Além disso `security.actuator.health-detail-enabled`
-     estava bound em `SecurityProperties` mas nunca consumido (o switch real é
+26. **Actuator tier effectively hard-locked: no operator role (Epic 3 story 3.3, follow-up)** —
+     `CustomUserDetailsService` returned `Collections.emptyList()` as authorities and the `User`
+     model has no role fields; no principal could reach `ROLE_ADMIN`/`METRICS_VIEWER`, so
+     `/actuator/health` (components), `/actuator/metrics` and `/actuator/prometheus` were inaccessible
+     via HTTP even for operators (401/403 always). Additionally `security.actuator.health-detail-enabled`
+     was bound in `SecurityProperties` but never consumed (the real switch is
      `management.endpoint.health.show-details`).
-     **Resolvido (2026-09-11):** identidade de operador implementada como **BasicAuth escopado ao
-     actuator** — `BasicOperatorAuthFilter` (não-bean, instanciado via `addFilterBefore` no
-     `SecurityConfig` conforme o padrão canônico do Spring Security 7 para filters custom) concede
-     `ROLE_OPERATOR` quando as credenciais batem com `app.security.operator.username/password`
-     (env `OPERATOR_USERNAME`/`OPERATOR_PASSWORD`, comparação constant-time `MessageDigest.isEqual`;
-     vazias fora do prod = **nenhuma** conta operator existe, qualquer Basic falha closed). Tiers:
-     health/metrics/prometheus/circuitbreakers → `ADMIN | OPERATOR` (metrics também
-     `METRICS_VIEWER`); env/beans/index seguem ADMIN-only (least privilege). Prop morta
-     `health-detail-enabled` **removida** do `SecurityProperties` (o switch real
-     `HEALTH_SHOW_DETAILS:when-authorized` agora tem um autenticado real para autorizar — health
-     com components visível ao operator). `ProdConfigValidator` fail-fast em prod: operator ausente,
-     senha < 16 chars ou username adivinhável (operator/admin) aborta o boot. Corrigido junto: o
-     bloco `security:` do `application.yaml` NUNCA bindava (prefixo real `app.security`; vivia de
-     `@DefaultValue`) — movido para `app.security:`. `ProdConfigValidatorIT` +3 (8 total);
-     `OperatorAccessIT` nova (9: health c/ details, metrics+nomeada, prometheus scrape,
-     circuitbreakers c/ databaseCb, least-privilege 403 em env/beans/index, senha errada 401,
-     usuário inexistente 401, anon 401, JWT user 403). Curl manual (env real): health 200 c/
-     components (mongo/redis/circuitBreakers CLOSED), `metrics/jvm.memory.used` 200 (valor
-     208288504.0), prometheus 200, circuitbreakers 200, env 403, senha errada 401, anônimo 401. — `resolved`
+     **Resolved (2026-09-11):** operator identity implemented as **BasicAuth scoped to
+     actuator** — `BasicOperatorAuthFilter` (non-bean, instantiated via `addFilterBefore` in
+     `SecurityConfig` per the canonical Spring Security 7 pattern for custom filters) grants
+     `ROLE_OPERATOR` when credentials match `app.security.operator.username/password`
+     (env `OPERATOR_USERNAME`/`OPERATOR_PASSWORD`, constant-time comparison `MessageDigest.isEqual`;
+     empty outside prod = **no** operator account exists, any Basic fails closed). Tiers:
+     health/metrics/prometheus/circuitbreakers → `ADMIN | OPERATOR` (metrics also
+     `METRICS_VIEWER`); env/beans/index remain ADMIN-only (least privilege). Dead property
+     `health-detail-enabled` **removed** from `SecurityProperties` (the real switch
+     `HEALTH_SHOW_DETAILS:when-authorized` now has a real authenticated user to authorize — health
+     with components visible to operator). `ProdConfigValidator` fail-fast in prod: operator missing,
+     password < 16 chars or guessable username (operator/admin) aborts boot. Fixed together: the
+     `security:` block in `application.yaml` NEVER bound (real prefix is `app.security`; lived on
+     `@DefaultValue`) — moved to `app.security:`. `ProdConfigValidatorIT` +3 (8 total);
+     `OperatorAccessIT` new (9: health with details, metrics+named, prometheus scrape,
+     circuitbreakers with databaseCb, least-privilege 403 on env/beans/index, wrong password 401,
+     non-existent user 401, anon 401, JWT user 403). Manual curl (real env): health 200 with
+     components (mongo/redis/circuitBreakers CLOSED), `metrics/jvm.memory.used` 200 (value
+     208288504.0), prometheus 200, circuitbreakers 200, env 403, wrong password 401, anon 401. — `resolved`
 
-27. **Prometheus registry ausente no pom (Epic 3 story 3.7)** — após o upgrade Boot 4.1.1
-    (dívida 21), `micrometer-registry-prometheus` não estava no `pom.xml`; sem o artifact o Actuator
-    não monta `/actuator/prometheus` (sem data source para scrape/SLOs/alertas/Grafana).
-    **Resolvido:** dependência adicionada (Rule 9 — aprovação explícita do owner 2026-09-11, versão
-    gerida pelo BOM, jar 1.17.1). `MetricsIT.playbackExportsEpic2BusinessSeries` faz playback da
-    scrape Prometheus (nomes normalizados `*_total`/`*_seconds`) das séries EP2 + `analytics_queue_depth`.
-     Aproveitado: corrigida regressão de ordenação no `SecurityConfig` (introduzida no 3.3) que fazia
-     `POST /api/v1/urls` (permitAll) cair no matcher `/api/v1/urls/**` (authenticated → 401 anônimo);
-     públicos reordenados antes dos gerenciados e `/actuator` → `ROLE_ADMIN` antes de `GET /{id}`. — `resolved`
+27. **Prometheus registry missing from pom (Epic 3 story 3.7)** — after the Boot 4.1.1
+    upgrade (debt 21), `micrometer-registry-prometheus` was not in `pom.xml`; without the artifact the
+    Actuator does not mount `/actuator/prometheus` (no data source for scrape/SLOs/alerts/Grafana).
+    **Resolved:** dependency added (Rule 9 — explicit owner approval 2026-09-11, version
+    managed by BOM, jar 1.17.1). `MetricsIT.playbackExportsEpic2BusinessSeries` plays back the
+    Prometheus scrape (normalized names `*_total`/`*_seconds`) of the EP2 series + `analytics_queue_depth`.
+     Bonus: fixed ordering regression in `SecurityConfig` (introduced in 3.3) that caused
+     `POST /api/v1/urls` (permitAll) to fall into the `/api/v1/urls/**` matcher (authenticated → 401
+     anonymous); publics reordered before managed ones and `/actuator` → `ROLE_ADMIN` before `GET /{id}`.
 
-28. **Epic 5 (Performance) — SLOs, like-for-like, profiling, cache config, stress** — concluído
-     2026-09-11. (a) Baseline k6 re-executada na stack idêntica à 2026-09-09 (k6 v2.2.0 container,
-     Redis 8.10.1, Mongo 6.0.28): tails **menores** que ambas as baselines (redirect p99 8.75ms vs
-     21.7/17ms; shorten p95 11.97ms vs 24.1/16ms) — veredito: ruído de medição, **não** regressão do
-     Tomcat 11; pendência like-for-like de `docs/load-test-baseline.md` resolvida. (b) Perfil JFR
-     (236s sob carga mixed, `jcmd`): GC saudável (155 pausas, mediana 3.43ms, 0.21% wall clock), zero
-     contenção, alocação dominada por observation-plumbing do framework — **nenhuma mitigação
-     justificada** (37× headroom); `docs/performance-profiling.md`. (c) `RedisUrlCache` externalizado
-     via `UrlCacheProperties` (`app.cache.l1-max-size`/`l1-ttl`/`bloom-*`, defaults históricos
-     preservados) + `UrlCachePropertiesIT` (4). (d)      `load-tests/stress.js` (ramping 2×: 400/40 rps,
-     hold 4m): 165.498 reqs, **0 falhas**, p95 < 5ms. `./mvnw verify` verde (271 unit + 144 IT),
-     gates + CI verdes; evidências em `tasks/epic-5/epic-5-dod.md`. — `resolved`
+28. **Epic 5 (Performance) — SLOs, like-for-like, profiling, cache config, stress** — completed
+     2026-09-11. (a) Baseline k6 re-run on identical stack to 2026-09-09 (k6 v2.2.0 container,
+     Redis 8.10.1, Mongo 6.0.28): tails **lower** than both baselines (redirect p99 8.75ms vs
+     21.7/17ms; shorten p95 11.97ms vs 24.1/16ms) — verdict: measurement noise, **not** a Tomcat 11
+     regression; like-for-like pending `docs/load-test-baseline.md` resolved. (b) JFR profile
+     (236s under mixed load, `jcmd`): healthy GC (155 pauses, median 3.43ms, 0.21% wall clock), zero
+     contention, allocation dominated by framework observation-plumbing — **no mitigation
+     justified** (37× headroom); `docs/performance-profiling.md`. (c) `RedisUrlCache` externalized
+     via `UrlCacheProperties` (`app.cache.l1-max-size`/`l1-ttl`/`bloom-*`, historical defaults
+     preserved) + `UrlCachePropertiesIT` (4). (d) `load-tests/stress.js` (ramping 2×: 400/40 rps,
+     hold 4m): 165.498 reqs, **0 failures**, p95 < 5ms. `./mvnw verify` green (271 unit + 144 IT),
+     gates + CI green; evidence in `tasks/epic-5/epic-5-dod.md`. — `resolved`
 
 29. **Epic 6 (Scalable) — ADRs, explain audit, multi-instance artifacts, horizontal scale
-     validation** — concluído 2026-09-11. (a) 4 ADRs em `docs/adr/` (0001 escala horizontal
-     stateless; 0002 rate-limit global via Redis; 0003 L1 Caffeine por instância c/ staleness
-     ≤5s; 0004 circuit breakers resilience4j). (b) Auditoria explain na infra isolada com dados
-     reais (7.103 short_urls / 112.956 click_events): redirect = IDHACK (1 key/1 doc), cursor
-     pagination = IXSCAN V7, analytics = IXSCAN V4, TTL V5 — zero COLLSCAN, nenhum índice novo.
-     (c) Artefatos multi-instância: `nginx.conf` upstream c/ pesos (canary 10→30→100) +
-     `max_fails=2 fail_timeout=10s`; template systemd `url-shortener@.service` (porta derivada);
-     imagem `url-shortener:sha-583832b` = 302MB (198MB base JRE + 77MB jar; meta 150MB do
-     template não adotada — jlink fora de escopo); runbook §0/§12. (d) Validação horizontal
-     real: 2 instâncias (18080/18081) + LB nginx compartilhando Mongo/Redis, stress 2× via LB
-     = 165.499 reqs, **0 5xx, p95 7.28ms** (27× headroom); **rate-limit global provado**:
-     burst concorrente de 300 via LB → exatamente 120×302 + 180×429 (bucket único
-     `rl:redirect:127.0.0.1`). `./mvnw verify` verde (271 unit + 144 IT, rerun 144/0); evidências
-     em `tasks/epic-6/epic-6-dod.md`. Leitura HTTP do estado do CB (`/actuator/circuitbreakers`)
+     validation** — completed 2026-09-11. (a) 4 ADRs in `docs/adr/` (0001 horizontal stateless
+     scale; 0002 rate-limit global via Redis; 0003 L1 Caffeine per instance w/ staleness
+     ≤5s; 0004 circuit breakers resilience4j). (b) Explain audit on isolated infra with real data
+     (7.103 short_urls / 112.956 click_events): redirect = IDHACK (1 key/1 doc), cursor
+     pagination = IXSCAN V7, analytics = IXSCAN V4, TTL V5 — zero COLLSCAN, no new indexes.
+     (c) Multi-instance artifacts: `nginx.conf` upstream w/ weights (canary 10→30→100) +
+     `max_fails=2 fail_timeout=10s`; systemd template `url-shortener@.service` (derived port);
+     image `url-shortener:sha-583832b` = 302MB (198MB base JRE + 77MB jar; meta 150MB of
+     template not adopted — jlink out of scope); runbook §0/§12. (d) Real horizontal
+     validation: 2 instances (18080/18081) + LB nginx sharing Mongo/Redis, stress 2× via LB
+     = 165.499 reqs, **0 5xx, p95 7.28ms** (27× headroom); **rate-limit global proven**:
+     burst concurrent of 300 via LB → exactly 120×302 + 180×429 (single bucket
+     `rl:redirect:127.0.0.1`). `./mvnw verify` green (271 unit + 144 IT, rerun 144/0); evidence
+     in `tasks/epic-6/epic-6-dod.md`. Leitura HTTP do estado do CB (`/actuator/circuitbreakers`)
      está disponível pelo **papel de operador** da dívida 26 — status `resolved` desde 2026-09-11,
      coberta pelo `OperatorAccessIT` (circuitbreakers → 200 via BasicAuth, sem JWT/role). — `resolved`
 
-30. **Epic 7 (Reliable) — contract de modos de falha, PEL real, DR drill provado** — concluído
-     2026-09-11. (a) Matriz de modos de falha 7.1 (fail-open/fail-closed por dependência) em
+30. **Epic 7 (Reliable) — failure mode contract, real PEL, proven DR drill** — completed
+     2026-09-11. (a) Failure mode matrix 7.1 (fail-open/fail-closed per dependency) in
      `docs/reliability.md` + **ADR 0005** (fail-open Redis/analytics) + **ADR 0006** (at-least-once,
-     exactly-once rejeitado). (b) Inventário CB/timeout/retry + ITs de Mongo/Redis down; shutdown
-     script verde + liveness ≠ readiness. (c) **PEL redelivery real** no `ClickBatchWorker`
-     (crash-recovery: drena o PEL com `ReadOffset.from("0")` antes de `lastConsumed()`) — antes,
-     batch não-ackado ficava órfão e o redelivery era código morto; `ClickPipelineRedeliveryIT`
-     prova reassign + reclaim (asserções por delta em `analytics.events.failed.total`, que acumula
-     no contexto compartilhado) e poison não trava o group. (d) DR drill isolado (Mongo 27018 /
-     Redis 6380 portas Épico 5/6): backup/restore `mongorestore` containerizado (7.640 short_urls;
-     RPO provado: código pré-backup 302, código pós-backup 404); fault-injections com números —
+     exactly-once rejected). (b) CB/timeout/retry inventory + ITs for Mongo/Redis down; shutdown
+     script green + liveness ≠ readiness. (c) **Real PEL redelivery** in `ClickBatchWorker`
+     (crash-recovery: drains PEL with `ReadOffset.from("0")` before `lastConsumed()`) — before,
+     unacked batch was orphaned and redelivery was dead code; `ClickPipelineRedeliveryIT`
+     proves reassign + reclaim (assertions by delta on `analytics.events.failed.total`, which accumulates
+     in shared context) and poison doesn't block the group. (d) Isolated DR drill (Mongo 27018 /
+     Redis 6380 ports Epic 5/6): containerized backup/restore via `mongorestore` (7,640 short_urls;
+     RPO proven: pre-backup code 302, post-backup code 404); fault injections with numbers —
      Redis-down mid-run = 5730/5730 checks 100%, `http_req_duration` p95 744ms (fail-open, ADR
-     0005); Mongo-down cold-cache = CB fail-closed p50 3.56ms (surge de 504) + p99 27s (janela de
-     amostragem), recuperação automática (HALF_OPEN → CLOSED, sem restart). Playbooks de incidente
-     com comandos reais no `docs/release-runbook.md` §5b. (e) Gates finais verdes:
-     `check-metrics-frozen`/`check-boundaries`/`check-doc-sync`/`check-security` (todos + `--self-test`);
-     **`promtool test rules` pegou annotation name inválido no `alerts.yml`** (`runbook-§Fast-burn`
+     0005); Mongo-down cold-cache = CB fail-closed p50 3.56ms (surge of 504) + p99 27s (sampling
+     window), auto-recovery (HALF_OPEN → CLOSED, no restart). Incident playbooks with real
+     commands in `docs/release-runbook.md` §5b. (e) Final gates green:
+     `check-metrics-frozen`/`check-boundaries`/`check-doc-sync`/`check-security` (all + `--self-test`);
+     **`promtool test rules` caught invalid annotation name in `alerts.yml`** (`runbook-§Fast-burn`
      → `runbook_fast_burn`/`runbook_slow_burn`/`runbook_budget_exhausted`; `docs/slos.md` +
-     comentário do `alertmanager.yml` sincronizados); `check-rules`/`test-rules`/`amtool check-config`
-     verdes (containers prom 2.53 / alertmanager 0.27). `./mvnw verify` verde (271 unit + 165 IT).
-     Commit de fechamento: 59bdc70 (7.5) + evidências em `tasks/epic-7/epic-7-dod.md`. — `resolved`
+     `alertmanager.yml` comment synced); `check-rules`/`test-rules`/`amtool check-config`
+     green (prom 2.53 / alertmanager 0.27 containers). `./mvnw verify` green (271 unit + 165 IT).
+     Closing commit: 59bdc70 (7.5) + evidence in `tasks/epic-7/epic-7-dod.md`. — `resolved`
 
 ## 🔍 Operational Discipline & Debugging Guidelines
 

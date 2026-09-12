@@ -332,8 +332,9 @@ The URL Shortener Service is developed solo/AI-assisted. Before contributing, re
 [AGENTS.md](AGENTS.md) (binding rules for both humans and agents — architecture boundaries, the
 Base62 ID-generation standard, no-URL-dedup, redirect-path integrity), the
 [coding standards](docs/coding-standards.md) and the [testing playbook](docs/testing-playbook.md).
-Keep the full gate green (`./mvnw verify`) and update `README.md` / `AGENTS.md` / `CHANGELOG.md` in the
-same change set (AGENTS.md rule 10).
+**All code, configuration, and documentation must be in English** — this includes comments, commit
+messages, documentation, DTOs, and error codes. Keep the full gate green (`./mvnw verify`) and
+update `README.md` / `AGENTS.md` / `CHANGELOG.md` in the same change set (AGENTS.md rule 10).
 
 ## License
 
