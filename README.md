@@ -209,7 +209,7 @@ Security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
 
 ## Current State
 
-**Latest tagged release: `v0.12.0`** (Links as Resource, 2026-08-28) · see
+**Latest tagged release: `v0.13.0`** (Reliability & scale, 2026-09-11) · see
 [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
 Implemented on `main`:
@@ -246,6 +246,13 @@ Implemented on `main`:
 - **Rich click analytics (Phase C) — landed.** Click events capture `referrer`, `device` (mobile/desktop/tablet/bot) and `country` (GeoIP2, opt-in via `app.analytics.geo.enabled`). A scheduled **`click_daily` rollup** (migration V9) pre-aggregates per `(shortCode, UTC day)` with clicks, breakdown maps (device/country/referrer value counts) and **approximate unique visitors** via Redis HyperLogLog (PFADD in worker, PFCOUNT in query, on by default). The endpoint `GET /api/v1/urls/{id}/clicks?unit=day|hour&from=&to=` returns a time series + breakdown, owner-guarded (401/403/404). Hourly series derives from raw events (bounded to 30 days). All enrichment is worker-side; the redirect path stays fast (no enrichment, no HLL). See `docs/data-model-decisions.md` → *Analytics*.
 - **Fault tolerance** — Resilience4j circuit breakers (`databaseCb` fail-fast for Mongo,
   `rateLimiterCb` fail-open for the rate limiter / ID generator), exposed via Actuator.
+- **Reliability contract (Epic 7)** — failure modes are contracted per dependency
+  (`docs/reliability.md` matrix 7.1, ADR 0005 fail-open Redis/analytics, ADR 0006 at-least-once):
+  Redis-down keeps the redirect path green with elevated latency, Mongo-down fast-fails (biased open)
+  with automatic recovery. The analytics worker's Redis-stream **PEL is genuinely reclaimed** on
+  crash-recovery (drain before `lastConsumed()`), and a DR drill with real numbers (dump/restore via
+  `scripts/backup-mongodb.sh`/`restore-mongodb.sh`, fault injections) is documented with runbooks in
+  `docs/release-runbook.md` §5b.
 - **Auth & users** — stateless JWT (HS256, access + refresh), BCrypt password hashing, `FREE` plan by
   default.
 - **Observability (four pillars)** — Micrometer metrics + Prometheus endpoint with latency
@@ -293,8 +300,9 @@ Deliberately not implemented yet (candidate backlog, in priority order):
 
 > Everything previously tracked here has **landed** — Links as Resource, real analytics persistence,
 > redirect-path rate limiting, TTL/link expiry, the locked identity model, framework-free `core`,
-> destination validation, operational-exposure tightening, observability (four pillars) and
-> operational excellence. See [CHANGELOG.md](CHANGELOG.md) for the per-version history.
+> destination validation, operational-exposure tightening, observability (four pillars), operational
+> excellence, and the maintainability/security/observability/performance/scalability/reliability
+> hardening of Epics 1–7. See [CHANGELOG.md](CHANGELOG.md) for the per-version history.
 
 ## Documentation
 

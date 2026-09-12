@@ -7,40 +7,91 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ## [Unreleased]
 
-### Fixed
+## [0.13.0] - 2026-09-11
 
-- **IT suite: mongod dying mid-suite (exit 14, "Prematurely reached end of stream")** — root cause:
-  `@DirtiesContext(AFTER_EACH_TEST_METHOD)` re-created the whole ApplicationContext per test method
-  (114 contexts for 114 tests), each opening its own Mongo connection pool. The shared singleton
-  mongod accumulated connections/threads/file descriptors until it hit the EMFILE limit ("Too many
-  open files") during a schema-migration index build; WiredTiger treats that as a library panic and
-  `abort()`s mongod (exit 14), and every test after that point failed. Fix (dargent singleton-container
-  pattern, `docs/lessons.md` #7): drop `@DirtiesContext` — isolation is guaranteed by the
-  `@BeforeEach/@AfterEach` cleanup (drop DB, Redis flushAll, Bloom filter reset, **plus L1 Caffeine
-  invalidateAll**, newly added) — cap the test mongod `wiredTigerCacheSizeGB=0.25`, and raise the
-  container `nofile` ulimit to 65536. Full suite now deterministic: 265 unit + 114 IT, 0 errors.
-- **TTL validation moved to the application layer** — the controller no longer resolves
-  `ttlSeconds` into an `expiresAt` instant; `ShortenUrlUseCase` gains a `Long ttlSeconds` overload
-  and `UrlShortenerService` resolves it via `ExpiryResolver` with the cap passed as a primitive
-  (fixes a latent `core → infra` boundary violation: `UrlShortenerService` was importing
-  `infra.config.properties.ShortenerProperties`; also converts a missing-cap NPE into
-  `InvalidExpiryException`).
+### Added
+
+- **Branded domains (Phase C)** — authenticated users can claim a custom domain, prove ownership via a
+  DNS TXT record, and have it activated; shortening under a claimed domain is owner-only; the redirect
+  path enforces a **strict Host mirror** (a domain-bound link resolves only under its own host).
+  Migration `V8`; `DomainOwnershipHealthCheck` monitors TXT validity.
+- **Rich click analytics (Phase C)** — click events capture `referrer`, `device` (mobile/desktop/tablet/bot)
+  and `country` (GeoIP2, opt-in); a `click_daily` rollup (migration `V9`) pre-aggregates per
+  `(shortCode, UTC day)`; `GET /api/v1/urls/{id}/clicks` returns a time series + breakdown (owner-guarded);
+  **unique visitors** via Redis HyperLogLog. All enrichment is worker-side; the redirect path is untouched.
+- **Epic 1 (Maintainable)** — Spotless (google-java-format) check gate at `validate`; ArchUnit boundary
+  tests (`BoundaryRulesTest` + self-test); `check-doc-sync.sh` gate (debt matrix + lessons ↔
+  coding-standards) in CI; core coverage floor raised to 70% line + branch.
+- **Epic 2 (Secure by Design)** — CWE-117 sanitizer at every client-controlled log sink; SSRF gate blocks
+  private/internal IP literals incl. IPv6 + IPv4-mapped-IPv6 + metadata IPs with a
+  `security.ssrf.blocked.total` metric; HTTP security headers (`X-Content-Type-Options`, `X-Frame-Options`,
+  `Referrer-Policy`); **OWASP Dependency-Check gate** (fail CVSS ≥ 7) + `check-security.sh` (+ self-test) in
+  CI, NVD primed from the ODC nightly mirror (`nvdDatafeedUrl`) so cold syncs take ~2 min.
+- **Epic 3 (Observability)** — correlation-id header + `request_id` MDC on every request; the 7 duplicate
+  metrics folded into `MetricsPort` with a **metrics-freeze gate** (`check-metrics-frozen.sh`, 24 business
+  series) in CI; anonymous `/actuator` index blocked (tiered access, `ProductionLockdownIT`); alert rules
+  validated with `promtool` in CI; Prometheus registry restored after the Boot 4 upgrade.
+- **Operator role over BasicAuth for actuator tiers (AGENTS debt 26)** — a dedicated operator identity
+  (`app.security.operator.*`, env `OPERATOR_USERNAME`/`OPERATOR_PASSWORD`, constant-time compare) unlocks
+  health-with-components, metrics, prometheus and circuit-breaker endpoints; env/beans/index stay ADMIN-only;
+  fail-fast in prod when the operator is unset or its password is weak. `OperatorAccessIT` (9 tests).
+- **Epic 5 (Performance)** — like-for-like k6 baseline resolved (same k6 v2.2.0 container + Redis 8.10.1:
+  redirect p99 8.75 ms, shorten p95 11.97 ms — noise, not a regression); JFR profile under 2× load healthy
+  (0.21% GC wall, 37× headroom, no mitigation warranted); L1 Caffeine + Bloom filter config externalized via
+  `app.cache.*` properties; stress scenario at 2× nominal (ramping 400/40 rps): 165,498 requests, **0 failures**,
+  p95 < 5 ms.
+- **Epic 6 (Scalable)** — ADRs 0001–0004 (horizontal stateless scale, Redis-global rate limit, per-instance
+  L1 with ≤5 s staleness, circuit breakers); `explain()` audit on real data: IDHACK/IXSCAN everywhere, **zero
+  COLLSCAN**; multi-instance artifacts (weighted nginx upstream, systemd `url-shortener@.service` template,
+  runbook §12); horizontal validation with 2 instances behind an LB: 165,499 requests, **0 5xx**, p95 7.28 ms,
+  **global rate-limit proven** (300-request burst → exactly 120×302 + 180×429).
+- **Epic 7 (Reliable)** — failure-mode contract: `docs/reliability.md` matrix 7.1 + **ADR 0005** (fail-open
+  Redis/analytics) + **ADR 0006** (at-least-once, exactly-once rejected); inventory of CB/timeout/retry + ITs
+  for Mongo/Redis down; shutdown script + liveness ≠ readiness; **real PEL redelivery** in `ClickBatchWorker`
+  (crash-recovery drains the PEL before `lastConsumed()`; `ClickPipelineRedeliveryIT` proves reassign+reclaim
+  and poison tolerance); **DR drill** with numbers (containerized dump/restore, 7,640 short_urls, RPO proven;
+  Redis-down mid-run = 5,730/5,730 checks, p95 744 ms fail-open; Mongo-down cold-cache = CB fast-fail with
+  auto-recovery); dependency-outage playbooks in `docs/release-runbook.md` §5b.
+- **DD/QA hardening** — `HEAD /{id}` now mirrors `GET` (was 401) with `ReadPathIT` coverage; promtool analysis
+  fixed invalid annotation names (`runbook-§X` → `runbook_<phase>`) in `alerts.yml`; `scripts/check-security.sh`
+  is self-executable.
 
 ### Changed
 
 - **Platform upgrade: Java 21 + Spring Boot 3.5.7 + Undertow → Java 25 + Spring Boot 4.1.1 + Tomcat.**
-  Boot 4 removed Undertow support (the app now runs on **Tomcat 11** with virtual threads, Jakarta
-  EE 11) and renamed `spring.data.mongodb.*` → `spring.mongodb.*`. Stack updates: Jackson 3
-  (`tools.jackson`), `spring-boot-starter-aspectj`, `spring-boot-starter-webmvc-test`, Spring
-  Security 7 (DAO authentication provider constructor), Redis:4 (ValueOperations generics),
-  Testcontainers **2.0.5** (`MongoDBContainer` from `org.testcontainers.mongodb`, replica set with
-  **explicit `withReplicaSet()`**), Redisson 4.7.0, jjwt 0.12.7, springdoc 3.1.1, spotbugs 4.10.4.1
-  (requires Maven ≥ 3.8.9), lombok 1.18.46, logstash-encoder 9.0, REST Assured **6.0.1** (5.5.7
-  pulls Groovy 5.0.8, which throws an NPE in `ClosureMetaClass` — 5.5.x cannot run under Groovy 5).
-- **Maven wrapper 3.9.16** — the repo bundles `./mvnw` (was: local `mvn` only); spotbugs' higher
-  Maven floor made the wrapper the canonical entry point. Updated README commands, CI (Java 25,
-  temurin), Dockerfile (temurin-25), systemd unit and scripts accordingly.
-- Bumped Lombok to 1.18.46 (JDK 25 compatibility; required for local builds on Corretto 25).
+  Boot 4 removed Undertow support (the app now runs on **Tomcat 11** with virtual threads, Jakarta EE 11) and
+  renamed `spring.data.mongodb.*` → `spring.mongodb.*`. Stack updates: Jackson 3 (`tools.jackson`),
+  `spring-boot-starter-aspectj`, `spring-boot-starter-webmvc-test`, Spring Security 7 (DAO authentication
+  provider constructor), Redis:4, Testcontainers **2.0.5** (explicit `withReplicaSet()`), Redisson 4.7.0,
+  jjwt 0.12.7, springdoc 3.1.1, spotbugs 4.10.4.1, lombok 1.18.46, logstash-encoder 9.0, REST Assured 6.0.1.
+- **Maven wrapper 3.9.16** — the repo bundles `./mvnw` (was: local `mvn` only); updated README commands, CI
+  (Java 25, temurin), Dockerfile (temurin-25), systemd unit and scripts.
+- **Metrics folded into the port** — `MetricsService` removed; its 7 meters now live in
+  `MicrometerMetricsAdapter` behind `MetricsPort` (`recordRedirect`, `recordShortenLatency`,
+  `recordRedirectLatency`); Prometheus series byte-for-byte identical; a freeze gate pins the 24 business series.
+- **Cache config externalized** — L1 Caffeine size/TTL and Bloom filter bounds are now
+  `app.cache.*` properties (historical defaults preserved).
+- **Core coverage floor** raised from 60% to **70%** line + branch (Epic 1).
+
+### Fixed
+
+- **IT suite: mongod dying mid-suite (exit 14, "Prematurely reached end of stream")** — root cause:
+  `@DirtiesContext(AFTER_EACH_TEST_METHOD)` re-created the whole ApplicationContext per test method (114
+  contexts for 114 tests), each opening its own Mongo connection pool; the shared mongod hit the EMFILE
+  ("Too many open files") limit during a schema-migration index build. Fix (singleton-container pattern,
+  `docs/lessons.md` #7): drop `@DirtiesContext` (isolation via `@BeforeEach/@AfterEach` cleanup + L1 Caffeine
+  `invalidateAll`), cap the test mongod `wiredTigerCacheSizeGB=0.25`, raise the container `nofile` to 65536.
+  Suite now deterministic: **271 unit + 165 IT**, 0 errors.
+- **TTL validation moved to the application layer** — the controller no longer resolves `ttlSeconds`;
+  `ShortenUrlUseCase` gains a `Long ttlSeconds` overload and `UrlShortenerService` resolves it via
+  `ExpiryResolver` with the cap as a primitive (fixes a latent `core → infra` boundary violation and converts
+  a missing-cap NPE into `InvalidExpiryException`).
+- **`/actuator` index reachable anonymously** via the `GET /{id}` catch-all — actuator matcher moved ahead of
+  the redirect path; `ProductionLockdownIT` (7 tests) locks the tiers down.
+- **`POST /api/v1/urls` matching the `/api/v1/urls/**` matcher** — public endpoints re-ordered ahead of the
+  authenticated ones in `SecurityConfig` (regression from the tier rework; anonymous shorten → 401 is gone).
+- **Prometheus registry absent after the Boot 4 upgrade** — `micrometer-registry-prometheus` restored
+  (managed by the BOM); `/actuator/prometheus` works again and is asserted by `MetricsIT` playback.
 
 ## [0.12.0] - 2026-08-28
 
