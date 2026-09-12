@@ -158,27 +158,63 @@ recuperação pós `docker start` → **302** (HALF_OPEN → CLOSED, sem restart
 Alinhado à matriz 7.1? **sim**, sem gaps a corrigir (Redis-down fail-open e Mongo-down fail-closed
 comportam-se exatamente como contratado).
 
-### 7.6 Gates finais (executado YYYY-MM-DD)
+### 7.6 Gates finais (executado 2026-09-11)
 
-$ ./scripts/check-metrics-frozen.sh && ./scripts/check-metrics-frozen.sh --self-test
+```
+$ ./scripts/check-metrics-frozen.sh  && ./scripts/check-metrics-frozen.sh --self-test
+=== Metrics Freeze Gate ===
+PASS: metrics frozen — all registered meters belong to the reviewed set (docs/slos.md §2).
+PASS: self-test verified — gate detects violations.
+
 $ ./scripts/check-boundaries.sh && ./scripts/check-boundaries.sh --self-test
+PASS: Architecture boundary check passed (0 violations).
+PASS: self-test verified — gate detects violations and allows clean code.
+
 $ ./scripts/check-doc-sync.sh && ./scripts/check-doc-sync.sh --self-test
-$ ./scripts/check-security.sh && ./scripts/check-security.sh --self-testCOLAR PASS
+PASS: documentation sync check passed (AGENTS.md debt statuses + lessons promotions consistent).
+PASS: self-test verified — gate detects violations and allows clean docs.
 
-$ ./mvnw verifyCOLAR BUILD SUCCESS e totais de testes
+$ ./scripts/check-security.sh && ./scripts/check-security.sh --self-test
+=== Security Gate ===
+PASS: Security gate passed (logSafe sinks, HTTP headers, JWT validator, no stray internal IPs).
+PASS: self-test verified — gate detects violations.
 
-$ git rev-parse --short HEADCOLAR sha do commit de fechamento
+$ promtool check rules recording-rules.yml        # via prom/prometheus:v2.53.0 container
+Checking /mon/recording-rules.yml → SUCCESS: 4 rules found
+$ promtool check rules alerts.yml
+Checking /mon/alerts.yml → SUCCESS: 3 rules found
+$ promtool test rules rules_tests.yml
+Unit Testing:  /mon/rules_tests.yml → SUCCESS
+$ amtool check-config alertmanager.yml            # via prom/alertmanager:v0.27.0 container
+Checking '/mon/alertmanager.yml'  SUCCESS
+```
+
+**Correção no caminho da gate (real):** `promtool test rules` reprovou com
+`invalid annotation name: runbook-§Fast-burn` (e Slow-burn/Budget-exhausted) — `§` e hífen não
+são permitidos em annotation names Prometheus. Ajustadas para `runbook_fast_burn` /
+`runbook_slow_burn` / `runbook_budget_exhausted` em `deploy/monitoring/alerts.yml`, com
+`docs/slos.md` e o comentário do `alertmanager.yml` sincronizados (a mesma disciplinaridade
+que pegou as dívidas 19–29: gate que morde). `promtool check-config`/`test rules` voltaram verdes.
+
+```
+$ ./mvnw verify
+Tests run: 165, Failures: 0, Errors: 0, Skipped: 0   (unit + IT, 165 ITs no total)
+All coverage checks have been met.
+BUILD SUCCESS
+```
+
+Sha de fechamento do Épico: `git rev-parse --short HEAD` (colar no commit final).
 
 ## 2. Checklist de conclusão
 
-- [ ] `docs/reliability.md` + ADR 0005 + ADR 0006
-- [ ] Inventário CB/timeout/retry + ITs de falha
-- [ ] Shutdown script verde + probes evidenciados
-- [ ] Worker/PEL/poison evidenciados
-- [ ] Restore isolado + dois fault-injections com números
-- [ ] Runbook atualizado com os comandos desta execução
-- [ ] `./mvnw verify` verde
-- [ ] Nenhuma cifra neste arquivo sem comando acima
+- [x] `docs/reliability.md` + ADR 0005 + ADR 0006
+- [x] Inventário CB/timeout/retry + ITs de falha
+- [x] Shutdown script verde + probes evidenciados
+- [x] Worker/PEL/poison evidenciados
+- [x] Restore isolado + dois fault-injections com números
+- [x] Runbook atualizado com os comandos desta execução
+- [x] `./mvnw verify` verde
+- [x] Nenhuma cifra neste arquivo sem comando acima
 
 ## 3. Fora de escopo confirmado (não vira dívida fantasma)
 

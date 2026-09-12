@@ -463,6 +463,28 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
      em `tasks/epic-6/epic-6-dod.md`. Nota: leitura HTTP do estado do CB (`/actuator/circuitbreakers`)
      segue 401 (dívida 26); a prova funcional (0 5xx sob carga) é a evidência utilizada. — `resolved`
 
+30. **Epic 7 (Reliable) — contract de modos de falha, PEL real, DR drill provado** — concluído
+     2026-09-11. (a) Matriz de modos de falha 7.1 (fail-open/fail-closed por dependência) em
+     `docs/reliability.md` + **ADR 0005** (fail-open Redis/analytics) + **ADR 0006** (at-least-once,
+     exactly-once rejeitado). (b) Inventário CB/timeout/retry + ITs de Mongo/Redis down; shutdown
+     script verde + liveness ≠ readiness. (c) **PEL redelivery real** no `ClickBatchWorker`
+     (crash-recovery: drena o PEL com `ReadOffset.from("0")` antes de `lastConsumed()`) — antes,
+     batch não-ackado ficava órfão e o redelivery era código morto; `ClickPipelineRedeliveryIT`
+     prova reassign + reclaim (asserções por delta em `analytics.events.failed.total`, que acumula
+     no contexto compartilhado) e poison não trava o group. (d) DR drill isolado (Mongo 27018 /
+     Redis 6380 portas Épico 5/6): backup/restore `mongorestore` containerizado (7.640 short_urls;
+     RPO provado: código pré-backup 302, código pós-backup 404); fault-injections com números —
+     Redis-down mid-run = 5730/5730 checks 100%, `http_req_duration` p95 744ms (fail-open, ADR
+     0005); Mongo-down cold-cache = CB fail-closed p50 3.56ms (surge de 504) + p99 27s (janela de
+     amostragem), recuperação automática (HALF_OPEN → CLOSED, sem restart). Playbooks de incidente
+     com comandos reais no `docs/release-runbook.md` §5b. (e) Gates finais verdes:
+     `check-metrics-frozen`/`check-boundaries`/`check-doc-sync`/`check-security` (todos + `--self-test`);
+     **`promtool test rules` pegou annotation name inválido no `alerts.yml`** (`runbook-§Fast-burn`
+     → `runbook_fast_burn`/`runbook_slow_burn`/`runbook_budget_exhausted`; `docs/slos.md` +
+     comentário do `alertmanager.yml` sincronizados); `check-rules`/`test-rules`/`amtool check-config`
+     verdes (containers prom 2.53 / alertmanager 0.27). `./mvnw verify` verde (271 unit + 165 IT).
+     Commit de fechamento: 59bdc70 (7.5) + evidências em `tasks/epic-7/epic-7-dod.md`. — `resolved`
+
 ## 🔍 Operational Discipline & Debugging Guidelines
 
 - **Investigate before trial-and-error:** when a compile or test fails, read the full stack trace and

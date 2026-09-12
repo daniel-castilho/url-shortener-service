@@ -51,25 +51,25 @@ Marcos `[x]` preenchidos durante a execução; evidências coladas no `epic-7-do
 - [x] Artefatos k6 em `load-tests/results/` (gitignored) — no DoD entra o summary, não o binário.
 
 ## 7.6 Gates finais do épico
-- [ ] `./scripts/check-metrics-frozen.sh` (+ `--self-test`) → PASS.
-- [ ] `./scripts/check-boundaries.sh` (+ `--self-test`) → PASS.
-- [ ] `./scripts/check-doc-sync.sh` (+ `--self-test`) → PASS.
-- [ ] `./scripts/check-security.sh` (+ `--self-test`) → PASS.
-- [ ] `promtool check rules` + `promtool test rules` + `amtool check-config` → verdes.
-- [ ] `./mvnw verify` conjunto → BUILD SUCCESS.
-- [ ] Evidências coladas no `epic-7-dod.md`; self-audit da regra zero.
+- [x] `./scripts/check-metrics-frozen.sh` (+ `--self-test`) → PASS.
+- [x] `./scripts/check-boundaries.sh` (+ `--self-test`) → PASS.
+- [x] `./scripts/check-doc-sync.sh` (+ `--self-test`) → PASS.
+- [x] `./scripts/check-security.sh` (+ `--self-test`) → PASS.
+- [x] `promtool check rules` + `promtool test rules` + `amtool check-config` → verdes.
+- [x] `./mvnw verify` conjunto → BUILD SUCCESS.
+- [x] Evidências coladas no `epic-7-dod.md`; self-audit da regra zero.
 
 ---
 
 **Checklist de conclusão do Épico 7:**
 
-- [ ] `docs/reliability.md` + ADR 0005 + ADR 0006
-- [ ] Inventário CB/timeout/retry + ITs de Mongo/Redis down
-- [ ] Shutdown script verde + liveness ≠ readiness evidenciado (ou corrigido)
+- [x] `docs/reliability.md` + ADR 0005 + ADR 0006
+- [x] Inventário CB/timeout/retry + ITs de Mongo/Redis down
+- [x] Shutdown script verde + liveness ≠ readiness evidenciado (ou corrigido)
 - [x] Worker recupera PEL; poison não trava o group
-- [ ] Backup/restore isolado verde + dois fault-injections com números
-- [ ] Runbook de incidente atualizado
-- [ ] `./mvnw verify` verde (todos os gates)
-- [ ] Evidências coladas no `epic-7-dod.md`
+- [x] Backup/restore isolado verde + dois fault-injections com números
+- [x] Runbook de incidente atualizado
+- [x] `./mvnw verify` verde (todos os gates)
+- [x] Evidências coladas no `epic-7-dod.md`
 
 *Ao marcar todos os itens acima, o Épico 7 está **concluído** com modos de falha contratados e provados.*

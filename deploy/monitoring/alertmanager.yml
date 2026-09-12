@@ -3,7 +3,7 @@
 #
 # The default receiver is a webhook placeholder — set ALERTMANAGER_WEBHOOK_URL or wire a
 # real receiver (email/opsgenie/slack) here before production. Alerts reference runbooks:
-# every rule carries a `runbook-§X` annotation pointing back to docs/slos.md §Response runbook.
+# every rule carries a `runbook_<phase>` annotation pointing back to docs/slos.md §Response runbook.
 global:
   resolve_timeout: 5m
 

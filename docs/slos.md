@@ -85,7 +85,7 @@ Availability error budget = `1 − 0.999 = 0.001`. Burn rate = error ratio ÷ er
 Multi-window conditions prevent false positives from short traffic spikes with
 no sustained burn. See `deploy/monitoring/alerts.yml`.
 
-Each rule carries `runbook` / `runbook-§X` annotations resolving to this document
+Each rule carries `runbook` / `runbook_<phase>` annotations resolving to this document
 (§Response runbook below). The rules are validated on every push (`promtool check rules`
 + `promtool test rules deploy/monitoring/rules_tests.yml` covering fast- and slow-burn
 firing and healthy-traffic silence, plus `amtool check-config` for
