@@ -4,7 +4,9 @@
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1.1-6DB33F?style=for-the-badge&logo=spring&logoColor=white)
 ![Maven](https://img.shields.io/badge/Maven-3.9.16-C71A36?style=for-the-badge&logo=apache-maven&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Build Status](https://img.shields.io/github/actions/workflow/status/daniel-castilho/url-shortener-service/ci.yml?branch=main&label=Build&logo=github-actions&logoColor=white)
+![Coverage](https://img.shields.io/badge/Coverage-70%25-brightgreen?logo=codecov&logoColor=white)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 
 URL Shortener Service is a high-performance link-shortening API built with **Java 25**, **Spring Boot 4.1.1**
 and a **Hexagonal Architecture (Ports & Adapters)**. Its business core (`core` package) is free of
