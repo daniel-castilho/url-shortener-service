@@ -36,14 +36,6 @@ FROZEN_METERS=(
     "analytics.retention.purged.total"
     "analytics.retention.runs.total"
     "analytics.rollup.days.total"
-    "analytics.retention.errors.total"
-    "analytics.retention.purged.total"
-    "analytics.retention.runs.total"
-    "analytics.rollup.days.total"
-    "analytics.retention.errors.total"
-    "analytics.retention.purged.total"
-    "analytics.retention.runs.total"
-    "analytics.rollup.days.total"
     "analytics.rollup.errors.total"
     "analytics.rollup.groups.upserted.total"
     "bloomfilter.rejections.total"
@@ -64,10 +56,7 @@ FROZEN_METERS=(
     "urls.expired.total"
     "urls.shortened.total"
     "vanity.urls.created.total"
-    "domains.claimed.total"
-    "domains.verified.total"
-    "custom.domains.created.total"
-    "rate.limit.exceeded.total"
+)
 
 find_registered_meters() {
     local root="${1:-$SRC}"
