@@ -53,6 +53,7 @@ import org.springframework.core.annotation.Order;
 @Configuration
 @EnableConfigurationProperties({
   ca.tyny.urlshortener.infra.config.properties.RateLimiterProperties.class,
+  ca.tyny.urlshortener.infra.config.properties.RedisClientProperties.class,
   ca.tyny.urlshortener.infra.config.properties.UrlValidationProperties.class,
   ca.tyny.urlshortener.infra.config.properties.SecurityProperties.class,
   ca.tyny.urlshortener.infra.config.properties.ShortenerProperties.class,

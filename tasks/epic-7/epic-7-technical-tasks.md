@@ -12,11 +12,13 @@ Marcos `[x]` preenchidos durante a execução; evidências coladas no `epic-7-do
 
 ## 7.2 Isolamento (CB + timeout + retry budget)
 - [ ] Inventariar adapters de saída: anotação Resilience4j, timeout, retry. Tabela no DoD.
-- [ ] Confirmar valores reais em `application.yaml` (`spring.data.mongodb.*`, `spring.data.redis.timeout`, `resilience4j.circuitbreaker.instances.*`).
-- [ ] Se o lookup de redirect não tiver timeout explícito no cliente Mongo/Redis, externalizar (não hardcode) e documentar o valor escolhido (alvo: Redis ≤ 500ms já configurado; Mongo socket 30s é alto para hot-path — justificar ou baixar **somente** com evidência e sem quebrar ITs).
-- [ ] IT Mongo down / recusado no cache-miss do `GET /{id}`: status + log/métrica de CB. Nome sugerido: `RedirectMongoFailureIT`.
-- [ ] IT Redis down no redirect: rate-limit fail-open + fallback Mongo. Nome sugerido: `RedirectRedisFailureIT` (estender `RedisUrlCache` tests se já cobrirem o essencial).
-- [ ] **Nota técnica (singleton containers):** as ITs de falha sobem containers **dedicados à própria classe** (start/stop no ciclo de vida delas) — os singleton de `BaseIntegrationTest` são compartilhados por todas as ITs e não podem ser parados no meio da suíte.
+- [x] Confirmar valores reais em `application.yaml` (`spring.data.mongodb.*`, `spring.data.redis.timeout`, `resilience4j.circuitbreaker.instances.*`).
+- [x] Se o lookup de redirect não tiver timeout explícito no cliente Mongo/Redis, externalizar (não hardcode) e documentar o valor escolhido (alvo: Redis ≤ 500ms já configurado; Mongo socket 30s é alto para hot-path — justificar ou baixar **somente** com evidência e sem quebrar ITs).
+      **Finding — a claim "Redis ≤ 500ms já configurado" era falsa:** o starter Redisson 4.7.0 **ignora** `spring.data.redis.timeout` (o `RedissonAutoConfigurationV4.buildSingleServerConfig` mapeia apenas host/port/password/ssl/database); os defaults reais do Redisson (timeout 3s, connect 10s, 3 retries a 1.5s) faziam cada op Redis falhar em ~5–25s — 200 GETs sob outage = "hang" de horas. Corrigido: bloco `app.redis.*` (`command-timeout-ms 500`, `connect-timeout-ms 500`, `retry-attempts 1`, `retry-interval-ms 100`, env-overridable) aplicado via `RedissonAutoConfigurationCustomizer` em `RedisConfig`; Mongo 30s mantido com justificativa no ADR 0005 (CB é a proteção operacional).
+- [x] IT Mongo down / recusado no cache-miss do `GET /{id}`: status + log/métrica de CB. Nome sugerido: `RedirectMongoFailureIT`.
+- [x] IT Redis down no redirect: rate-limit fail-open + fallback Mongo. Nome sugerido: `RedirectRedisFailureIT` (estender `RedisUrlCache` tests se já cobrirem o essencial).
+- [x] **Nota técnica (singleton containers):** as ITs de falha sobem containers **dedicados à própria classe** (start/stop no ciclo de vida delas) — os singleton de `BaseIntegrationTest` são compartilhados por todas as ITs e não podem ser parados no meio da suíte.
+      `RedirectMongoFailureIT` (4/4: CB open→503, CB closed→404, half-open probe, hot code via L2 / cold→503) e `RedirectRedisFailureIT` (2/2: cache-miss→Mongo degrades, rate-limiter fail-open além do limite) — **verdes juntos** (6/6, ~40s).
 - [ ] `./mvnw test -Dtest='RedirectMongoFailureIT,RedirectRedisFailureIT,RedisClickEventQueueFailOpenTest,TracingFailOpenIT'` → verde; output colado.
 - [ ] Não depender de `GET /actuator/circuitbreakers` autenticado como prova primária (métrica `resilience4j.circuitbreaker.*` / log). Nota: a dívida #26 foi resolvida em `c0fbb9c` (operator BasicAuth) — o endpoint está acessível ao operator como evidência secundária opcional.
 

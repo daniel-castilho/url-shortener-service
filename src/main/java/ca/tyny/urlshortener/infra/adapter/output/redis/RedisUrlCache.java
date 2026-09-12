@@ -14,6 +14,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import org.redisson.api.RBloomFilter;
 import org.redisson.api.RedissonClient;
 import org.slf4j.Logger;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
@@ -93,7 +94,15 @@ public class RedisUrlCache implements UrlCachePort {
     }
 
     // 3. Check Redis
-    String redisValue = redisTemplate.opsForValue().get("url:" + id);
+    String redisValue;
+    try {
+      redisValue = redisTemplate.opsForValue().get("url:" + id);
+    } catch (DataAccessException e) {
+      // ADR 0005: L2 is degrade (skip, fall through) — an outage is a cache miss,
+      // proceeds to MongoDB. Higher latency, zero client-visible failure.
+      log.warn("Redis L2 lookup failed for id={}; degrading to MongoDB", id, e);
+      return CacheLookup.miss();
+    }
 
     if (redisValue == null) {
       return CacheLookup.miss();
@@ -128,7 +137,12 @@ public class RedisUrlCache implements UrlCachePort {
     }
 
     // Add to Redis with TTL capped at the link expiry and jittered otherwise
-    redisTemplate.opsForValue().set("url:" + id, encode(value), ttl);
+    try {
+      redisTemplate.opsForValue().set("url:" + id, encode(value), ttl);
+    } catch (DataAccessException e) {
+      // ADR 0005: L2 is degrade (skip) — a Redis outage must not fail the caller.
+      log.warn("Redis L2 put failed for id={}; continuing without it", id, e);
+    }
 
     // Add to Local Cache
     localCache.put(id, value);
@@ -204,8 +218,12 @@ public class RedisUrlCache implements UrlCachePort {
 
   @Override
   public void evict(String id) {
-    // Delete from Redis
-    redisTemplate.delete("url:" + id);
+    // Delete from Redis (best-effort per ADR 0005 degrade policy)
+    try {
+      redisTemplate.delete("url:" + id);
+    } catch (DataAccessException e) {
+      log.warn("Redis L2 evict failed for id={}; continuing with L1 invalidation", id, e);
+    }
     // Invalidate local Caffeine cache
     localCache.invalidate(id);
     // Note: Bloom filter entry is kept (harmless false positive -> extra DB hit)

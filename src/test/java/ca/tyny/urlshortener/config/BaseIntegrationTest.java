@@ -24,7 +24,7 @@ import org.testcontainers.utility.DockerImageName;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public abstract class BaseIntegrationTest {
 
-  static final MongoDBContainer mongoDB =
+  public static final MongoDBContainer mongoDB =
       new MongoDBContainer(DockerImageName.parse("mongo:6.0"))
           .withExposedPorts(27017)
           // Testcontainers 2.x: rs.initiate() only runs when withReplicaSet() is used
@@ -46,7 +46,7 @@ public abstract class BaseIntegrationTest {
                 cmd.withCmd(full.toArray(new String[0]));
               });
 
-  static final GenericContainer<?> redis =
+  public static final GenericContainer<?> redis =
       new GenericContainer<>(DockerImageName.parse("redis:alpine")).withExposedPorts(6379);
 
   static {

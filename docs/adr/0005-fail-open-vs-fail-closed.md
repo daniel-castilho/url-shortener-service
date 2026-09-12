@@ -14,7 +14,10 @@ while the **data** dependency (MongoDB) must degrade loudly and visibly. This AD
 decision the code already implements and the alternatives rejected.
 
 Timeout budget reality (`application.yaml`): Mongo `connect-timeout 10s` / `socket-timeout
-30s`; Redis `timeout 500ms`; DNS (validation) `2000ms`; domain TXT verify `3000ms`.
+30s`; Redis **enforced** via `app.redis.*` (command/connect `500ms`, 1 retry at 100ms) applied
+through a `RedissonAutoConfigurationCustomizer` — the Redisson starter ignores
+`spring.data.redis.timeout`, so this block is the real budget; DNS (validation) `2000ms`;
+domain TXT verify `3000ms`.
 
 ## Decision
 

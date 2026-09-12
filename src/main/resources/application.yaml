@@ -18,12 +18,21 @@ spring:
     redis:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
-      timeout: 500ms
+      # Note: the Redisson starter does NOT honour spring.data.redis.timeout
+      # (it maps only host/port/password/ssl/database). The real timeout budget
+      # lives in app.redis below and is applied via RedissonAutoConfigurationCustomizer.
 
 # ========================================
 # Application Configuration
 # ========================================
 app:
+  redis:
+    # Redisson client timeout budget (ADR 0005: "Redis ≤ 500ms").
+    # Under an outage these bound each Redis op, so fail-open degrades instead of hangs.
+    command-timeout-ms: ${APP_REDIS_COMMAND_TIMEOUT_MS:500}
+    connect-timeout-ms: ${APP_REDIS_CONNECT_TIMEOUT_MS:500}
+    retry-attempts: ${APP_REDIS_RETRY_ATTEMPTS:1}
+    retry-interval-ms: ${APP_REDIS_RETRY_INTERVAL_MS:100}
   shortener:
     code-length: ${SHORTENER_CODE_LENGTH:7}
     # Maximum ttlSeconds accepted on shorten (server-side cap); over-cap is rejected with 400.
@@ -97,6 +106,12 @@ management:
       show-details: ${HEALTH_SHOW_DETAILS:when-authorized}
       probes:
         enabled: true
+      group:
+        readiness:
+          include: "mongo,redis,circuitBreakers,diskSpace,ping"
+          # Public probe (K8s/nginx): must NOT leak backend component details to
+          # anonymous callers — full /actuator/health (operator/ADMIN) keeps `always`.
+          show-components: when-authorized
       show-components: always
   health:
     circuitbreakers:

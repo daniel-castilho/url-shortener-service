@@ -12,11 +12,14 @@ import ca.tyny.urlshortener.core.exception.InvalidExpiryException;
 import ca.tyny.urlshortener.core.exception.QuotaExceededException;
 import ca.tyny.urlshortener.core.exception.UrlExpiredException;
 import ca.tyny.urlshortener.core.exception.UrlNotFoundException;
+import ca.tyny.urlshortener.infra.adapter.output.persistence.exception.RepositoryException;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -256,6 +259,48 @@ public class GlobalExceptionHandler {
             LocalDateTime.now());
 
     return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+  }
+
+  @ExceptionHandler(CallNotPermittedException.class)
+  public ResponseEntity<ErrorResponse> handleCircuitBreakerOpen(CallNotPermittedException ex) {
+    log.warn("Circuit breaker open: {}", logSafe(ex.getMessage()));
+
+    ErrorResponse error =
+        new ErrorResponse(
+            HttpStatus.SERVICE_UNAVAILABLE.value(),
+            "Service Unavailable",
+            "Service temporarily unavailable due to high load or dependency failure. Please try again later.",
+            LocalDateTime.now());
+
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(error);
+  }
+
+  @ExceptionHandler(DataAccessException.class)
+  public ResponseEntity<ErrorResponse> handleDataAccessException(DataAccessException ex) {
+    log.error("Data access failure: {}", logSafe(ex.getMessage()));
+
+    ErrorResponse error =
+        new ErrorResponse(
+            HttpStatus.SERVICE_UNAVAILABLE.value(),
+            "Service Unavailable",
+            "Service temporarily unavailable due to data store failure. Please try again later.",
+            LocalDateTime.now());
+
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(error);
+  }
+
+  @ExceptionHandler(RepositoryException.class)
+  public ResponseEntity<ErrorResponse> handleRepositoryException(RepositoryException ex) {
+    log.error("Persistence failure: {}", logSafe(ex.getMessage()));
+
+    ErrorResponse error =
+        new ErrorResponse(
+            HttpStatus.SERVICE_UNAVAILABLE.value(),
+            "Service Unavailable",
+            "Service temporarily unavailable due to data store failure. Please try again later.",
+            LocalDateTime.now());
+
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(error);
   }
 
   // Error response DTOs
