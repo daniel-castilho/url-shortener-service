@@ -47,6 +47,11 @@ frozen series disappears. Series live behind `MetricsPort` →
 | `analytics.retention.runs.total` | Counter | — | retention purge runs |
 | `analytics.retention.purged.total` | Counter | — | expired documents purged |
 | `analytics.retention.errors.total` | Counter | — | retention purge failures |
+| `rate.limit.exceeded.total` | Counter | service=url-shortener | requests rejected by rate limiter |
+| `vanity.urls.created.total` | Counter | service=url-shortener | vanity URLs created |
+| `domains.claimed.total` | Counter | service=url-shortener | custom domains claimed |
+| `domains.verified.total` | Counter | service=url-shortener | custom domains verified |
+| `custom.domains.created.total` | Counter | service=url-shortener | links created under custom domains |
 | `id.generation.duration` | Timer | service=url-shortener | Base62 + vanity code generation (p50/p95/p99) |
 | `url.retrieval.duration` | Timer | service=url-shortener | single hot-path cache + DB lookup (p50/p95/p99) |
 | `shorten.latency` | Timer | operation=shorten | end-to-end shorten request (p50/p95/p99) |
