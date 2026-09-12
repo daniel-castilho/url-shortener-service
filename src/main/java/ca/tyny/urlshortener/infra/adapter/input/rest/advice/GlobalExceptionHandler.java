@@ -28,6 +28,51 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+/**
+ * Centralized exception handling for REST endpoints.
+ *
+ * <p>Maps domain exceptions to appropriate HTTP responses with appropriate status codes.
+ * All error responses follow a consistent format via {@link ErrorResponse} and
+ * {@link ValidationErrorResponse}.
+ *
+ * <p>Security note (CWE-117): All exception messages containing client-controlled data
+ * (ids, aliases, URLs) are sanitized via {@link #logSafe(String)} before logging to
+ * prevent log injection attacks (CWE-117). The {@link #logSafe(String)} method replaces
+ * newline and carriage return characters with underscores.
+ *
+ * <p>Exception mapping:
+ * <ul>
+ *   <li>{@link UrlNotFoundException} → 404 Not Found</li>
+ *   <li>{@link UrlExpiredException} → 410 Gone</li>
+ *   <li>{@link AliasAlreadyExistsException} → 409 Conflict</li>
+ *   <li>{@link DomainAlreadyExistsException} → 409 Conflict</li>
+ *   <li>{@link DomainNotFoundException} → 404 Not Found</li>
+ *   <li>{@link InvalidDestinationException} → 400 Bad Request</li>
+ *   <li>{@link InvalidExpiryException} → 400 Bad Request</li>
+ *   <li>{@link InvalidExpiryException} → 400 Bad Request</li>
+ *   <li>{@link ForbiddenException} → 403 Forbidden</li>
+ *   <li>{@link QuotaExceededException} → 402 Payment Required</li>
+ *   <li>{@link AliasAlreadyExistsException} → 409 Conflict</li>
+ *   <li>{@link DomainAlreadyExistsException} → 409 Conflict</li>
+ *   <li>{@link DomainNotFoundException} → 404 Not Found</li>
+ *   <li>{@link InvalidDomainException} → 400 Bad Request</li>
+ *   <li>{@link InvalidDomainException} → 400 Bad Request</li>
+ *   <li>{@link DomainNotVerifiedException} → 400 Bad Request</li>
+ *   <li>{@link QuotaExceededException} → 402 Payment Required</li>
+ *   <li>{@link CodeGenerationException} → 500 Internal Server Error</li>
+ *   <li>{@link InvalidDestinationException} → 400 Bad Request</li>
+ *   <li>{@link MethodArgumentNotValidException} → 400 Bad Request (with field errors)</li>
+ *   <li>{@link MethodArgumentTypeMismatchException} → 400 Bad Request</li>
+ *   <li>{@link CallNotPermittedException} → 503 Service Unavailable (circuit breaker)</li>
+ *   <li>{@link DataAccessException} → 503 Service Unavailable</li>
+ *   <li>{@link RepositoryException} → 503 Service Unavailable</li>
+ *   <li>{@link Exception} → 500 Internal Server Error (catch-all)</li>
+ * </ul>
+ *
+ * <p>All error responses follow a consistent format via {@link ErrorResponse} and
+ * {@link ValidationErrorResponse} records, including status code, error type, message,
+ * and timestamp.
+ */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
