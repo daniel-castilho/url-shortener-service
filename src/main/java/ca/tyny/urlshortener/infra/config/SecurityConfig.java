@@ -78,6 +78,10 @@ public class SecurityConfig {
                     .hasRole("ADMIN")
                     .requestMatchers(HttpMethod.GET, "/{id}")
                     .permitAll() // Redirect
+                    // HEAD mirrors GET per HTTP semantics (and ops tooling such as curl -Is
+                    // depends on it); Spring forwards HEAD to the GET handler.
+                    .requestMatchers(HttpMethod.HEAD, "/{id}")
+                    .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/urls")
                     .permitAll() // Create Short URL (Anonymous allowed)
 

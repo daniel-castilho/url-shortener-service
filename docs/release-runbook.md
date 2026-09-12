@@ -202,6 +202,86 @@ bash scripts/verify-graceful-shutdown.sh
 
 ---
 
+## 5b. Dependency-outage playbooks (validated in the Epic 7 drill, 2026-09-11)
+
+Contracted behaviour lives in `docs/reliability.md` §1; these are the operator commands that were
+actually executed against the isolated infra (`app:18080 / Mongo:27018 / Redis:6380`).
+
+**Redis down (fail-open)**
+
+```sh
+# 1. confirm the outage
+CURL="curl -s -o /dev/null -w '%{http_code}\n'"
+$CURL http://localhost:8080/actuator/health/readiness   # DOWN (redis bucket)
+docker stop redis                                       # or the outage finds you
+
+# 2. client effect while down: redirects STILL 302 (rate-limit fail-open,
+#    cache falls through to Mongo); latency grows; no 4xx/5xx spike
+$CURL http://localhost:8080/<code>
+
+# 3. recovery
+docker start redis
+docker exec redis redis-cli ping                          # PONG
+$CURL http://localhost:8080/actuator/health/readiness   # UP
+```
+Drill result: 5,730 checks, **0% failed, 100% 302** across a 45s 150rps run with Redis stopped at
++20s; `http_req_duration` p95 744ms (`cache`/`rl` falls back to Mongo per ADR 0005), steady baseline
+p95 back at ~10ms after restart. Matches matrix line "Redis down — rate limiter … fail-open" +
+"cache L2 … answers from Mongo".
+
+**MongoDB down, hot cache (partially degraded)**
+
+```sh
+docker stop urlshortener-mongo
+for c in <warm-code>; do $CURL http://localhost:8080/$c; done   # 302: served from L1+L2 cache
+```
+Codes already resident in Caffeine L1 / Redis L2 keep answering **302**; only cache-miss/bloom-negative
+codes degrade (see next).
+
+**MongoDB down, cold cache (fail-closed, circuit-breaker)**
+
+```sh
+# app must be running and warm BEFORE the outage (schema migrator is fail-fast at boot)
+docker exec <redis> redis-cli FLUSHALL      # drop L2/bloom so reads really hit Mongo
+sleep 6                                     # L1 TTL (app.cache.l1-ttl)
+docker stop urlshortener-mongo
+# load the cold path: first ~5 calls wait the Mongo driver server-selection timeout (~30s),
+# then databaseCb opens and calls fast-fail 503;
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8080/<cold-code>   # 503 after CB open
+```
+Drill result: 60s run, 4,504 reqs, `http_req_failed` **100%**, `http_req_duration` p50 3.6ms /
+p95 6.9ms / p99 27s — the p99 tail is the CB sampling window, the p50 is the fast-fail OPEN state;
+`databaseCb` transitions confirmed in the app log. Matches matrix "MongoDB down … fast failures
+surface as 503".
+
+**Recovery**
+
+```sh
+docker start urlshortener-mongo
+# no restart needed: CB goes HALF_OPEN after 20s, probe calls pass, service self-heals
+sleep 25
+$CURL http://localhost:8080/<code>   # 302 again (verified)
+```
+
+**Restore mapping data (DR rollback of short_urls)**
+
+```sh
+# backup (host needs mongodump in PATH; the drill ran it via the mongo container:
+#   docker exec urlshortener-mongo-isolated mongodump --uri=mongodb://127.0.0.1:27017/url_shortener \
+#     --db=url_shortener --out=/tmp/epic7-backup --gzip && docker cp <container>:/tmp/epic7-backup .)
+bash scripts/backup-mongodb.sh            # -> /var/backups/url-shortener/<timestamp>/
+
+# simulate loss
+docker exec urls-mongo mongosh url_shortener --eval 'db.short_urls.drop()'   # 404 on cold reads
+# restore
+bash scripts/restore-mongodb.sh /var/backups/url-shortener/<timestamp>/      # 302 again
+```
+Drill result: drop → cold-read 404 → `mongorestore` → **302** restored; pre-backup codes intact,
+codes created after the dump stay absent (expected, RPO = last backup). `click_events` "restore
+failures" are non-issues: that collection was never dropped, so existing `_id`s are skipped.
+
+---
+
 ## 6. Routine operations & data durability
 
 | Task                        | Command                                                       |

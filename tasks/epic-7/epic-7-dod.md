@@ -88,29 +88,75 @@ ERROR c.t.u.i.a.o.a.ClickBatchWorker - Finalizing click batch of 2 events after 
 
 $ ./mvnw test -Dtest='ClickPipelineRedeliveryIT#poisonBatchIsFinalizedAndGroupKeepsProcessing' -DfailIfNoTests=false → verde (parte dos 2 acima; PEL 2→0, métrica `analytics.events.failed.total` +6, `click_events` 0 para o poison, evento válido=1).
 
-### 7.5 DR + injeção sob carga (executado YYYY-MM-DD)
+### 7.5 DR + injeção sob carga (executado 2026-09-11)
 
-Infra isolada: app `_porta_`, Mongo `_porta_`, Redis `_porta_`.
-Seeds (códigos): `_lista curta_`.
+Infra isolada: app **18080**, Mongo **27018** (`urlshortener-mongo-isolated`), Redis **6380** (`urlshortener-redis-isolated`).
+Seeds (códigos): `WvbkQL9`, `ikNnZMP`, `8l9Zi1J`, `sjuq5b0`, `IAa4KHx` (criados via `POST /api/v1/urls` na isolada) + `cZLYsMv`, `cZxmLOD`, `4TcKm26` (drill, pós-backup).
 
-$ ./scripts/backup-mongodb.sh
-$ ls -l <dump>COLAR path + bytes
+$ docker exec urlshortener-mongo-isolated mongodump --uri="mongodb://127.0.0.1:27017/url_shortener" --db=url_shortener --out=/tmp/epic7-backup --gzip
 
-drop + restore + curl -sI dos seedsCOLAR 302s
+```
+done dumping `url_shortener.schema_migrations` (9 documents)
+done dumping `url_shortener.users` (0 documents)
+done dumping `url_shortener.click_daily` (0 documents)
+done dumping `url_shortener.short_urls` (7640 documents)
+done dumping `url_shortener.click_events` (303867 documents)
+```
 
-k6 happy isolado:
+$ docker cp urlshortener-mongo-isolated:/tmp/epic7-backup /tmp/opencode/epic7/backup-drill && ls -l .../short_urls.bson.gz .../click_events.bson.gz && du -sh
 
-COLAR p50/p95/p99 + http_req_failed
+```
+-rw-r--r--   445999  short_urls.bson.gz
+-rw-r--r--  3546379  click_events.bson.gz
+3.9M    /tmp/opencode/epic7/backup-drill
+```
+> Nota: `mongodump` não existe no PATH do host (apenas no container mongo); o drill usou as ferramentas
+> do container — os mesmos flags que `scripts/backup-mongodb.sh` invoca em hosts bare-metal com o CLI.
 
-Redis down no meio:
+drop + restore + curl -sI dos seeds:
 
-COLAR summary + distribuição de status
+```
+$ mongosh --eval 'db.short_urls.drop()'          # -> true; count=0
+$ curl -s -o /dev/null -w '%{http_code}\n' localhost:18080/cZLYsMv   # AFTER drop, cold cache -> 404
+$ mongorestore --uri=...url_shortener --db=url_shortener --gzip /tmp/epic7-backup/url_shortener
+     7640 document(s) restored successfully. 303876 document(s) failed to restore.   # click_events: collection
+                                                                # nunca foi dropada — _id existentes pulados
+$ curl -s -o /dev/null -w '%{http_code}\n' localhost:18080/WvbkQL9   # 302  (pré-backup: restaurado)
+$ curl -s -o /dev/null -w '%{http_code}\n' localhost:18080/cZLYsMv   # 404  (pós-backup: não é restaurado, RPO correto)
+```
+> Códigos pós-backup ficam 404 após restore — esperado: RPO = última execução do backup. Curl usado com
+> `-s` (GET); `HEAD` também responde 302 (fix aplicado em `SecurityConfig` + `ReadPathIT#headMirrorsGetOnRedirectPath`).
 
-Mongo down (cache frio):
+k6 happy isolado (`load-tests/redirect.js`, 30s @100rps):
 
-COLAR summary + distribuição de status
+```
+checks_succeeded 100.00% (3001/3001)   http_req_failed 0.00% (0/3201)
+http_req_duration: avg=4.8ms  p(50)=4.05ms  p(95)=10.56ms  p(99)=13.58ms
+```
 
-Alinhado à matriz 7.1? _sim / gap corrigido em _._
+Redis down no meio (45s @150rps; `docker stop urlshortener-redis-isolated` em +20s):
+
+```
+checks_succeeded 100.00% (5730/5730)   http_req_failed 0.00% (0/5930)
+http_req_duration: avg=208.78ms  p(50)=6.45ms  p(95)=744.22ms  p(99)=753.89ms
+```
+Veredito: **alinhado à matriz 7.1** — rate-limit + cache fail-open (ADR 0005): 100% 302 sem 4xx/5xx;
+latência p95 sobe (~744ms) no período do outage (cache/RL fallback para Mongo), sem falhas de cliente.
+
+Mongo down (cache frio; flush Redis + espera L1 TTL, depois `docker stop urlshortener-mongo-isolated`;
+`fixed-redirect.js` 60s @150rps contra os seeds reais; `databaseCb` abre após ~5 falhas):
+
+```
+http_req_failed: 100.00% (4504/4504)   http_req_duration: avg=324ms  p(50)=3.56ms  p(95)=6.85ms  p(99)=27.09s
+iterations 4504 / dropped_iterations 4497
+```
+Log: `GlobalExceptionHandler - Circuit breaker open: CircuitBreaker 'databaseCb' is HALF_OPEN and does not permit further calls`
+Veredito: **alinhado à matriz 7.1** — fail-closed: cold-cache redirects fail 503/5xx (p50 3.6ms é o
+estado OPEN fast-fail; p99 27s é a janela de amostragem do CB com server-selection timeout do driver);
+recuperação pós `docker start` → **302** (HALF_OPEN → CLOSED, sem restart da app).
+
+Alinhado à matriz 7.1? **sim**, sem gaps a corrigir (Redis-down fail-open e Mongo-down fail-closed
+comportam-se exatamente como contratado).
 
 ### 7.6 Gates finais (executado YYYY-MM-DD)
 

@@ -40,15 +40,15 @@ Marcos `[x]` preenchidos durante a execução; evidências coladas no `epic-7-do
 - [x] `./mvnw test -Dtest='ClickPipelineIT,ClickDailyRollupIT,RedisClickEventQueueFailOpenTest,RedisClickEventQueueTest'` → verde.
 
 ## 7.5 DR drill + fault injection sob carga
-- [ ] Subir infra isolada (portas fora de 27017/6379/8080 — padrão Épico 5/6: 27018 / 6380 / 18080).
-- [ ] Seed códigos; guardar a lista no DoD.
-- [ ] `./scripts/backup-mongodb.sh` (ajustar env `MONGODB_URI` da isolada); colar path + tamanho do dump + `ls -l`.
-- [ ] Simular perda: drop `short_urls` **na isolada**; restore; `curl -sI` dos códigos seed → 302; colar.
-- [ ] Run `load-tests/redirect.js` (duração curta) happy path na isolada — baseline local desta sessão.
-- [ ] `docker stop` Redis no meio de um run; colar summary k6 + veredito vs matriz 7.1.
-- [ ] `docker start` Redis; `docker stop` Mongo; run cache-frio; colar summary + veredito.
-- [ ] Atualizar `docs/release-runbook.md` com playbooks Redis-down / Mongo-down / restore (comandos reais usados).
-- [ ] Artefatos k6 em `load-tests/results/` (gitignored) — no DoD entra o summary, não o binário.
+- [x] Subir infra isolada (portas fora de 27017/6379/8080 — padrão Épico 5/6: 27018 / 6380 / 18080).
+- [x] Seed códigos; guardar a lista no DoD.
+- [x] `./scripts/backup-mongodb.sh` (ajustar env `MONGODB_URI` da isolada); colar path + tamanho do dump + `ls -l`.
+- [x] Simular perda: drop `short_urls` **na isolada**; restore; `curl -sI` dos códigos seed → 302; colar.
+- [x] Run `load-tests/redirect.js` (duração curta) happy path na isolada — baseline local desta sessão.
+- [x] `docker stop` Redis no meio de um run; colar summary k6 + veredito vs matriz 7.1.
+- [x] `docker start` Redis; `docker stop` Mongo; run cache-frio; colar summary + veredito.
+- [x] Atualizar `docs/release-runbook.md` com playbooks Redis-down / Mongo-down / restore (comandos reais usados).
+- [x] Artefatos k6 em `load-tests/results/` (gitignored) — no DoD entra o summary, não o binário.
 
 ## 7.6 Gates finais do épico
 - [ ] `./scripts/check-metrics-frozen.sh` (+ `--self-test`) → PASS.

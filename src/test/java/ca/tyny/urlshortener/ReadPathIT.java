@@ -74,6 +74,31 @@ class ReadPathIT extends BaseIntegrationTest {
   }
 
   @Test
+  @DisplayName("HEAD mirrors GET on the redirect path")
+  void headMirrorsGetOnRedirectPath() {
+    String originalUrl = "https://example.com/read-path-head-test";
+    var request =
+        new ca.tyny.urlshortener.infra.adapter.input.rest.dto.ShortenRequest(originalUrl, null);
+    String shortId =
+        given()
+            .contentType("application/json")
+            .body(request)
+            .post("/api/v1/urls")
+            .then()
+            .statusCode(200)
+            .extract()
+            .path("id");
+
+    given()
+        .redirects()
+        .follow(false)
+        .head("/" + shortId)
+        .then()
+        .statusCode(302)
+        .header("Location", originalUrl);
+  }
+
+  @Test
   @DisplayName("Bloom-negative code triggers findById per Policy B")
   void bloomNegativeTriggersFindByIdPerPolicyB() {
     // Given: a code that definitely does not exist (Bloom filter will say negative)
