@@ -1,5 +1,11 @@
 # Systemd TEMPLATE unit for running N instances of the URL Shortener (ADR 0001).
 #
+# NOTE (Epic 8, ADR 0007): the DEPLOY PLANE is blue-green with concrete units
+# (deploy/url-shortener-blue.service :8080, deploy/url-shortener-green.service :8081),
+# each with its own jar — deploy.sh/rollback.sh operate on those. This template remains
+# for SCALE-OUT beyond the deploy plane (>= 3 instances, runbook §12): add the new
+# instance to the nginx upstream (deploy/proxy/nginx.conf) manually.
+#
 # Instantiate per instance:  sudo systemctl enable --now url-shortener@1 url-shortener@2
 # Each instance binds its own SERVER_PORT (8080, 8081, ...) and is listed in the
 # nginx upstream (deploy/proxy/nginx.conf) with its own weight, enabling

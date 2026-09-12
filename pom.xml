@@ -10,16 +10,20 @@
     </parent>
     <groupId>ca.tyny</groupId>
     <artifactId>url-shortener-service</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <!-- CI-friendly versioning (Epic 8 story 8.2): local default is the SNAPSHOT; the release
+         build passes -Drevision=<semver> so the jar is target/url-shortener-service-<semver>.jar.
+         flatten-maven-plugin (resolveCiFriendliesOnly) resolves ${revision} in the deployed POM. -->
+    <version>${revision}</version>
     <name>url-shortener-service</name>
     <description>High performance URL Shortener with Tomcat and GraalVM</description>
 
     <properties>
+        <revision>0.0.1-SNAPSHOT</revision>
         <java.version>25</java.version>
         <!-- CVE bump over Boot 4.1.1's managed 11.0.24 (dargent does the same) -->
         <tomcat.version>11.0.25</tomcat.version>
         <!-- kept in alignment with the Boot 4.1.1 BOM (1.18.46, JDK 25-ready) -->
-        <lombok.version>1.18.46</lombok.version>
+        <lombok.version>1.18.48</lombok.version>
         <spotbugs.version>4.10.4.1</spotbugs.version>
         <jacoco.version>0.8.15</jacoco.version>
         <!-- 12.2.2, not 13.x: dependency-check 13 keyless mode is broken upstream
@@ -229,6 +233,32 @@
     <build>
         <plugins>
             <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>flatten-maven-plugin</artifactId>
+                <version>1.7.2</version>
+                <configuration>
+                    <!-- resolve only ${revision}-style CI-friendly properties; leave everything
+                         else as-is (smallest possible diff in the .flattened-pom.xml) -->
+                    <flattenMode>resolveCiFriendliesOnly</flattenMode>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>flatten</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>flatten</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>flatten.clean</id>
+                        <phase>clean</phase>
+                        <goals>
+                            <goal>clean</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
@@ -241,6 +271,14 @@
                     </annotationProcessorPaths>
                     <compilerArgs>
                         <arg>-parameters</arg>
+                        <arg>-Xlint:unchecked</arg>
+                    </compilerArgs>
+                    <fork>true</fork>
+                    <compilerArgs>
+                        <arg>--add-opens=java.base/java.lang=ALL-UNNAMED</arg>
+                        <arg>--add-opens=java.base/java.util=ALL-UNNAMED</arg>
+                        <arg>--add-opens=java.base/java.text=ALL-UNNAMED</arg>
+                        <arg>--add-opens=java.desktop/java.awt=ALL-UNNAMED</arg>
                     </compilerArgs>
                 </configuration>
             </plugin>
