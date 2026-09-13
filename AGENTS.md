@@ -215,9 +215,10 @@ src/main/java/com/example/urlshortener/
 Untraced test classes inside gated component packages. Fields: `class — reason (owner, deadline)`.
 Items expire at the next epic; do not add new ones without a reason that survives review.
 
-- `ca.tyny.urlshortener.infra.adapter.output.redis.RedisUrlCacheTest` — covers the cache adapter
-  (`UrlCachePort`), not the RateLimiting component; becomes traceable when UrlShortener/Cache gets
-  its own living spec (owner: daniel-castilho, deadline: next epic).
+- _(empty — retired with the Cache component story 9.1: `RedisUrlCacheTest` now traces
+  REQ-CACHE-001)_
+
+Entries must be removed from this list before their deadline (next epic) or they block the gate.
 
 ---
 
