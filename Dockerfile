@@ -23,6 +23,10 @@ FROM --platform=$TARGETPLATFORM eclipse-temurin:25-jre-alpine
 ARG VERSION=local
 WORKDIR /app
 
+# Patch base-OS packages to latest distribution (closes base-image CVEs:
+# openssl/libexpat HIGH/CRITICAL findings reported by Trivy at release time)
+RUN apk upgrade --no-cache
+
 # Release identity (Epic 8 story 8.2): consumed by the release job (Trivy/SBOM read it too)
 LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.title="URL Shortener Service"
