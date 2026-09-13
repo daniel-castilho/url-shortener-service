@@ -9,12 +9,16 @@ and `deploy/monitoring/alerts.yml` and the SLO Grafana dashboard.
 | SLI | SLO target | Window | Error budget | Burn-rate alerts |
 |-----|-----------|--------|--------------|------------------|
 | Availability (non-5xx requests) | ≥ 99.9% | 30d rolling | 0.1% of requests | Fast 14.4x (critical) / Slow 6x (warning) |
-| Latency (p99) | < 200ms | 30d rolling | 0.1% of requests over budget? — see below | Threshold alerts from p99 panel |
+| Latency (p99) | < 200ms | 30d rolling | 0.1% of requests over budget? — see below | `RedirectLatencyP99AboveSLO` (warning, threshold) |
 | Error rate (5xx) | < 0.1% | 30d rolling | equivalent to availability | covered by availability burn alerts |
+| Rate-limit rejections (abuse signal) | < 5% of traffic | 5m | — | `RateLimitExcessiveTrafficRejected` (warning) |
 
 > **Latency note:** the p99 < 200 ms target is enforced by the k6 load harness
 > (thresholds `p95 < 200ms`, error rate `< 0.1%`) and tracked on the latency
-> dashboard. The availability burn-rate alerts are the primary 24/7 guard.
+> dashboard — that is the **release-time enforcement**. The 24/7 guard is
+> `RedirectLatencyP99AboveSLO` (`redirect_latency_seconds{quantile="0.99"} > 0.2`
+> with a 5m-traffic guard, so idle windows never alert). The availability
+> burn-rate alerts remain the primary 24/7 availability guard.
 
 ## Frozen metrics contract
 
@@ -93,7 +97,8 @@ no sustained burn. See `deploy/monitoring/alerts.yml`.
 Each rule carries `runbook` / `runbook_<phase>` annotations resolving to this document
 (§Response runbook below). The rules are validated on every push (`promtool check rules`
 + `promtool test rules deploy/monitoring/rules_tests.yml` covering fast- and slow-burn
-firing and healthy-traffic silence, plus `amtool check-config` for
+firing and healthy-traffic silence, plus the latency p99 and rate-limit-share alerts
+firing/silent, plus `amtool check-config` for
 `deploy/monitoring/alertmanager.yml`), so a broken expression or config never reaches
 production (Epic 3 stories 3.4/3.6). Prometheus routes to Alertmanager per
 `deploy/monitoring/prometheus.yml`; replace the placeholder webhook receiver before
@@ -106,6 +111,8 @@ going live.
 | Fast burn | `SLOAvailabilityFastBurn` (critical) | Check p50/p95/p99 + error rate panels; inspect `logs/application.log` for errors; health-check MongoDB/Redis; rollback recent deploy if latency introduced it. |
 | Slow burn | `SLOAvailabilitySlowBurn` (warning) | Scheduled investigation; correlate with deploy timeline (CHANGELOG) and k6 baseline (`docs/load-test-baseline.md`). |
 | Budget exhausted | `SLOErrorBudgetExhausted` | Emergency — treat as incident; freeze deploys; add capacity or fix defect. |
+| Latency p99 | `RedirectLatencyP99AboveSLO` (warning) | Latency dashboard (`redirect_latency_seconds` + `url_retrieval_duration_seconds` p99 panels); cache hit ratio (`cache_hits_total / cache_misses_total`); correlate with CHANGELOG deploys + k6 baseline; consider rollback. |
+| Rate-limit rejections | `RateLimitExcessiveTrafficRejected` (warning) | Inspect top clients by IP; verify `RATE_LIMITER_*` config; check `bloomfilter_rejections_total` for cache-penetration probing; treat as possible enumeration attack. |
 
 ## Review schedule
 

@@ -7,6 +7,19 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ## [Unreleased]
 
+### Added
+
+- **Alert rules for the frozen meters** — `RedirectLatencyP99AboveSLO` (warning, `redirect_latency_seconds{quantile="0.99"} > 0.2` with a 5m traffic guard, so idle windows never alert) and `RateLimitExcessiveTrafficRejected` (warning, share of all traffic rejected by the rate limiter > 5% — the enumeration/abuse signal), both in `deploy/monitoring/alerts.yml` with on-call runbook annotations, plus four `promtool` rule tests in `deploy/monitoring/rules_tests.yml` (fire/no-fire pairs). `docs/slos.md` now names the real rules instead of "threshold alerts from p99 panel".
+
+### Fixed
+
+- **Redis connection leak in `UrlShortenerHealthIndicator`** — `checkRedis()` borrowed a
+  connection via `getConnectionFactory().getConnection()` and never closed it: one leaked
+  `RedisConnection` per `/actuator/health` probe, exhausting the pool under continuous
+  probing. Now acquired in try-with-resources; behavior unchanged. Also adds the missing
+  test coverage (`UrlShortenerHealthIndicatorTest`, 5 cases incl. the no-leak regression,
+  and `HealthIndicatorDetailsIT` proving the indicator is wired into the actuator).
+
 ## [0.14.0] - 2026-09-13
 
 ### Added

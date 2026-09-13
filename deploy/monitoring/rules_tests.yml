@@ -51,3 +51,58 @@ tests:
       - expr: 'ALERTS{alertname="SLOAvailabilityFastBurn"}'
         eval_time: 110m
         exp_samples: []
+
+  - name: Redirect p99 latency alert fires above SLO with traffic flowing
+    input_series:
+      # p99 latency stuck at 250ms (above the 200ms SLO), redirects flowing.
+      - series: 'redirect_latency_seconds{operation="redirect",quantile="0.99"}'
+        values: '0.25x30'
+      - series: 'redirects_total{service="url-shortener"}'
+        values: '0+10x30'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="RedirectLatencyP99AboveSLO"}'
+        eval_time: 10m
+        exp_samples:
+          - labels: 'ALERTS{alertname="RedirectLatencyP99AboveSLO",alertstate="firing",operation="redirect",quantile="0.99",severity="warning",slo="latency"}'
+            value: 1
+
+  - name: Redirect p99 latency alert silent below SLO with the same traffic
+    input_series:
+      - series: 'redirect_latency_seconds{operation="redirect",quantile="0.99"}'
+        values: '0.1x30'
+      - series: 'redirects_total{service="url-shortener"}'
+        values: '0+10x30'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="RedirectLatencyP99AboveSLO"}'
+        eval_time: 10m
+        exp_samples: []
+
+  - name: Rate-limit share alert fires when >5% of traffic is rejected
+    input_series:
+      # exceeded 10/min vs redirects 50/min + shortened 5/min = ~15% rejected.
+      - series: 'rate_limit_exceeded_total{service="url-shortener"}'
+        values: '0+10x30'
+      - series: 'redirects_total{service="url-shortener"}'
+        values: '0+50x30'
+      - series: 'urls_shortened_total{service="url-shortener"}'
+        values: '0+5x30'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="RateLimitExcessiveTrafficRejected"}'
+        eval_time: 10m
+        exp_samples:
+          - labels: 'ALERTS{alertname="RateLimitExcessiveTrafficRejected",alertstate="firing",severity="warning",slo="rate-limit"}'
+            value: 1
+
+  - name: Rate-limit share alert silent when ~1% of traffic is rejected
+    input_series:
+      # exceeded 1/min vs the same healthy traffic (~1% rejected).
+      - series: 'rate_limit_exceeded_total{service="url-shortener"}'
+        values: '0+1x30'
+      - series: 'redirects_total{service="url-shortener"}'
+        values: '0+50x30'
+      - series: 'urls_shortened_total{service="url-shortener"}'
+        values: '0+5x30'
+    promql_expr_test:
+      - expr: 'ALERTS{alertname="RateLimitExcessiveTrafficRejected"}'
+        eval_time: 10m
+        exp_samples: []
