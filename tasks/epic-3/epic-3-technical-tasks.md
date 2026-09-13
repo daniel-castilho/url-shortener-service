@@ -1,76 +1,76 @@
-# Epic 3 – Tasks Técnicas
+# Epic 3 – Technical Tasks
 
-> Prefixo real: `service=url-shortener` (tag Micrometer). Séries de negócio atuais (baseline, `MicrometerMetricsAdapter`):
+> Real prefix: `service=url-shortener` (Micrometer tag). Current business series (baseline, `MicrometerMetricsAdapter`):
 > counters: `urls.shortened.total`, `cache.hits.total`, `cache.misses.total`, `bloomfilter.rejections.total`, `urls.expired.total`, `schema.migrations.applied.total`, `schema.migrations.failed.total`, `security.ssrf.blocked.total` — timers (p50/p95/p99): `id.generation.duration`, `url.retrieval.duration`.
-> **NÃO** existem `dargent_*`/`MetricsConfig.java`/"12 séries" — template drift de outro projeto (dargent) foi corrigido.
+> `dargent_*`/`MetricsConfig.java`/"12 series" **do not exist** — template drift from another project (dargent) was corrected.
 
-## 3.1 Implementar correlation-Id em todo o pipeline
-- [ ] Criar `RequestCorrelationFilter` (`OncePerRequestFilter`, registro no `SecurityConfig`/`WebMvcConfig`):
-    - Inbound `X-Request-Id` validado (ASCII ≤ 64 chars, sem CR/LF/controle); malformed → UUID gerado.
-    - Ausente → gera UUID; **ecoa no header de resposta** (`X-Request-Id`).
-    - `MDC.put("request_id", ...)` para cada request; cleanup no `finally`.
-    - Propagação para workpath async (analytics/click events) — documentar limitação se outbox/consumers não existirem.
-- [ ] Verificar que todo log de request tem `request_id` no MDC (appenders não sobrescrevem).
-- [ ] Criar `CorrelationIdIT` (fim-a-fim RestAssured): assere header ecoado + `request_id` presente em logs capturados.
-- [ ] Colar output do teste e do grep de validação no handoff-DOD.
+## 3.1 Implement correlation-Id across the whole pipeline
+- [ ] Create `RequestCorrelationFilter` (`OncePerRequestFilter`, registered in `SecurityConfig`/`WebMvcConfig`):
+    - Inbound `X-Request-Id` validated (ASCII ≤ 64 chars, no CR/LF/control chars); malformed → UUID generated.
+    - Missing → generate UUID; **echo it in the response header** (`X-Request-Id`).
+    - `MDC.put("request_id", ...)` for each request; cleanup in the `finally`.
+    - Propagation to the async workpath (analytics/click events) — document the limitation if outbox/consumers do not exist.
+- [ ] Verify that every request log has `request_id` in the MDC (appenders do not overwrite it).
+- [ ] Create `CorrelationIdIT` (RestAssured end-to-end): asserts echoed header + `request_id` present in captured logs.
+- [ ] Paste the test and validation-grep output into the handoff-DoD.
 
-## 3.2 Congelar métricas Prometheus (gate)
-- [ ] Criar `scripts/check-metrics-frozen.sh` (ou `metrics-frozen-check`) que:
-    - Sobe via Micrometer a lista esperada (estática: as 10 de negócio + padrões JVM/web/Jakarta que existirem no playback).
-    - Compara `/{actuator}/prometheus` renderizado com a lista frozen → falha se série nova surgir sem atualização da lista (mudança exige revisão de design + bump da lista).
-- [ ] Wire no `verify` (execução) OU no CI (job `observability`).
+## 3.2 Freeze Prometheus metrics (gate)
+- [ ] Create `scripts/check-metrics-frozen.sh` (or `metrics-frozen-check`) that:
+    - Brings up the expected list via Micrometer (static: the 10 business series + the JVM/web/Jakarta patterns that exist in the playback).
+    - Compares the rendered `/{actuator}/prometheus` against the frozen list → fails if a new series appears without updating the list (a change requires design review + list bump).
+- [ ] Wire into `verify` (execution) OR into CI (job `observability`).
 - [ ] `./mvnw verify` → `metrics-frozen-check` PASS.
-- [ ] Colar output do script e da lista frozen no handoff-DOD.
+- [ ] Paste the script output and the frozen list into the handoff-DoD.
 
-## 3.3 Health checks tiered — teste de lockdown prod
-- [ ] Baseline: verificar `app.security.actuator` + `management.health.show-details`/`spring security` (dívida 9) cobrem liveness/readiness públicos e detail quando autorizado.
-- [ ] Criar `ProductionLockdownIT` (perfil `prod` + actuator): assere
+## 3.3 Tiered health checks — prod lockdown test
+- [ ] Baseline: verify `app.security.actuator` + `management.health.show-details`/`spring security` (debt 9) cover public liveness/readiness and detail when authorized.
+- [ ] Create `ProductionLockdownIT` (`prod` profile + actuator): asserts
     - `/actuator/health/liveness` → 200
-    - `/actuator/health/readiness` → 200 com Mongo/Redis up
-    - `/actuator/health` em prod → sem `details` sensíveis (show-details não vaza)
-    - endpoints não públicos → 401/403 conforme perfil
-- [ ] `./mvnw test -Dtest='ProductionLockdownIT'` → verde.
-- [ ] Colar output no handoff-DOD.
+    - `/actuator/health/readiness` → 200 with Mongo/Redis up
+    - `/actuator/health` in prod → no sensitive `details` (show-details does not leak)
+    - non-public endpoints → 401/403 per profile
+- [ ] `./mvnw test -Dtest='ProductionLockdownIT'` → green.
+- [ ] Paste output into the handoff-DoD.
 
-## 3.4 Regras de alerta Prometheus — validadas no CI
-- [ ] `deploy/monitoring/alerts.yml`: garantir anotação `runbook-§X` (X = seção do `docs/slos.md`) em todas as regras (baseline: 3 regras de burn-rate).
-- [ ] CI: job/step que baixa `promtool` + `amtool` (binários versão pinned ou containers prom/alertmanager) e roda `promtool test rules` + `amtool check-config` (promtool/amtool **não** instalados localmente/CI hoje).
-- [ ] Subir testes de regras (`promtool test rules`) unit/utest3 friendly na árvore `deploy/monitoring/test/`.
-- [ ] Verde em `./^promtool test rules` e `amtool check-config` local + CI.
-- [ ] Colar outputs no handoff-DOD.
+## 3.4 Prometheus alert rules — validated in CI
+- [ ] `deploy/monitoring/alerts.yml`: ensure the `runbook-§X` annotation (X = `docs/slos.md` section) on every rule (baseline: 3 burn-rate rules).
+- [ ] CI: job/step that downloads `promtool` + `amtool` (pinned-version binaries or prom/alertmanager containers) and runs `promtool test rules` + `amtool check-config` (promtool/amtool **not** installed locally/in CI today).
+- [ ] Add rule tests (`promtool test rules`), unit/utest3 friendly, under the `deploy/monitoring/test/` tree.
+- [ ] Green on `./^promtool test rules` and `amtool check-config` local + CI.
+- [ ] Paste outputs into the handoff-DoD.
 
-## 3.5 Implementar painel de diagnóstico rápido
-- [ ] Consolidar tabela sintoma → check → ação (≥5 linhas) em `docs/observability.md` (nova seção §Diagnóstico Rápido).
-- [ ] Criar `scripts/debug-health.sh`:
-    - `curl /actuator/prometheus | grep <série>` para cada série crítica das 10 de negócio.
-    - Imprime estado + ação recomendada por SLO (`docs/slos.md`).
-- [ ] `bash scripts/debug-health.sh` → saída legível, sem erros.
-- [ ] Colar output no handoff-DOD.
+## 3.5 Implement a quick diagnostic panel
+- [ ] Consolidate the symptom → check → action table (≥5 rows) in `docs/observability.md` (new section §Quick Diagnostics).
+- [ ] Create `scripts/debug-health.sh`:
+    - `curl /actuator/prometheus | grep <series>` for each critical one of the 10 business series.
+    - Prints state + recommended action per SLO (`docs/slos.md`).
+- [ ] `bash scripts/debug-health.sh` → readable output, no errors.
+- [ ] Paste output into the handoff-DoD.
 
-## 3.6 Integrar no CI (GitHub Actions)
-- [ ] Job `observability` no `.github/workflows/ci.yml`:
+## 3.6 Integrate into CI (GitHub Actions)
+- [ ] `observability` job in `.github/workflows/ci.yml`:
     - `scripts/check-metrics-frozen.sh`
-    - `promtool test rules` + `amtool check-config` (binários pinned)
-    - (opcional) `bash scripts/debug-health.sh` contra imagem da aplicação
-- [ ] Falha em qualquer job → PR não mergeável (necessário branch protection existente).
-- [ ] Colar trecho do workflow no handoff-DOD.
+    - `promtool test rules` + `amtool check-config` (pinned binaries)
+    - (optional) `bash scripts/debug-health.sh` against the application image
+- [ ] Failure in any job → PR not mergeable (requires existing branch protection).
+- [ ] Paste the workflow snippet into the handoff-DoD.
 
-## 3.7 Observabilidade retro-compatível com EP2
-- [ ] `security.ssrf.blocked.total` na lista frozen + verificada em `SsrfProtectionIT` (já incrementada).
-- [ ] Sem colisão de nomes com as demais séries (listagem única).
-- [ ] `./mvnw verify` conjunto (EP1+EP2+EP3) → verde (unit 280 + IT 128 baseline, 2026-09-10).
+## 3.7 Observability backward-compatible with EP2
+- [ ] `security.ssrf.blocked.total` in the frozen list + verified in `SsrfProtectionIT` (already incremented).
+- [ ] No name collisions with the other series (single listing).
+- [ ] `./mvnw verify` combined (EP1+EP2+EP3) → green (unit 280 + IT 128 baseline, 2026-09-10).
 
 ---
 
-**Checklist de conclusão do Épico 3:**
+**Epic 3 completion checklist:**
 
-- [ ] `request_id` em 100% dos logs (MDC) + `CorrelationIdIT` verde
-- [ ] 10 séries de negócio "frozen"; `metrics-frozen-check` PASS
-- [ ] `ProductionLockdownIT` → health tiered em prod verde
-- [ ] 3+ regras com `runbook-§X`; `promtool test rules` + `amtool check-config` verdes
-- [ ] Painel de diagnóstico rápido (`debug-health.sh`) verde
-- [ ] Job CI `observability` verde
-- [ ] Integração retro-compatível com métricas EP2 verde
-- [ ] `./mvnw verify` completo verde (unit + IT + gates)
+- [ ] `request_id` in 100% of logs (MDC) + `CorrelationIdIT` green
+- [ ] 10 business series "frozen"; `metrics-frozen-check` PASS
+- [ ] `ProductionLockdownIT` → tiered health in prod green
+- [ ] 3+ rules with `runbook-§X`; `promtool test rules` + `amtool check-config` green
+- [ ] Quick diagnostic panel (`debug-health.sh`) green
+- [ ] CI job `observability` green
+- [ ] Backward-compatible integration with EP2 metrics green
+- [ ] `./mvnw verify` fully green (unit + IT + gates)
 
-*Ao marcar todos, o Épico 3 está concluído e o próximo épico (EP4 – Testes) pode iniciar.*
+*Once all are checked, Epic 3 is complete and the next epic (EP4 – Testing) can start.*

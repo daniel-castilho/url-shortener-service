@@ -1,40 +1,40 @@
-# Epic 3: Observable – Visibilidade Total
+# Epic 3: Observable – Total Visibility
 
-**Projeto:** url-shortener-service
-**Contexto (real, 2026-09):** Java 25, Spring Boot 4.1.1, Tomcat 11 (virtual threads), Arquitetura Hexagonal, MongoDB + Redis (Testcontainers), observabilidade base já existente (`docs/observability.md`, `docs/slos.md`, `deploy/monitoring/{prometheus,recording-rules,alerts}.yml`, `deploy/otel/`).
-**Objetivo:** fechar os gaps reais de observabilidade deste repositório: correlation-id em 100% dos logs, gate de métricas "frozen", testes de lockdown de actuator em prod, regras de alerta validadas por `promtool`/`amtool` no CI, e um painel de diagnóstico rápido operacional.
+**Project:** url-shortener-service
+**Context (real, 2026-09):** Java 25, Spring Boot 4.1.1, Tomcat 11 (virtual threads), Hexagonal Architecture, MongoDB + Redis (Testcontainers), observability baseline already present (`docs/observability.md`, `docs/slos.md`, `deploy/monitoring/{prometheus,recording-rules,alerts}.yml`, `deploy/otel/`).
+**Objective:** close the real observability gaps of this repository: correlation-id in 100% of logs, a "frozen" metrics gate, actuator lockdown tests in prod, alert rules validated by `promtool`/`amtool` in CI, and an operational quick-diagnosis panel.
 
 ---
 
-## Por que este épico agora?
+## Why this epic now?
 
-- **EP1 (Maintainable)** consolidou nomes/pacotes e o `check-doc-sync`; EP3 depende dessa base para correlação consistente de logs.
-- **EP2 (Secure)** entregou `logSafe`, headers e `security.ssrf.blocked.total`; EP3 dá visibilidade operacional a essas evidências.
-- Blocos de construção **já existem** (baseline): health checks tiered + actuator tiered (dívida 9), `MetricsPort` com 10 séries, SLOs + burn-rate em `docs/slos.md`, 3 regras de alerta em `deploy/monitoring/alerts.yml`, tracing OTel (dívida 12).
-- Os **gaps reais** a fechar são listados em `epic-3-technical-tasks.md` §3.1–3.7 (novo) vs. baseline (já existe).
+- **EP1 (Maintainable)** consolidated names/packages and the `check-doc-sync`; EP3 depends on that foundation for consistent log correlation.
+- **EP2 (Secure)** delivered `logSafe`, headers and `security.ssrf.blocked.total`; EP3 gives operational visibility to this evidence.
+- Building blocks **already exist** (baseline): tiered health checks + tiered actuator (debt 9), `MetricsPort` with 10 series, SLOs + burn-rate in `docs/slos.md`, 3 alert rules in `deploy/monitoring/alerts.yml`, OTel tracing (debt 12).
+- The **real gaps** to close are listed in `epic-3-technical-tasks.md` §3.1–3.7 (new) vs. baseline (already exists).
 
-**Critério de Aceitação Elevado:**
+**Elevated Acceptance Criteria:**
 
-1. `request_id` no MDC em **100%** dos logs de request (verificado por `CorrelationIdIT` + script de validação).
-2. **Métricas frozen**: todas as séries registradas em `MicrometerMetricsAdapter` têm correspondência no playback de `/actuator/prometheus`; novo contador/timer exige revisão de design (gate em CI).
-3. `ProductionLockdownIT` valida actuator em prod (`health/liveness`, `health/readiness`, `show-details` não-vazado) — lockdown já implementado (dívida 9); falta o teste/fim-a-fim.
-4. Regras de alerta em `deploy/monitoring/alerts.yml` com anotação `runbook-§X` apontando para `docs/slos.md`; `promtool test rules` + `amtool check-config` verdes em cada push.
-5. Painel de diagnóstico rápido: tabela sintoma → check → ação em `docs/observability.md` + `scripts/debug-health.sh` operacional.
-6. CI: job `observability` rodando os gates acima; falha = PR bloqueado.
-7. **Zero "claims from memory"**: todo número, sha ou contagem nas evidências é colado de output de comando real.
+1. `request_id` in the MDC in **100%** of request logs (verified by `CorrelationIdIT` + validation script).
+2. **Frozen metrics**: every series registered in `MicrometerMetricsAdapter` has a match in the `/actuator/prometheus` playback; a new counter/timer requires design review (gate in CI).
+3. `ProductionLockdownIT` validates actuator in prod (`health/liveness`, `health/readiness`, `show-details` non-leak) — lockdown already implemented (debt 9); the end-to-end test is missing.
+4. Alert rules in `deploy/monitoring/alerts.yml` with the `runbook-§X` annotation pointing to `docs/slos.md`; `promtool test rules` + `amtool check-config` green on every push.
+5. Quick diagnostic panel: symptom → check → action table in `docs/observability.md` + working `scripts/debug-health.sh`.
+6. CI: `observability` job running the gates above; failure = PR blocked.
+7. **Zero "claims from memory"**: every number, sha or count in the evidence is pasted from a real command output.
 
-**Relação com outros épicos:**
+**Relationship with other epics:**
 
-| Épico | Dependência |
+| Epic | Dependency |
 |-------|-------------|
-| EP1 – Maintainable | Convenções de logging, pacotes, `logSafe` |
-| EP2 – Secure | `security.ssrf.blocked.total`, headers, actuator tiered |
-| EP4 – Testes | Histórias de teste derivadas dos stories abaixo |
-| EP5 – Performance | SLOs de latência p95 mensurados por métricas/tracing |
-| EP6 – Escalável | Tuning de pools/rate-limit baseado em métricas |
-| EP7 – Reliable | Circuit-breaker/bulkhead states expostos (se adicionados) |
-| EP8 – Deployable | Health checks/métricas estáveis para blue-green/canary |
+| EP1 – Maintainable | Logging conventions, packages, `logSafe` |
+| EP2 – Secure | `security.ssrf.blocked.total`, headers, tiered actuator |
+| EP4 – Testing | Test stories derived from the stories below |
+| EP5 – Performance | p95 latency SLOs measured via metrics/tracing |
+| EP6 – Scalable | Pool/rate-limit tuning based on metrics |
+| EP7 – Reliable | Circuit-breaker/bulkhead states exposed (if added) |
+| EP8 – Deployable | Stable health checks/metrics for blue-green/canary |
 
 ---
 
-*Próximo passo: stories detalhadas (3.1–3.7) — já preenchidas em `epic-3-stories.md` com baseline vs. gap.*
+*Next step: detailed stories (3.1–3.7) — already filled in `epic-3-stories.md` with baseline vs. gap.*

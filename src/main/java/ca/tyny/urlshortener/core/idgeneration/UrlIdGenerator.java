@@ -1,8 +1,8 @@
 package ca.tyny.urlshortener.core.idgeneration;
 
 /**
- * Interface pública do módulo de geração de IDs de URL. O Core Service depende apenas desta
- * interface, desconhecendo as estratégias internas.
+ * Public interface of the URL ID generation module. The core service depends only on this
+ * interface, without knowledge of the internal strategies.
  */
 public interface UrlIdGenerator {
   String generateId(String customAlias, String userId);

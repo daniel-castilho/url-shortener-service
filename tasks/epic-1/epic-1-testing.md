@@ -1,43 +1,43 @@
-# Epic 1 – Estratégia de Testes
+# Epic 1 – Testing Strategy
 
-Este épico foca na fundação; portanto os testes aqui são de **conferência de estrutura** e **validação de convenções**, não de lógica de negócio (essa responsabilidade vem nos épicos seguintes).
+This epic focuses on the foundation; therefore the tests here are about **structure checking** and **convention validation**, not business logic (that responsibility comes in the following epics).
 
-## 1.1 Unit‑testes de fronteira (boundary checks)
-- **Objetivo:** Confirmar que o `check-boundaries.sh` relta 0 violações.
-- **Ação:** 
-  - `./mvnw test` (apenas unitários do `core/`), sem Docker.
-  - Verificar saída do script e capturar o código de retorno.
-- **Critério de aceite:** Script retorna 0 e imprime “PASS”.
+## 1.1 Boundary unit tests (boundary checks)
+- **Objective:** Confirm that `check-boundaries.sh` reports 0 violations.
+- **Action:** 
+  - `./mvnw test` (only unit tests of `core/`), without Docker.
+  - Verify the script output and capture the return code.
+- **Acceptance criteria:** Script returns 0 and prints "PASS".
 
-## 1.2 Testes de integração de pacotes (`*Test`)
-- **Objetivo:** Garantir que a reorganização de pacotes não quebra a compilação nem os testes unitários.
-- **Ação:** 
-  - `./mvnw test -Dtest='*Test'` (classe que termina em `Test`, não `IT`).
-  - Verificar cobertura JaCoCo por módulo (`core` ≥ 70 % linha, se o floor for subido após medição — gate atual: LINE ≥ 60% global).
-- **Critério aceite:** Cobertura não inferior ao definido; `./mvnw verify` verde.
+## 1.2 Package integration tests (`*Test`)
+- **Objective:** Ensure that the package reorganization does not break compilation or the unit tests.
+- **Action:** 
+  - `./mvnw test -Dtest='*Test'` (class ending in `Test`, not `IT`).
+  - Verify JaCoCo coverage per module (`core` ≥ 70 % line, if the floor is raised after measurement — current gate: LINE ≥ 60% global).
+- **Acceptance criteria:** Coverage not below the defined value; `./mvnw verify` green.
 
-## 1.3 Auto‑auditoria da matriz de dívida
-- **Objetivo:** Validar que `AGENTS.md` ↔ `lessons.md` ↔ `coding-standards.md` estão alinhados.
-- **Ação:** 
-  - Script simples (bash/python) que extrai rótulos `status:` de cada arquivo e compara.
-  - Caso haja divergência, o script falha e imprime diferenças.
-- **Critério aceite:** Saída “Sincronizado” ou lista de divergências a corrigir antes de fechar o épico.
+## 1.3 Debt matrix self‑audit
+- **Objective:** Validate that `AGENTS.md` ↔ `lessons.md` ↔ `coding-standards.md` are aligned.
+- **Action:** 
+  - Simple script (bash/python) that extracts `status:` labels from each file and compares them.
+  - If there is divergence, the script fails and prints the differences.
+- **Acceptance criteria:** "Synced" output or list of divergences to fix before closing the epic.
 
-## 1.4 Documentação como código (Handoff‑DOD)
-- **Objetivo:** Garantir que todo relato de conclusão deste épico siga a regra *zero‑from‑memory* do `handoff-dod.md`.
-- **Ação:** 
-  - Ao gerar o resumo do épico, colar sempre comandos reais (`git log`, `git status`, `gh run list`, contagens do Surefire).
-  - Marcar qualquer número ou sha que venha de memória como **Hipótese (TD‑13)**.
-- **Critério aceite:** O bloco de evidências do handoff contém apenas outputs colados; nenhuma linha “eu acho que foi …”.
+## 1.4 Documentation as code (Handoff‑DOD)
+- **Objective:** Ensure that every completion report of this epic follows the *zero‑from‑memory* rule of `handoff-dod.md`.
+- **Action:** 
+  - When generating the epic summary, always paste real commands (`git log`, `git status`, `gh run list`, Surefire counts).
+  - Mark any number or sha that comes from memory as **Hypothesis (TD‑13)**.
+- **Acceptance criteria:** The handoff evidence block contains only pasted outputs; no line "I think it was …".
 
-## 1.5 Integração contínua (CI)
-- **Objetivo:** Que todo *push* para `main` valide a manutenibilidade antes de permitir merge.
-- **Pipeline (resumo):**
-  - `build` → `./mvnw test` + `./mvnw verify` (inclui ArchUnit, SpotBugs, JaCoCo).
-  - `boundary-gate` → execução `scripts/check-boundaries.sh` (com `--self-test`).
-  - `doc-sync` → verificação de promoção de lições e sincronia da matriz.
-- **Critério aceite:** Pipeline verde em branch `main`; falha em qualquer um dos gates bloqueia merge.
+## 1.5 Continuous integration (CI)
+- **Objective:** Every *push* to `main` validates maintainability before allowing merge.
+- **Pipeline (summary):**
+  - `build` → `./mvnw test` + `./mvnw verify` (includes ArchUnit, SpotBugs, JaCoCo).
+  - `boundary-gate` → run `scripts/check-boundaries.sh` (with `--self-test`).
+  - `doc-sync` → verification of lesson promotion and matrix sync.
+- **Acceptance criteria:** Green pipeline on branch `main`; failure in any of the gates blocks merge.
 
 --- 
 
-**Pós‑Épico 1:** Todos os testes acima fazem parte da gate `./mvnw verify` a partir de agora; qualquer nova história que toque em `core/` deve passar pelos checks de fronteira antes de ser mergida.
+**Post‑Epic 1:** All the tests above are part of the `./mvnw verify` gate from now on; any new story that touches `core/` must pass the boundary checks before being merged.

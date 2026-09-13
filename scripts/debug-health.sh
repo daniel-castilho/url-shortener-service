@@ -3,7 +3,7 @@
 #
 # Queries the health probes and /actuator/prometheus of a running instance and prints
 # the recommended action for the symptoms it detects, referencing
-# docs/observability.md §Diagnóstico and docs/slos.md §Response runbook.
+# docs/observability.md §Diagnosis and docs/slos.md §Response runbook.
 #
 # Usage:
 #   bash scripts/debug-health.sh [base_url]          # default http://localhost:8080
@@ -47,7 +47,7 @@ echo "readiness: $readiness"
 
 case "$readiness" in
   *'"status":"UP"'*) echo "backends : UP (Mongo + Redis reachable)" ;;
-  *DOWN*|*unreachable*) echo "backends : DOWN or unreachable -> row 1 in §Diagnóstico below" ;;
+  *DOWN*|*unreachable*) echo "backends : DOWN or unreachable -> row 1 in §Diagnosis below" ;;
   *) echo "backends : unknown readiness body ($readiness)" ;;
 esac
 
@@ -88,10 +88,10 @@ metrics  : /actuator/prometheus needs an operator credential (AGENTS.md debt 26)
 EOF
 fi
 
-# --- Symptom -> action table (docs/observability.md §Diagnóstico) ----------------
+# --- Symptom -> action table (docs/observability.md §Diagnosis) -----------------
 cat <<'EOF'
 
-§Diagnóstico (symptom -> check -> action; detail in docs/observability.md)
+§Diagnosis (symptom -> check -> action; detail in docs/observability.md)
  1. Readiness DOWN / Mongo or Redis unreachable
       check : /actuator/health/readiness body + `docker compose ps` + service logs
       action: start the backend stack (docker-compose up -d), verify network/replicaset,

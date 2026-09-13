@@ -1,64 +1,64 @@
-# Epic 3 – Estratégia de Testes
+# Epic 3 – Testing Strategy
 
 ## 3.1 Correlation-Id (CorrelationIdIT)
-- **Objetivo:** Prov, gemundo que cada log de request contém `request_id` no MDC e que o header é ecoado.
-- **Ação:**
-  - `./mvnw test -Dtest='CorrelationIdIT'` → verde (RestAssured contra RANDOM_PORT; logs capturados contêm `request_id`).
-  - Grep de validação: todo sink de log dentro do ciclo de request referencia `request_id` do MDC (não em linha fixa).
-- **Critério aceite:** teste verde + saída colada no handoff-DOD.
+- **Objective:** Prove that every request log contains `request_id` in the MDC and that the header is echoed.
+- **Action:**
+  - `./mvnw test -Dtest='CorrelationIdIT'` → green (RestAssured against RANDOM_PORT; captured logs contain `request_id`).
+  - Validation grep: every log sink within the request cycle references `request_id` from the MDC (not on a fixed line).
+- **Acceptance criterion:** green test + output pasted into the handoff-DoD.
 
-## 3.2 Métricas frozen (check-metrics-frozen)
-- **Objetivo:** Nenhuma série nova no playback de `/actuator/prometheus` sem revisão de design.
-- **Ação:**
-  - `scripts/check-metrics-frozen.sh` em `./mvnw verify` → PASS.
-  - Lista congelada == série do `MicrometerMetricsAdapter` (10 de negócio) + esperadas do runtime.
-- **Critério aceite:** gate verde + saída colada.
+## 3.2 Frozen metrics (check-metrics-frozen)
+- **Objective:** No new series in the `/actuator/prometheus` playback without a design review.
+- **Action:**
+  - `scripts/check-metrics-frozen.sh` in `./mvnw verify` → PASS.
+  - Frozen list == `MicrometerMetricsAdapter` series (10 business) + expected runtime ones.
+- **Acceptance criterion:** green gate + output pasted.
 
-## 3.3 Health checks tiered (ProductionLockdownIT)
-- **Objetivo:** Validar comportamento de prod: liveness/readiness públicos, detalhe não vazado, endpoints não-públicos bloqueados.
-- **Ação:**
-  - `./mvnw test -Dtest='ProductionLockdownIT'` → verde (Testcontainers Mongo/Redis; perfil `prod`).
-  - Asserções: `/health/liveness` 200; `/health/readiness` 200; `/health` sem `details` sensíveis; acesso não-autorizado negado.
-- **Critério aceite:** teste verde + saída colada.
+## 3.3 Tiered health checks (ProductionLockdownIT)
+- **Objective:** Validate prod behaviour: public liveness/readiness, non-leaked detail, non-public endpoints blocked.
+- **Action:**
+  - `./mvnw test -Dtest='ProductionLockdownIT'` → green (Testcontainers Mongo/Redis; `prod` profile).
+  - Assertions: `/health/liveness` 200; `/health/readiness` 200; `/health` without sensitive `details`; unauthorized access denied.
+- **Acceptance criterion:** green test + output pasted.
 
-## 3.4 Regras de alerta (promtool/amtool no CI)
-- **Objetivo:** Regras de `deploy/monitoring/alerts.yml` sintaticamente válidas e coerentes com SLOs.
-- **Ação:**
-  - `promtool test rules <test>` → 0 erros/warnings.
-  - `amtool check-config <config>` → verde.
-  - Cada regra com anotação `runbook-§X` (`docs/slos.md`).
-- **Critério aceite:** bins verdes (local + CI) + outputs colados.
+## 3.4 Alert rules (promtool/amtool in CI)
+- **Objective:** Rules in `deploy/monitoring/alerts.yml` syntactically valid and consistent with SLOs.
+- **Action:**
+  - `promtool test rules <test>` → 0 errors/warnings.
+  - `amtool check-config <config>` → green.
+  - Every rule with the `runbook-§X` annotation (`docs/slos.md`).
+- **Acceptance criterion:** green bins (local + CI) + outputs pasted.
 
-## 3.5 Painel de diagnóstico (debug-health.sh)
-- **Objetivo:** Script operacional que transforma `/actuator/prometheus` em "o que fazer agora".
-- **Ação:**
-  - `bash scripts/debug-health.sh` → saída legível, imprime ação recomendada por SLO.
-- **Critério aceite:** script verde + saída colada.
+## 3.5 Diagnostic panel (debug-health.sh)
+- **Objective:** An operational script that turns `/actuator/prometheus` into "what to do now".
+- **Action:**
+  - `bash scripts/debug-health.sh` → readable output, prints the recommended action per SLO.
+- **Acceptance criterion:** green script + output pasted.
 
-## 3.6 Integração CI
-- **Objetivo:** Bloquear merge se qualquer checagem de observabilidade falhar.
-- **Ação:**
-  - Job `observability` em `.github/workflows/ci.yml`: `check-metrics-frozen.sh` + `promtool test rules` + `amtool check-config`.
-  - Falha em qualquer job → PR bloqueado.
-- **Critério aceite:** pipeline verde; vermelho bloqueia.
+## 3.6 CI integration
+- **Objective:** Block merge if any observability check fails.
+- **Action:**
+  - `observability` job in `.github/workflows/ci.yml`: `check-metrics-frozen.sh` + `promtool test rules` + `amtool check-config`.
+  - Failure in any job → PR blocked.
+- **Acceptance criterion:** green pipeline; red blocks.
 
-## 3.7 Rastreabilidade com EP2
-- **Objetivo:** Séries EP2 (`security.ssrf.blocked.total`) no gate frozen e incrementadas nos testes.
-- **Ação:**
-  - `./mvnw verify` conjunto → verde; playback inclui séries EP2.
-- **Critério aceite:** gate + verify verdes + saída colada.
+## 3.7 Traceability with EP2
+- **Objective:** EP2 series (`security.ssrf.blocked.total`) in the frozen gate and incremented in tests.
+- **Action:**
+  - `./mvnw verify` combined → green; playback includes EP2 series.
+- **Acceptance criterion:** green gate + verify + output pasted.
 
 ---
 
-**Checklist de conclusão do Épico 3:**
+**Epic 3 completion checklist:**
 
-- [ ] `CorrelationIdIT` → 100% logs com `request_id` no MDC
+- [ ] `CorrelationIdIT` → 100% logs with `request_id` in the MDC
 - [ ] `metrics-frozen-check` PASS
-- [ ] `ProductionLockdownIT` → health tiered verde
-- [ ] regras + `promtool test rules` + `amtool check-config` verdes
-- [ ] `debug-health.sh` verde
-- [ ] Job CI `observability` verde
-- [ ] Integração retro-compatível com EP2 verde
-- [ ] `./mvnw verify` completo verde (unit + IT + gates)
+- [ ] `ProductionLockdownIT` → tiered health green
+- [ ] rules + `promtool test rules` + `amtool check-config` green
+- [ ] `debug-health.sh` green
+- [ ] CI job `observability` green
+- [ ] Backward-compatible integration with EP2 green
+- [ ] `./mvnw verify` fully green (unit + IT + gates)
 
-*Ao marcar todos, o Épico 3 está concluído e o próximo épico (EP4 – Testes) pode iniciar.*
+*Once all are checked, Epic 3 is complete and the next epic (EP4 – Testing) can start.*

@@ -1,13 +1,13 @@
 # Epic 8 – Definition of Done (DoD)
 
-**Regra zero — zero‑from‑memory:** Todo número, sha ou contagem neste documento é colado de um
-output de comando incluído neste documento.
+**Regra zero — zero-from-memory:** every number, sha or count in this document is pasted from a
+command output included in this document.
 
-Fechamento em 2026-09-13, tag `v0.14.0`.
+Closing on 2026-09-13, tag `v0.14.0`.
 
-## 1. Evidências obrigatórias (outputs reais coladas)
+## 1. Required evidence (real pasted outputs)
 
-### 8.1 Contrato de release + ADRs (executado 2026-09-13)
+### 8.1 Release contract + ADRs (executed 2026-09-13)
 
 ```
 $ git log --oneline -- docs/adr/ docs/release-engineering.md
@@ -18,14 +18,14 @@ ca9a29c docs(reliability): failure-mode matrix + ADR 0005 (fail-open vs fail-clo
 b7ba99e docs(adr): record scalability decisions as ADRs 0001-0004 (Epic 6 story 6.1)
 ```
 
-- Arquivos: `docs/release-engineering.md`, `docs/adr/0007-blue-green-bare-metal.md`,
+- Files: `docs/release-engineering.md`, `docs/adr/0007-blue-green-bare-metal.md`,
   `docs/adr/0008-artifact-promotion.md`.
-- Contrato de cutover (ADR 0007): _fail-closed: qualquer passo falha → cor antiga a 100%,
-  exit ≠ 0 com o passo nomeado_.
-- Consequência aceita (ADR 0007): _frota pós-cutover = 1 ativa + 1 idle; capacidade 2× =
-  instância extra fora do plano de deploy_.
+- Cutover contract (ADR 0007): _fail-closed: any step fails → old color at 100%,
+  exit ≠ 0 with the offending step named_.
+- Consequence accepted (ADR 0007): _post-cutover fleet = 1 active + 1 idle; 2× capacity =
+  requires an extra instance outside the deploy plane_.
 
-### 8.2 Identidade do artifact (executado 2026-09-13)
+### 8.2 Artifact identity (executed 2026-09-13)
 
 ```
 $ ./mvnw -q help:evaluate -Dexpression=project.version -Drevision=0.14.0 -DforceStdout
@@ -39,18 +39,18 @@ $ ./mvnw verify  (resumo à data do fechamento)
 [INFO] Total time:  03:36 min
 ```
 
-- Gate CHANGELOG — verde:
+- Gate CHANGELOG — green:
   ```
   $ bash scripts/check-changelog.sh
   PASS: changelog gate — [Unreleased] exists and is empty (promotion happened)
   ```
-- Gate CHANGELOG — vermelho (intencional, Unreleased sujo injetado temporariamente):
+- Gate CHANGELOG — red (intentional, dirty Unreleased injected temporarily):
   ```
   FAIL: ## [Unreleased] contains entries at .../CHANGELOG.md — promote them to a version section before tagging
   exit=1
   ```
 
-### 8.3 Blue-green fail-closed (executado 2026-09-13)
+### 8.3 Blue-green fail-closed (executed 2026-09-13)
 
 ```
 $ scripts/deploy.sh --self-test
@@ -65,10 +65,10 @@ PASS: self-test verified
 exit=0
 ```
 
-Cutover zero-downtime exercitado localmente (drill real, portas 18xxx isoladas — Mongo 27018 /
-Redis 6380, nginx container host-network como front :18080, azul 18081 / verde 18082; o render de
-`deploy.sh` é systemd/:8080-target, então o drill reproduziu os mesmos pesos no conf do front).
-Loop de redirect (`curl` do código semeado `yd02dah` via front, N=60 por flip):
+Cutover exercised locally (real drill, isolated 18xxx ports — Mongo 27018 /
+Redis 6380, nginx container in host-network as front :18080, blue 18081 / green 18082; `deploy.sh`'s
+render targets systemd/:8080, so the drill reproduced the same weights on the front's conf).
+Redirect loop (`curl` of the seeded code `yd02dah` through the front, N=60 per flip):
 ```
 --- flip: init: blue 100 / green down ---
         server 127.0.0.1:18081 weight=100 max_fails=2 fail_timeout=10s;
@@ -91,11 +91,11 @@ status histogram (N=60):
 status histogram (N=60):
      60 302
 ```
-Nenhum 5xx/ERR em 240 requests (4 flips × 60). Fail-closed provado matando o verde ativo
-pós-cutover (peers max_fails=2 citam o upstream): 40/40 → `502`, o front não silenciosamente
-reencaminha.
+No 5xx/ERR across 240 requests (4 flips × 60). Fail-closed proven by killing the active green
+post-cutover (peers max_fails=2 name the upstream): 40/40 → `502`, the front does not silently
+reforward.
 
-Rollback real (mesmo front, pesos restaurados):
+Real rollback (same front, weights restored):
 ```
 --- flip: rollback: blue 100 / green down (restored) ---
         server 127.0.0.1:18081 weight=100 max_fails=2 fail_timeout=10s;
@@ -104,7 +104,7 @@ status histogram (N=60):
      60 302
 ```
 
-### 8.4 Smoke + rollback (executado 2026-09-13)
+### 8.4 Smoke + rollback (executed 2026-09-13)
 
 ```
 $ scripts/rollback.sh --self-test
@@ -112,19 +112,19 @@ OK: previous-100/current-down render, last-deploy parse, template untouched — 
 PASS: self-test verified
 exit=0
 
-$ scripts/smoke.sh http://localhost:18999   # porta morta — perna nomeada no exit
+$ scripts/smoke.sh http://localhost:18999   # dead port — named leg in the exit
 SMOKE 22:23:34: leg 1/8 liveness
 SMOKE FAIL: leg 1: liveness expected 200, got 000
 exit=1
 
-$ scripts/rollback.sh                        # sem last-deploy — fail-closed ABORT
+$ scripts/rollback.sh                        # no last-deploy — fail-closed ABORT
 ROLLBACK 22:23:37 ABORT: no last-deploy.txt — nothing to roll back (deploy.sh writes it before cutover)
 exit=1
 ```
 
-### 8.5 Backup agendado e verificado (executado 2026-09-13)
+### 8.5 Scheduled and verified backup (executed 2026-09-13)
 
-Drill real self-contained `scripts/ci-restore-drill.sh` (stack isolada própria: Mongo :18017 /
+Real self-contained drill `scripts/ci-restore-drill.sh` (own isolated stack: Mongo :18017 /
 Redis :16379 / app :18080, compose project `urlshortener-drill`).
 
 ```
@@ -147,13 +147,13 @@ click_daily                     0            0 ok
 schema_migrations               9            9 ok
 ```
 
-Lições registradas em `docs/lessons.md`: (1) leftover stack faz health-check mentir; (2) mongodump
-exit 0 silencioso em db ausente → preflight + fail-closed.
+Lessons recorded in `docs/lessons.md`: (1) a leftover stack makes the health-check lie; (2) mongodump
+exits 0 silently on a missing db → preflight + fail-closed.
 
-### 8.6 Release como gate (executado 2026-09-13)
+### 8.6 Release as a gate (executed 2026-09-13)
 
 Tag: `v0.14.0` — workflow `release.yml` **run 34732409909** — jobs:
-Gates / k6 Gate / Runtime Smoke / Restore Drill / Release → **todos `success`**.
+Gates / k6 Gate / Runtime Smoke / Restore Drill / Release → **all `success`**.
 
 ```
 $ gh api repos/daniel-castilho/url-shortener-service/actions/runs/34732409909 --jq '{conclusion}'
@@ -177,20 +177,20 @@ $ gh release download v0.14.0 --pattern '*' /tmp/rel-check && sha256sum -c SHA25
 url-shortener-service-0.14.0.jar: OK
 ```
 
-- Trivy HIGH/CRITICAL + non-root gate (job release): non-root gate `success` (uid!=0 sobre alpine
-  `adduser -S` → uid 100) e Trivy reporta table limpo — verificado localmente na imagem
-  `url-shortener:0.14.0-test` (alpine+jar ambos `0` vulnerabilidades, HIGH/CRITICAL, ignore-unfixed).
-- Runbook TOC (seções de release):
+- Trivy HIGH/CRITICAL + non-root gate (release job): non-root gate `success` (uid!=0 over alpine
+  `adduser -S` → uid 100) and Trivy reports a clean table — verified locally on the image
+  `url-shortener:0.14.0-test` (alpine+jar both `0` vulnerabilities, HIGH/CRITICAL, ignore-unfixed).
+- Runbook TOC (release sections):
   ```
   $ grep -E '^#{1,3} ' docs/release-runbook.md
   1. Deploy a new version
   2. Roll back
   7. Operational checklist before a release
   Release artifacts & promotion
-  Incidente: deploy falhou
+  Incident: deploy failed
   ```
 
-### 8.7 Gates finais (executado 2026-09-13)
+### 8.7 Final gates (executed 2026-09-13)
 
 ```
 $ ./scripts/check-metrics-frozen.sh && ./scripts/check-metrics-frozen.sh --self-test
@@ -206,37 +206,37 @@ SUCCESS / SUCCESS / SUCCESS / SUCCESS
 $ scripts/deploy.sh --self-test && scripts/rollback.sh --self-test
 PASS / PASS
 $ ./mvnw verify
-BUILD SUCCESS  (OWASP: único CVE conhecido preexistente opentelemetry-api-1.62.0 MEDIUM; cobertura 60/60 atingida)
+BUILD SUCCESS  (OWASP: only known pre-existing CVE opentelemetry-api-1.62.0 MEDIUM; coverage 60/60 reached)
 ```
 
-Sha de fechamento do Épico: `b5fb2e2..736411c` (workflow fix, non-root gate fix, Dockerfile
-Trivy fix) + `2e6d8db` (8.1–8.6 maior parte). CI verde no push final.
+Epic-closing sha: `b5fb2e2..736411c` (workflow fix, non-root gate fix, Dockerfile
+Trivy fix) + `2e6d8db` (8.1-8.6 mostly). CI green on the final push.
 
-## 2. Checklist de conclusão
+## 2. Completion checklist
 
 - [x] `docs/release-engineering.md` + ADR 0007 + ADR 0008
 - [x] Versioning `revision` + flatten + gate CHANGELOG (red/green)
-- [x] `deploy.sh` blue-green fail-closed + units blue/green + self-test + **drill local real de cutover
-  (azul 18081/verde 18082 + front nginx container :18080; 240 redirects = 240× 302; fail-closed 502;
+- [x] `deploy.sh` blue-green fail-closed + units blue/green + self-test + **real local cutover drill
+  (blue 18081/green 18082 + nginx container front :18080; 240 redirects = 240× 302; fail-closed 502;
   rollback 60/60 302)**
-- [x] `smoke.sh` (8 pernas) + `rollback.sh` + self-test + dead-port red
-- [x] Timer de backup + manifest + restore `--verify` (negative test) + `ci-restore-drill.sh` com RTO
-  **real (21s ≤ 300s; pre=20/20 302; post=2/2 404)**
-- [x] `release.yml` verde no primeiro tag (run 34732409909) + Release com assets (jar do build da CI)
-- [x] Runbook atualizado (deploy/rollback/checklist/post-deploy/incidente)
-- [x] `./mvnw verify` verde
-- [x] Nenhuma cifra neste arquivo sem comando acima
+- [x] `smoke.sh` (8 legs) + `rollback.sh` + self-test + dead-port red
+- [x] Backup timer + manifest + restore `--verify` (negative test) + `ci-restore-drill.sh` with **real
+  RTO (21s ≤ 300s; pre=20/20 302; post=2/2 404)**
+- [x] `release.yml` green on the first tag (run 34732409909) + Release with assets (CI-built jar)
+- [x] Runbook updated (deploy/rollback/checklist/post-deploy/incident)
+- [x] `./mvnw verify` green
+- [x] No cipher in this file without the command above it
 
-## 3. Fora de escopo confirmado (não vira dívida fantasma)
+## 3. Confirmed out of scope (no phantom debt)
 
-- K8s / orquestrador / multi-host — não feito; bare metal é a plataforma (ADR 0007).
-- Replica set / Redis Sentinel — não feito; SPOF aceito no EP7.
-- Backup off-host — não feito; TD nomeado (alvo de RPO inalterado: último backup).
-- Canary auto-verificado por métricas (gate automático entre bumps) — não feito; canary = smoke +
-  vigilância manual nomeada (Grafana/burn-rate).
-- Deploy automático via SSH da CI — rejeitado no ADR 0008 (gate humano no bare metal).
-- Rotação de chave JWT (dívida EP2) — não resolvida aqui.
+- K8s / orchestrator / multi-host — not done; bare metal is the platform (ADR 0007).
+- Replica set / Redis Sentinel — not done; SPOF accepted in EP7.
+- Off-host backup — not done; named TD (unchanged RPO target: last backup).
+- Canary auto-verified by metrics (automatic gate between bumps) — not done; canary = smoke +
+  named manual monitoring (Grafana/burn-rate).
+- Automatic deploy via SSH from CI — rejected in ADR 0008 (human gate on bare metal).
+- JWT key rotation (EP2 debt) — not resolved here.
 
 ---
 
-*Seção 2 100% marcada e seção 1 com outputs reais: Épico 8 concluído em 2026-09-13 (tag `v0.14.0`).*
+*Section 2 100% checked and section 1 with real outputs: Epic 8 completed on 2026-09-13 (tag `v0.14.0`).*

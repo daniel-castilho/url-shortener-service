@@ -1,55 +1,55 @@
-# Epic 5 – Tasks Técnicas [aterrado]
+# Epic 5 – Technical Tasks [grounded]
 
-Guia de execução aterrado na realidade do repo. Marcos `[x]` são preenchidos
-durante a execução; evidências coladas no `epic-5-dod.md`.
+Execution guide grounded in the repo reality. `[x]` marks are filled in
+during execution; evidence is pasted in `epic-5-dod.md`.
 
-## 5.1/5.2 Re-executar baseline k6 e resolver a pendência like-for-like
-- [x] Garantir infra isolated up (Mongo 27018 + Redis 6380) ou usar docker-compose.
-- [x] Executar `bash scripts/performance-baseline.sh <duration> <redirect-rps> <shorten-rps>` na checkpoint atual de `main` (mesma stack da baseline 2026-09-09: k6 v2.2.0 container, Redis 8.10.1, Mongo 6.0.28).
-- [x] Coletar o summary export JSON (`load-tests/results/{shorten,redirect,mixed}-<STAMP>.summary.json`) e colar p50/p95/p99.
-- [x] Comparar com 2026-08-27 e 2026-09-09; atribuir ou isn't atribuir regressão à plataforma (Tomcat 11 vs Undertow).
-- [x] Atualizar `docs/load-test-baseline.md` (nova seção "Baseline — <data>", veredito da pendência).
-- [x] Colar output do k6 e do script no `epic-5-dod.md`.
+## 5.1/5.2 Re-run k6 baseline and resolve the like-for-like pending item
+- [x] Ensure isolated infra is up (Mongo 27018 + Redis 6380) or use docker-compose.
+- [x] Run `bash scripts/performance-baseline.sh <duration> <redirect-rps> <shorten-rps>` on the current `main` checkpoint (same stack as the 2026-09-09 baseline: k6 v2.2.0 container, Redis 8.10.1, Mongo 6.0.28).
+- [x] Collect the summary export JSON (`load-tests/results/{shorten,redirect,mixed}-<STAMP>.summary.json`) and paste p50/p95/p99.
+- [x] Compare with 2026-08-27 and 2026-09-09; attribute or do not attribute regression to the platform (Tomcat 11 vs Undertow).
+- [x] Update `docs/load-test-baseline.md` (new section "Baseline — <date>", pending-item verdict).
+- [x] Paste the k6 and script output in `epic-5-dod.md`.
 
-## 5.3 Perfil JFR do hot-path
-- [x] Boot do app em porta isolada com rate limits relaxados (ou via `performance-baseline.sh`).
-- [x] Iniciar perfil JFR 30s via `jcmd <pid> JFR.start` (settings=profile) e despejar com `JFR.dump`.
-- [x] Analisar eventos: GC, lock contention, alocação, single-thread top.
-- [x] Registrar ≥2 achados em `docs/performance-profiling.md` (novo).
-- [x] Aplicar mitigação somente se justificada pelos dados; `./mvnw verify` → verde; confirmar p95 SLOs não degradou. (Veredito: nenhuma mitigação justificada)
-- [x] Colar output do profiler e do `./mvnw verify` no `epic-5-dod.md`.
+## 5.3 JFR profile of the hot path
+- [x] Boot the app on an isolated port with relaxed rate limits (or via `performance-baseline.sh`).
+- [x] Start a 30s JFR profile via `jcmd <pid> JFR.start` (settings=profile) and dump with `JFR.dump`.
+- [x] Analyze events: GC, lock contention, allocation, single-thread top.
+- [x] Record ≥2 findings in `docs/performance-profiling.md` (new).
+- [x] Apply a mitigation only if justified by the data; `./mvnw verify` → green; confirm p95 SLOs did not degrade. (Verdict: no mitigation justified)
+- [x] Paste the profiler and `./mvnw verify` output in `epic-5-dod.md`.
 
-## 5.4 Externalizar cache L1 + evidência
-- [x] Criar `UrlCacheProperties` (`@ConfigurationProperties(prefix = "app.cache")`) e registrá-lo em `infra/config`; substituir hardcodes em `RedisUrlCache` (máx. 100 / TTL 5s; bloom 100M / 1% fpp).
-- [x] Adicionar teste/IT validando override das propriedades.
-- [x] Sob carga (durante baseline ou stress), colher séries `cache.hits.total`, `cache.misses.total`, `bloomfilter.rejections.total`, timers `url.retrieval.duration`/`redirect.latency`. (Evidência comportamental: stress 2× com p95 4.63ms e 0 falhas; métricas frozen PASS)
-- [x] `./mvnw verify` → verde (ética: métricas frozen inalteradas — sem série nova).
-- [x] Evidências no `epic-5-dod.md`.
+## 5.4 Externalize L1 cache + evidence
+- [x] Create `UrlCacheProperties` (`@ConfigurationProperties(prefix = "app.cache")`) and register it in `infra/config`; replace the hardcodes in `RedisUrlCache` (max. 100 / TTL 5s; bloom 100M / 1% fpp).
+- [x] Add a test/IT validating the property override.
+- [x] Under load (during baseline or stress), collect the `cache.hits.total`, `cache.misses.total`, `bloomfilter.rejections.total` series, `url.retrieval.duration`/`redirect.latency` timers. (Behavioural evidence: stress 2x with p95 4.63ms and 0 failures; frozen metrics PASS)
+- [x] `./mvnw verify` → green (ethics: frozen metrics unchanged — no new series).
+- [x] Evidence in `epic-5-dod.md`.
 
-## 5.5 Stress 2× SLO
-- [x] Criar `load-tests/stress.js` (ramping até `REDIRECT_RPS * 2` / `SHORTEN_RPS * 2`, 10min, thresholds p95 < 200ms/err < 0.1% ou degradação documentada).
-- [x] Executar em modo isolated; coletar summary export; documentar 5xx/degradado. (0 falhas; p95 < 5ms — nenhuma degradação)
-- [x] Evidências no `epic-5-dod.md`.
+## 5.5 Stress 2x SLO
+- [x] Create `load-tests/stress.js` (ramping up to `REDIRECT_RPS * 2` / `SHORTEN_RPS * 2`, 10min, thresholds p95 < 200ms/err < 0.1% or documented degradation).
+- [x] Run in isolated mode; collect the summary export; document 5xx/degradation. (0 failures; p95 < 5ms — no degradation)
+- [x] Evidence in `epic-5-dod.md`.
 
-## 5.x Gates finais do épico
+## 5.x Final epic gates
 - [x] `./scripts/check-metrics-frozen.sh` (+ `--self-test`) → PASS.
 - [x] `./scripts/check-boundaries.sh` (+ `--self-test`) → PASS.
 - [x] `./scripts/check-doc-sync.sh` (+ `--self-test`) → PASS.
-- [x] `promtool check rules` + `promtool test rules` + `amtool check-config` → verdes.
-- [x] `./mvnw verify` conjunto → BUILD SUCCESS (unit + IT + JaCoCo + SpotBugs + OWASP).
-- [x] Evidências coladas no `epic-5-dod.md`; self-audit rodado.
+- [x] `promtool check rules` + `promtool test rules` + `amtool check-config` → green.
+- [x] `./mvnw verify` overall → BUILD SUCCESS (unit + IT + JaCoCo + SpotBugs + OWASP).
+- [x] Evidence pasted in `epic-5-dod.md`; self-audit run.
 
 ---
 
-**Checklist de conclusão do Épico 5:**
+**Epic 5 completion checklist:**
 
-- [x] Histórias 5.1–5.5 atendidas (evidências coladas)
-- [x] Pendência like-for-like resolvida (veredito em `docs/load-test-baseline.md`)
-- [x] Profiling JFR + achados/`docs/performance-profiling.md`
-- [x] Cache L1 externalizado + IT + evidência sob carga
-- [x] Stress 2× (`load-tests/stress.js`) rodado e documentado
-- [x] `metrics-frozen-check` + `promtool` + `amtool` verdes
-- [x] `./mvnw verify` conjunto verde
-- [x] Evidências coladas no `epic-5-dod.md`
+- [x] Stories 5.1–5.5 met (evidence pasted)
+- [x] Like-for-like pending item resolved (verdict in `docs/load-test-baseline.md`)
+- [x] JFR profiling + findings/`docs/performance-profiling.md`
+- [x] L1 cache externalized + IT + evidence under load
+- [x] Stress 2x (`load-tests/stress.js`) run and documented
+- [x] `metrics-frozen-check` + `promtool` + `amtool` green
+- [x] `./mvnw verify` overall green
+- [x] Evidence pasted in `epic-5-dod.md`
 
-*Ao marcar todos os itens acima, o Épico 5 está **concluído** com SLOs validados, pendência de baseline resolvida e cache/índices/profiling evidenciados.*
+*Once all items above are checked, Epic 5 is **complete** with validated SLOs, the baseline pending item resolved and the cache/indices/profiling evidenced.*

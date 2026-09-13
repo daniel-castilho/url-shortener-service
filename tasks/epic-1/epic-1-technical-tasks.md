@@ -1,26 +1,26 @@
-# Epic 1 – Tasks Técnicas
+# Epic 1 – Technical Tasks
 
-## 1.1 Auditoriar e corrigir fronteiras do `core/`
-- [x] Executar `bash scripts/check-boundaries.sh` e registrar saída. _(2026‑09‑10: PASS — 0 violações)_
-- [x] Executar `bash scripts/check-boundaries.sh --self-test` (planta uma violação temporária e_assert a gate catches it). _(2026‑09‑10: PASS — gate detecta violação plantada e aceita código limpo)_
-- [x] Corrigir quaisquer imports `infra.*` encontrados em `core/*.java`:
-    - Mover a dependência para `infra/` atrás do port/outbound correspondente.
-    - Ou criar um port abstrato em `core/` e implementação em `infra/.
-    - _(N/A — auditoria de 2026‑09‑10: nenhum import `infra.*`/framework em `core/`; dívida histórica já resolvida na matriz AGENTS.md itens 1–2)_
-- [x] Confirmar que `./mvnw compile` ainda verde após cada mudança. _(2026‑09‑10: BUILD SUCCESS)_
-- [x] Confirmar que `./mvnw spotless:check` continua verde. _(2026‑09‑10: exit 0)_
-- [x] Codificar a Regra 1 como testes ArchUnit (redundância deliberada com o script: bytecode vs grep). _(BoundaryRulesTest 2/2 + BoundaryRulesSelfTestTest 2/2 verdes)_
+## 1.1 Audit and fix the `core/` boundaries
+- [x] Run `bash scripts/check-boundaries.sh` and record the output. _(2026‑09‑10: PASS — 0 violations)_
+- [x] Run `bash scripts/check-boundaries.sh --self-test` (plants a temporary violation and asserts the gate catches it). _(2026‑09‑10: PASS — gate detects the planted violation and accepts clean code)_
+- [x] Fix any `infra.*` imports found in `core/*.java`:
+    - Move the dependency to `infra/` behind the corresponding outbound port.
+    - Or create an abstract port in `core/` and an implementation in `infra/`.
+    - _(N/A — 2026‑09‑10 audit: no `infra.*`/framework imports in `core/`; historical debt already resolved in AGENTS.md matrix items 1–2)_
+- [x] Confirm that `./mvnw compile` is still green after each change. _(2026‑09‑10: BUILD SUCCESS)_
+- [x] Confirm that `./mvnw spotless:check` remains green. _(2026‑09‑10: exit 0)_
+- [x] Encode Rule 1 as ArchUnit tests (deliberate redundancy with the script: bytecode vs grep). _(BoundaryRulesTest 2/2 + BoundaryRulesSelfTestTest 2/2 green)_
 
-## 1.2 Promover lições repetidas para `coding-standards.md`
-- [x] Rodar um script ou revisão manual que conte ocorrências de cada lição em `lessons.md`. _(2026‑09‑10: grep por padrão — fail-open/best-effort/degrade 4×; atomic/$inc/read-modify-write 3×)_
-- [x] Identificar lições com contagem ≥ 3. _(2 padrões: degradação fail-open/fail-fast deliberada; mutação atômica de contadores)_
-- [x] Copiar o padrão (trecho + regra dourada) para `coding-standards.md` sob uma nova seção “Herde‑de‑Lições”. _(§14 Herde‑de‑Lições: §14.1 + §14.2)_
-- [x] Remover a lição promovida de `lessons.md` (ou marcar como `→ coding-standards`). _(3 marcações: Metrics/counters §14.2, Caching/bloom §14.1, Fail-open-vs-fail-fast §14.1, OTLP §14.1)_
-- [x] Atualizar a matriz de dívida em `AGENTS.md` com a nova referência. _(Item 22 adicionado, status `resolved`)_
+## 1.2 Promote repeated lessons to `coding-standards.md`
+- [x] Run a script or manual review that counts occurrences of each lesson in `lessons.md`. _(2026‑09‑10: grep by pattern — fail-open/best-effort/degrade 4×; atomic/$inc/read-modify-write 3×)_
+- [x] Identify lessons with count ≥ 3. _(2 patterns: deliberate fail-open/fail-fast degradation; atomic mutation of counters)_
+- [x] Copy the pattern (excerpt + golden rule) to `coding-standards.md` under a new section "Inherit Lessons". _(§14 Inherit Lessons: §14.1 + §14.2)_
+- [x] Remove the promoted lesson from `lessons.md` (or mark it as `→ coding-standards`). _(3 markings: Metrics/counters §14.2, Caching/bloom §14.1, Fail-open-vs-fail-fast §14.1, OTLP §14.1)_
+- [x] Update the debt matrix in `AGENTS.md` with the new reference. _(Item 22 added, status `resolved`)_
 
-## 1.3 Padronizar pacotes e nomes de classes
-- [x] Listar todos os pacotes atuais sob `src/main/java`. _(2026‑09‑10: 30 packages — todos sob `core/` ou `infra/`)_
-- [x] Verificar a aderência ao layout canônico do AGENTS.md (sem rename — o layout vigente é a fonte de verdade):
+## 1.3 Standardize packages and class names
+- [x] List all current packages under `src/main/java`. _(2026‑09‑10: 30 packages — all under `core/` or `infra/`)_
+- [x] Verify adherence to the canonical AGENTS.md layout (no renames — the current layout is the source of truth):
     - `core/model/`
     - `core/ports/incoming/`
     - `core/ports/outgoing/`
@@ -29,32 +29,32 @@
     - `infra/adapter/output/persistence/`
     - `infra/adapter/output/redis/`
     - `infra/config/`
-    - _(Verificado: também canônicos os subpacotes `core/command`, `core/exception`, `core/idgeneration`, `core/validation`, `infra/adapter/output/{analytics,dns,security,validation}`, `infra/config/properties`, `infra/observability`, `infra/security`)_
-- [x] Confirmar que nenhum `package` fica solto fora das pastas definidas. _(Único package na raiz `ca.tyny.urlshortener` é o `Application.java`, entry point canônico)_
-- [x] Confirmar que `./mvnw compile` e `./mvnw test` ainda verdes. _(2026‑09‑10: compile BUILD SUCCESS; test 269/269)_
+    - _(Verified: also canonical are the subpackages `core/command`, `core/exception`, `core/idgeneration`, `core/validation`, `infra/adapter/output/{analytics,dns,security,validation}`, `infra/config/properties`, `infra/observability`, `infra/security`)_
+- [x] Confirm that no `package` is loose outside the defined folders. _(The only package in the root `ca.tyny.urlshortener` is the `Application.java`, canonical entry point)_
+- [x] Confirm that `./mvnw compile` and `./mvnw test` are still green. _(2026‑09‑10: compile BUILD SUCCESS; test 269/269)_
 
-## 1.4 Remover código legacy e comentários “por que”
-- [x] Rodar `./mvnw spotless:check` em modo *check* para identificar arquivos que não seguem o Google Java Style (4‑space, 120‑col). _(Base normalizada via `spotless:apply` — commit style dedicado; check verde)_
-- [x] Identificar classes `unused` (por meio de `./mvnw dependency:tree -uf` ou remoção manual). _(Varredura por referência reversa: 23 candidatos eram beans Spring por component‑scan (configs/controllers/adapters/migrations) — falso‑positivos; 0 classes unused reais)_
-- [x] Remover classes/arquivos desnecessários; confirmar que não há efeito colateral. _(N/A — nada a remover; 0 TODO/FIXME/System.out/@Deprecated)_
-- [x] Reescrever comentários que explicam *o que* o código faz para explicar *por que* a decisão foi tomada (ex.: “usamos Instant em vez de Date para evitar fuso‑horário acidental na geração de TTL”). _(Varredura em `core/`: 1 comentário “o que” real (`QuotaUsage` "// Getters and Setters") reescrito como “por que”)_
-- [x] Confirmar `./mvnw spotless:check` verde. _(2026‑09‑10: exit 0)_
+## 1.4 Remove legacy code and "why" comments
+- [x] Run `./mvnw spotless:check` in *check* mode to identify files that do not follow Google Java Style (4‑space, 120‑col). _(Base normalized via `spotless:apply` — dedicated style commit; check green)_
+- [x] Identify `unused` classes (via `./mvnw dependency:tree -uf` or manual removal). _(Reverse-reference scan: 23 candidates were Spring beans by component‑scan (configs/controllers/adapters/migrations) — false positives; 0 real unused classes)_
+- [x] Remove unnecessary classes/files; confirm there is no side effect. _(N/A — nothing to remove; 0 TODO/FIXME/System.out/@Deprecated)_
+- [x] Rewrite comments that explain *what* the code does to explain *why* the decision was made (e.g.: "we use Instant instead of Date to avoid accidental timezone in TTL generation"). _(Scan in `core/`: 1 real "what" comment (`QuotaUsage` "// Getters and Setters") rewritten as "why")_
+- [x] Confirm `./mvnw spotless:check` green. _(2026‑09‑10: exit 0)_
 
-## 1.5 Sincronizar matriz de dívida técnica
-- [x] Garantir que cada item em `AGENTS.md` “Known Technical Debt” tenha campo `status: open/in-progress/resolved` e data de previsão. _(2026‑09‑10: 22 itens, todos `resolved` com evidência; verificado pelo gate)_
-- [x] Cross‑check com `lessons.md`: toda lição promovida deve ter seu rastro na matriz. _(4 marcações `→ coding-standards §14.x` apontam para seções existentes — verificado pelo gate)_
-- [x] Manter itens `resolved` na matriz como trilha de auditoria (política Regra 10 do AGENTS.md); apenas garantir que cada item tem status e data corretos. _(Decisão do owner: manter; template “remover resolved” rejeitado)_
-- [x] Comitar as alterações em `AGENTS.md` e enviar PR com rótulo `docs: sync technical debt matrix`. _(Commits por fase conforme fluxo acordado; PR só sob pedido explícito)_
-- [x] Gate novo: `scripts/check-doc-sync.sh` (+ `--self-test`) — valida status da matriz e promoções; wired no CI (job `doc-sync`).
+## 1.5 Sync the technical debt matrix
+- [x] Ensure that each item in `AGENTS.md` "Known Technical Debt" has a `status: open/in-progress/resolved` field and a forecast date. _(2026‑09‑10: 22 items, all `resolved` with evidence; verified by the gate)_
+- [x] Cross‑check with `lessons.md`: every promoted lesson must have its trace in the matrix. _(4 markings `→ coding-standards §14.x` point to existing sections — verified by the gate)_
+- [x] Keep `resolved` items in the matrix as an audit trail (Rule 10 policy of AGENTS.md); just ensure each item has correct status and date. _(Owner decision: keep; "remove resolved" template rejected)_
+- [x] Commit the changes in `AGENTS.md` and send a PR with label `docs: sync technical debt matrix`. _(Commits per phase per the agreed flow; PR only under explicit request)_
+- [x] New gate: `scripts/check-doc-sync.sh` (+ `--self-test`) — validates matrix status and promotions; wired in CI (job `doc-sync`).
 
 --- 
 
-**Checklist de conclusão do Épico 1:**
+**Epic 1 completion checklist:**
 
 - `check-boundaries.sh` → PASS (0 violations)  
-- `lessons.md` → promovido(s) para `coding-standards.md`  
-- `coding-standards.md` → último versionamento com todas as regras novas  
-- `AGENTS.md` → matriz de dívida sincronizada, status atualizado  
-- `./mvnw verify` (gate completo) → todos os sub‑gates verdes (unit, SpotBugs, JaCoCo, ArchUnit)  
+- `lessons.md` → promoted to `coding-standards.md`  
+- `coding-standards.md` → latest versioning with all new rules  
+- `AGENTS.md` → debt matrix synced, status updated  
+- `./mvnw verify` (full gate) → all sub‑gates green (unit, SpotBugs, JaCoCo, ArchUnit)  
 
-*Próximo épico: EP2 – Secure (segurança by design).*
+*Next epic: EP2 – Secure (security by design).*

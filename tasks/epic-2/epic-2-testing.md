@@ -1,67 +1,67 @@
-# Epic 2 – Estratégia de Testes
+# Epic 2 – Testing Strategy
 
-## 2.1 Unit‑tests de log (logSafe)
-- **Objetivo:** Confirmar que cada `log.warn`/`info` no `infra/` usa o helper `logSafe`.
-- **Ação:** 
-  - `grep -R "logSafe" src/main/java/infra` → deve cobrir 100 % dos logs client‑controlados.
-  - `./mvnw test -Dtest='*LogSafeTest'` (teste unitário que injeta strings com `\n`/`\r` eAsserta que o log não os contém).
-- **Critério aceite:** Testes verdes; cobertura de grep 100 %.
+## 2.1 Log unit tests (logSafe)
+- **Objective:** Confirm that each `log.warn`/`info` in `infra/` uses the `logSafe` helper.
+- **Action:** 
+  - `grep -R "logSafe" src/main/java/infra` → must cover 100 % of client-controlled logs.
+  - `./mvnw test -Dtest='*LogSafeTest'` (unit test that injects strings with `\n`/`\r` and asserts the log does not contain them).
+- **Acceptance criterion:** Green tests; 100 % grep coverage.
 
-## 2.2 Teste de SSRF (SSRFIT)
-- **Objetivo:** Validar que endpoints de shortening bloqueiam IPs internos.
-- **Ação:** 
-  - `./mvnw test -Dtest=SSRFIT` → verde.
-  - Verificar saída do teste: código 400 e mensagem `invalid_request`.
-- **Critério aceite:** Teste verde e saída colada no handoff‑DOD.
+## 2.2 SSRF test (SSRFIT)
+- **Objective:** Validate that shortening endpoints block internal IPs.
+- **Action:** 
+  - `./mvnw test -Dtest=SSRFIT` → green.
+  - Check the test output: 400 status code and `invalid_request` message.
+- **Acceptance criterion:** Green test and output pasted into the handoff‑DOD.
 
-## 2.3 Teste de ConfigValidator (ConfigValidatorIT)
-- **Objetivo:** Garantir que o perfil `prod` recusa secret curto/ Default.
-- **Ação:** 
-  - `./mvnw test -Dtest=ConfigValidatorIT` → verde.
-  - Saída: IllegalStateException com mensagem “invalid JWT secret”.
-- **Critério aceite:** Teste verde e saída colada.
+## 2.3 ConfigValidator test (ConfigValidatorIT)
+- **Objective:** Ensure the `prod` profile refuses a short/default secret.
+- **Action:** 
+  - `./mvnw test -Dtest=ConfigValidatorIT` → green.
+  - Output: IllegalStateException with “invalid JWT secret” message.
+- **Acceptance criterion:** Green test and pasted output.
 
-## 2.4 Teste de Headers de Segurança (SecurityHeadersIT)
-- **Objetivo:** Confirmar que o filtro global injeta os 3 headers HTTP.
-- **Ação:** 
-  - `./mvnw test -Dtest=SecurityHeadersIT` → verde.
-  - Saída de `curl -I` colada (ex.: `X-Content-Type-Options: nosniff` etc.).
-- **Critério aceite:** Teste verde + saída colada.
+## 2.4 Security headers test (SecurityHeadersIT)
+- **Objective:** Confirm that the global filter injects the 3 HTTP headers.
+- **Action:** 
+  - `./mvnw test -Dtest=SecurityHeadersIT` → green.
+  - Pasted `curl -I` output (e.g.: `X-Content-Type-Options: nosniff`, etc.).
+- **Acceptance criterion:** Green test + pasted output.
 
-## 2.5 Teste de gate OWASP Dependency‑Check
-- **Objetivo:** Validar que o build falha ao introduzir nova dependência vulnerável.
-- **Ação:** 
-  - Adicionar temporariamente um artefato de teste com vulnerabilidade conhecida (ex.: `junit:junit:2.13` com flag de vuln no pom).
-  - Executar `./mvnw verify` → build falha com mensagem de OWASP.
-  - Remover artefato e confirmar `./mvnw verify` verde.
-- **Critério aceite:** Build falha com nova dep; build verde sem ela.
+## 2.5 OWASP Dependency‑Check gate test
+- **Objective:** Validate that the build fails when a new vulnerable dependency is introduced.
+- **Action:** 
+  - Temporarily add a test artifact with a known vulnerability (e.g.: `junit:junit:2.13` with a vuln flag in the pom).
+  - Run `./mvnw verify` → build fails with an OWASP message.
+  - Remove the artifact and confirm `./mvnw verify` is green.
+- **Acceptance criterion:** Build fails with the new dep; build green without it.
 
-## 2.6 Integração no CI (GitHub Actions)
-- **Objetivo:** Bloquear merge se algum checkpoint de segurança falhar.
-- **Ação:** 
-  - Adicionar/workflow `security.yml` que roda:
-    - `./mvnw verify` (includes o gate OWASP).
-    - `scripts/check-security.sh` (verifica logSafe, SSRF config, JWT secret, headers).
-  - Falha em qualquer job → pull request não pode ser merged.
-- **Critério aceite:** Pipeline vermelho bloqueia merge; pipeline verde permite merge.
+## 2.6 CI integration (GitHub Actions)
+- **Objective:** Block the merge if any security checkpoint fails.
+- **Action:** 
+  - Add workflow `security.yml` that runs:
+    - `./mvnw verify` (includes the OWASP gate).
+    - `scripts/check-security.sh` (verifies logSafe, SSRF config, JWT secret, headers).
+  - Failure in any job → the pull request cannot be merged.
+- **Acceptance criterion:** Red pipeline blocks the merge; green pipeline allows the merge.
 
-## 2.7 Integração com Observability (EP3)
-- **Objetivo:** Garantir que métricas de segurança sejam coletadas.
-- **Ação:** 
-  - Verificar que contadores como `security.ssrf.blocked.total` e `security.headers.applied.total` são incrementados nos testes.
-  - Confirmar que as séries aparecem em `/actuator/prometheus`.
-- **Critério aceite:** Métricas visíveis e testes verdes.
+## 2.7 Observability integration (EP3)
+- **Objective:** Ensure security metrics are collected.
+- **Action:** 
+  - Verify that counters such as `security.ssrf.blocked.total` and `security.headers.applied.total` are incremented in tests.
+  - Confirm the series appear in `/actuator/prometheus`.
+- **Acceptance criterion:** Metrics visible and tests green.
 
 --- 
 
-**Checklist de conclusão do Épico 2:**
+**Epic 2 completion checklist:**
 
-- [ ] `logSafe` em 100 % dos logs `infra` (grep + CI green)
-- [ ] `SSRFIT` → 400 para IPs internos
-- [ ] `ConfigValidatorIT` → falha em prod com secret default
-- [ ] `SecurityHeadersIT` → headers presentes em resposta `curl -I`
-- [ ] `./mvnw verify` verde com `owasp-dependency-check` green
+- [ ] `logSafe` in 100 % of `infra` logs (grep + CI green)
+- [ ] `SSRFIT` → 400 for internal IPs
+- [ ] `ConfigValidatorIT` → fails in prod with a default secret
+- [ ] `SecurityHeadersIT` → headers present in the `curl -I` response
+- [ ] `./mvnw verify` green with `owasp-dependency-check` green
 - [ ] `scripts/check-security.sh` → PASS
-- [ ] `./mvnw verify` completo verde (unit + IT + gates)
+- [ ] Full `./mvnw verify` green (unit + IT + gates)
 
-*Ao marcar todos os itens acima, o Épico 2 está **concluído** e o próximo épico (EP3 – Observable) pode iniciar.*
+*By checking all items above, Epic 2 is **complete** and the next epic (EP3 – Observable) can start.*

@@ -1,50 +1,50 @@
-# Epic 6: Escalável – Base para Crescimento
+# Epic 6: Scalable – Foundation for Growth
 
-**Projeto:** url-shortener-service
-**Contexto:** Java 25, Spring Boot 4.1.1, Arquitetura Hexagonal, MongoDB, Redis, Tomcat 11 (virtual threads)
-**Objetivo:** Preparar o sistema para crescer de forma sustentável — múltiplas instâncias sem degradação nem reestruturação — e **evidenciar** (não reimplementar) os mecanismos de escala que o repo já possui.
+**Project:** url-shortener-service
+**Context:** Java 25, Spring Boot 4.1.1, Hexagonal Architecture, MongoDB, Redis, Tomcat 11 (virtual threads)
+**Objective:** Prepare the system to grow sustainably — multiple instances without degradation or restructuring — and **provide evidence** (not re-implement) of the scaling mechanisms the repo already has.
 
 ---
 
-## Estado do repo (pré-existente, não é novo trabalho)
+## Repo state (pre-existing, not new work)
 
-O repo **já possui** a maior parte da base de escala:
+The repo **already has** most of the scaling foundation:
 
-- **Stateless por design** (`docs/twelve-factor.md` §6/§8): auth JWT stateless; Mongo/Redis são recursos compartilhados; a fila de analytics é um Redis Stream durável (`RedisClickEventQueue` + `ClickBatchWorker`) — nenhum estado em processo.
-- **Rate-limit per-IP compartilhado:** `RedisRateLimiterAdapter` — token bucket **via Redis** (um único script Lua atômico, TIME-driven), escopos SHORTEN (60/min) e REDIRECT (120/min) independentes, trusted-proxy CIDR, fail-open. Todas as instâncias batem no mesmo bucket → o limite é global, não por instância. `RedirectRateLimitIT` (5 testes) cobre capacidade, anti-enumeration, escopos e burst concorrente.
-- **Circuit breakers Resilience4j:** `databaseCb` (`@CircuitBreaker`) em `MongoUrlRepository`, sliding window 10 / min 5 calls / 50% failure / 20s open; `rateLimiterCb`; expostos em `/actuator/circuitbreakers`.
-- **Índices MongoDB (V1–V9 via `MongoSchemaMigrator`):** lookup de redirect é por `_id` (o código curto É a PK — índice `{short_code:1}` seria inútil); cursor pagination usa V7 `(userId, createdAt DESC)`; analytics usa V4 `(shortCode, timestamp)` + `(timestamp)`; expiração usa TTL V5 `expiresAt`.
-- **Cache-aside compartilhado:** bloom filter + Redis L2 compartilhados; **Caffeine L1 é por instância** (TTL 5s → staleness limitado, aceitável), agora configurável via `app.cache.l1-*` (Épico 5).
-- **Baseline/stress single-instance (Épico 5):** nominal 200/20 rps p95 < 12ms; stress 2× (ramping 400/40, hold 4m): 165.498 reqs, 0 falhas, p95 < 5ms.
-- **SLO real:** p99 < 200ms (k6 thresholds `p95 < 200ms`, err < 0.1%) — não existe "S3 = 300ms".
+- **Stateless by design** (`docs/twelve-factor.md` §6/§8): stateless JWT auth; Mongo/Redis are shared resources; the analytics queue is a durable Redis Stream (`RedisClickEventQueue` + `ClickBatchWorker`) — no in-process state.
+- **Shared per-IP rate-limit:** `RedisRateLimiterAdapter` — token bucket **over Redis** (a single atomic Lua script, TIME-driven), independent SHORTEN (60/min) and REDIRECT (120/min) scopes, trusted-proxy CIDR, fail-open. All instances hit the same bucket → the limit is global, not per instance. `RedirectRateLimitIT` (5 tests) covers capacity, anti-enumeration, scopes, and concurrent burst.
+- **Resilience4j circuit breakers:** `databaseCb` (`@CircuitBreaker`) in `MongoUrlRepository`, sliding window 10 / min 5 calls / 50% failure / 20s open; `rateLimiterCb`; exposed at `/actuator/circuitbreakers`.
+- **MongoDB indexes (V1–V9 via `MongoSchemaMigrator`):** redirect lookup is by `_id` (the short code IS the PK — an index `{short_code:1}` would be useless); cursor pagination uses V7 `(userId, createdAt DESC)`; analytics uses V4 `(shortCode, timestamp)` + `(timestamp)`; expiration uses TTL V5 `expiresAt`.
+- **Shared cache-aside:** bloom filter + Redis L2 shared; **Caffeine L1 is per instance** (TTL 5s → bounded staleness, acceptable), now configurable via `app.cache.l1-*` (Epic 5).
+- **Single-instance baseline/stress (Epic 5):** nominal 200/20 rps p95 < 12ms; stress 2× (ramping 400/40, hold 4m): 165.498 reqs, 0 failures, p95 < 5ms.
+- **Real SLO:** p99 < 200ms (k6 thresholds `p95 < 200ms`, err < 0.1%) — there is no "S3 = 300ms".
 
-**O que falta de verdade:** (a) decisões de escala registradas como ADRs; (b) auditoria `explain` com evidência de uso de índice; (c) artefatos de deploy multi-instância (nginx upstream N servers, systemd template, imagem com tag sha, runbook); (d) uma **validação multi-instância real** (2 instâncias + LB sob carga 2×, provando rate-limit compartilhado).
+**What is truly missing:** (a) scaling decisions recorded as ADRs; (b) an `explain` audit with evidence of index usage; (c) multi-instance deploy artifacts (nginx upstream N servers, systemd template, image with sha tag, runbook); (d) a **real multi-instance validation** (2 instances + LB under 2× load, proving a shared rate-limit).
 
-## Por que este épico agora?
+## Why this epic now?
 
-- **EP5 (Performance)** validou SLOs single-instance; o EP6 valida que o design stateless **de fato escala horizontalmente** e registra as decisões que sustentam isso.
-- **EP7/EP8** dependem de uma base escalável (tolerância a falhas, deploy blue-green/canary sem interrupção).
+- **EP5 (Performance)** validated single-instance SLOs; EP6 validates that the stateless design **actually scales horizontally** and records the decisions that support it.
+- **EP7/EP8** depend on a scalable foundation (fault tolerance, blue-green/canary deploy without disruption).
 
-**Critério de Aceitação (aterrado):**
+**Acceptance Criteria (grounded):**
 
-1. ≥2 ADRs (target: 4) em `docs/adr/` com template status/date/context/decision/consequences.
-2. Auditoria `explain` nas queries críticas com evidência colada (IXSCAN, `totalDocsExamined` mínimo) — **sem** criar índice às cegas.
-3. Rate-limit e circuit breakers **evidenciados** sob carga (IT verde + `/actuator/circuitbreakers`).
-4. Artefatos multi-instância: nginx upstream com weight-flip, systemd template `url-shortener@.service`, imagem Docker construída (tamanho + tag sha no DoD), runbook atualizado.
-5. Run **2 instâncias + LB** sob stress 2×: SLOs mantidos, 0 5xx, rate-limit compartilhado provado.
-6. `./mvnw verify` verde com todos os gates.
-7. **Rule zero — zero-from-memory:** todo número, sha ou contagem é colado de output real.
+1. ≥2 ADRs (target: 4) in `docs/adr/` with the status/date/context/decision/consequences template.
+2. `explain` audit on the critical queries with pasted evidence (IXSCAN, minimal `totalDocsExamined`) — **without** blindly creating any index.
+3. Rate-limit and circuit breakers **proven with evidence** under load (green IT + `/actuator/circuitbreakers`).
+4. Multi-instance artifacts: nginx upstream with weight-flip, systemd template `url-shortener@.service`, built Docker image (size + sha tag in the DoD), updated runbook.
+5. Run **2 instances + LB** under 2× stress: SLOs held, 0 5xx, shared rate-limit proven.
+6. `./mvnw verify` green with all gates.
+7. **Rule zero — zero-from-memory:** every number, sha, or count is pasted from a real output.
 
-**Rastreabilidade rápida:**
+**Quick traceability:**
 
-| Story | Doc referência | Aspecto chave |
+| Story | Reference doc | Key aspect |
 |-------|----------------|---------------|
-| 6.1 | `docs/adr/` | Decisões de escala registradas |
-| 6.2 | `MongoSchemaMigrator` V3–V9 + mongosh explain | Índices usados de fato |
-| 6.3 | `RedisRateLimiterAdapter` + resilience4j | Limites globais + circuit breakers |
-| 6.4 | `deploy/proxy/nginx.conf`, `deploy/url-shortener@.service`, `Dockerfile` | Deploy multi-instância |
-| 6.5 | `load-tests/stress.js` via LB | Escala horizontal validada |
+| 6.1 | `docs/adr/` | Scale decisions recorded |
+| 6.2 | `MongoSchemaMigrator` V3–V9 + mongosh explain | Indexes actually used |
+| 6.3 | `RedisRateLimiterAdapter` + resilience4j | Global limits + circuit breakers |
+| 6.4 | `deploy/proxy/nginx.conf`, `deploy/url-shortener@.service`, `Dockerfile` | Multi-instance deploy |
+| 6.5 | `load-tests/stress.js` via LB | Horizontal scale validated |
 
 ---
 
-*Próximo passo: executar as stories 6.1–6.5 (`epic-6-technical-tasks.md`) e colar evidências no `epic-6-dod.md`.*
+*Next step: run stories 6.1–6.5 (`epic-6-technical-tasks.md`) and paste the evidence into `epic-6-dod.md`.*

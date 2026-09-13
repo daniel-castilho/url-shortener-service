@@ -384,7 +384,7 @@ Tag immutability: a bad release is fixed forward with `vX.Y.Z+1`; a tag is never
 
 ---
 
-## Incidente: deploy falhou
+## Incident: deploy failed
 
 When `scripts/deploy.sh` aborts (fail-closed: old color restored to 100%, new color drained/stopped, exit non-zero naming the offending step):
 

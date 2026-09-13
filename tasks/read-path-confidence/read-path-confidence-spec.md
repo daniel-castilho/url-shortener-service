@@ -20,9 +20,9 @@ migrations, OTel, k6), but two things undercut it:
    published baseline only records `shorten`; the redirect numbers are not published, and k6 is not a
    blocking CI gate.
 
-This epic makes the redirect path **chatto, previsível, e medido** — the exact foundation the product
+This epic makes the redirect path **fast, predictable, and measured** — the exact foundation the product
 phases (PATCH, branded domain, analytics) build on, and the thing the external review correctly said was
-missing ("publique o estágio 1 medido").
+missing ("publish the measured stage 1").
 
 ---
 

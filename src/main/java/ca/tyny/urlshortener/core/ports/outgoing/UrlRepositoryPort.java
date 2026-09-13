@@ -4,65 +4,65 @@ import ca.tyny.urlshortener.core.model.ShortUrl;
 import java.util.Optional;
 
 /**
- * Porto de saída que define o contrato para persistência de URLs encurtadas.
+ * Outbound port that defines the contract for short-URL persistence.
  *
- * <p>Esta é uma abstração que permite o core da aplicação (domain layer) permanecer independente de
- * detalhes de infraestrutura (qual banco de dados é usado).
+ * <p>An abstraction that keeps the application core (domain layer) independent of infrastructure
+ * details (which database is used).
  *
- * <p>Segue o padrão Ports & Adapters (Clean Architecture): - Port: Esta interface agnóstica de
- * banco de dados - Adapter: Implementação concreta (ex: MongoUrlRepository)
+ * <p>Follows the Ports &amp; Adapters pattern (Clean Architecture): - Port: this abstraction is
+ * database-agnostic - Adapter: concrete implementation (e.g. MongoUrlRepository)
  *
- * <p>Responsabilidades: - Definir operações de persistência de URLs - Ser agnóstico quanto ao banco
- * de dados específico - Ser testável (implementações mock podem ser facilmente criadas)
+ * <p>Responsibilities: - Define URL persistence operations - Stay agnostic about the specific data
+ * store - Be testable (mock implementations can be created easily)
  *
  * @author URL Shortener Team
  */
 public interface UrlRepositoryPort {
 
   /**
-   * Persiste uma URL encurtada.
+   * Persists a shortened URL.
    *
-   * @param shortUrl a URL encurtada a ser salva
-   * @throws IllegalArgumentException se os dados forem inválidos
-   * @throws RuntimeException (ou subclasses específicas) em caso de erro de persistência
+   * @param shortUrl the shortened URL to save
+   * @throws IllegalArgumentException if the data is invalid
+   * @throws RuntimeException (or specific subclasses) on a persistence error
    */
   void save(ShortUrl shortUrl);
 
   /**
-   * Recupera uma URL encurtada por seu identificador único.
+   * Retrieves a shortened URL by its unique identifier.
    *
-   * @param id o identificador único da URL encurtada
-   * @return Optional contendo a URL se encontrada, ou empty se não existir
-   * @throws RuntimeException (ou subclasses específicas) em caso de erro ao consultar
+   * @param id the unique identifier of the shortened URL
+   * @return Optional containing the URL if found, empty otherwise
+   * @throws RuntimeException (or specific subclasses) when the query fails
    */
   Optional<ShortUrl> findById(String id);
 
   /**
-   * Verifica se uma URL encurtada existe por seu identificador.
+   * Checks whether a shortened URL exists by its identifier.
    *
-   * @param id o identificador único
-   * @return true se existir, false caso contrário
+   * @param id the unique identifier
+   * @return true if it exists, false otherwise
    */
   boolean existsById(String id);
 
   /**
-   * Incrementa atomicamente em 1 o contador de cliques de uma URL encurtada.
+   * Atomically increments the click counter of a shortened URL by 1.
    *
-   * @param id o identificador único da URL encurtada
+   * @param id the unique identifier of the shortened URL
    */
   default void incrementClickCount(String id) {
     incrementClickCount(id, 1L);
   }
 
   /**
-   * Incrementa atomicamente o contador de cliques de uma URL encurtada.
+   * Atomically increments the click counter of a shortened URL.
    *
-   * <p>A implementação deve usar um incremento atômico do lado do armazenamento (ex.: {@code $inc}
-   * no MongoDB), nunca leitura-seguida-de-escrita, para não perder incrementos sob concorrência. Se
-   * o código não existir, é no-op.
+   * <p>The implementation must use a storage-side atomic increment (e.g. {@code $inc} in MongoDB),
+   * never a read-then-write, so increments are not lost under concurrency. If the code does not
+   * exist, it is a no-op.
    *
-   * @param id o identificador único da URL encurtada
-   * @param delta quanto somar ao contador (&gt; 0)
+   * @param id the unique identifier of the shortened URL
+   * @param delta how much to add to the counter (&gt; 0)
    */
   void incrementClickCount(String id, long delta);
 }

@@ -1,29 +1,28 @@
 package ca.tyny.urlshortener.infra.adapter.output.persistence.exception;
 
 /**
- * Exceção de domínio lançada quando ocorrem erros na camada de persistência. Encapsula exceções
- * específicas do MongoDB ou banco de dados, evitando que detalhes de infraestrutura vazem para o
- * core da aplicação.
+ * Domain exception thrown when errors occur in the persistence layer. Encapsulates MongoDB- or
+ * database-specific exceptions so that infrastructure details never leak into the application core.
  *
- * <p>Segue o padrão de isolamento de infraestrutura proposto pela Clean Architecture.
+ * <p>Follows the infrastructure isolation pattern proposed by Clean Architecture.
  */
 public class RepositoryException extends RuntimeException {
 
   /**
-   * Construtor com mensagem descritiva.
+   * Constructor with a descriptive message.
    *
-   * @param message descrição do erro que ocorreu
+   * @param message description of the error that occurred
    */
   public RepositoryException(String message) {
     super(message);
   }
 
   /**
-   * Construtor com mensagem e causa raiz (cause chaining). Permite rastrear a exception original do
-   * MongoDB ou banco de dados.
+   * Constructor with a message and root cause (cause chaining). Allows tracing the original MongoDB
+   * or database exception.
    *
-   * @param message descrição do erro que ocorreu
-   * @param cause a exceção original (ex: MongoException)
+   * @param message description of the error that occurred
+   * @param cause the original exception (e.g. MongoException)
    */
   public RepositoryException(String message, Throwable cause) {
     super(message, cause);
