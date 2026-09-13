@@ -543,13 +543,14 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     is a hard CI gate for `@spec-complete` components (≥ 90% traced, no dangling refs, untraced test
     classes must sit in the debt registry). Supporting tooling: `scripts/extract-requirements.sh`
     (JSON export), `scripts/generate-package-info.sh` (template). Known gaps tracked here: (a)
-    `recordRateLimitExceeded()` has no production caller, so the 429 counter metric stays 0 —
-    the `RateLimitExcessiveTrafficRejected` alert is structurally correct but inert until a caller
-    is wired (flagged during the alerts work); (b) only RateLimiting is spec-complete — UrlShortener,
-    Auth, Analytics, Persistence and Cache components have no living specs yet (ratchet, next
-    epics); (c) Spotless excludes `package-info.java` from google-java-format because the formatter
-    reflows the EARS/`###` markdown structure that the gate regexes parse — revisit when the gate
-    parses the AST instead of text. — `in-progress`
+    ~~`recordRateLimitExceeded()` has no production caller~~ **resolved 2026-09-13: wired at the
+    single 429 egress (`UrlController.tooManyRequests`) — every rejected request increments
+    `rate.limit.exceeded.total` exactly once; live-proven via `/actuator/prometheus` with
+    `RATE_LIMITER_LIMIT=1` (two requests → 200 then 429 → counter > 0)**; (b) only RateLimiting is
+    spec-complete — UrlShortener, Auth, Analytics, Persistence and Cache components have no living
+    specs yet (ratchet, next epics); (c) Spotless excludes `package-info.java` from google-java-format
+    because the formatter reflows the EARS/`###` markdown structure that the gate regexes parse —
+    revisit when the gate parses the AST instead of text. — `in-progress`
 
 ## 🔍 Operational Discipline & Debugging Guidelines
 

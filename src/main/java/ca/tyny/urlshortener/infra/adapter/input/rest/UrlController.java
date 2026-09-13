@@ -186,9 +186,14 @@ public class UrlController {
     }
   }
 
-  /** 429 with standard throttling headers (Retry-After + RateLimit-*). */
-  private static <T> ResponseEntity<T> tooManyRequests(
+  /**
+   * 429 with standard throttling headers (Retry-After + RateLimit-*). Single 429 egress: records
+   * the frozen meter {@code rate.limit.exceeded.total} (numerator of the {@code
+   * RateLimitExcessiveTrafficRejected} alert) exactly once per rejected request.
+   */
+  private <T> ResponseEntity<T> tooManyRequests(
       ca.tyny.urlshortener.core.model.RateLimitVerdict verdict) {
+    metricsPort.recordRateLimitExceeded();
     return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
         .header("Retry-After", Long.toString(verdict.resetSeconds()))
         .header("RateLimit-Limit", "*")

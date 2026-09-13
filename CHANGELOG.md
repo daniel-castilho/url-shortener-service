@@ -25,6 +25,13 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ### Fixed
 
+- **`rate.limit.exceeded.total` meter never incremented (debt 32a)** — the counter was registered
+  and frozen but had no production caller, so the `RateLimitExcessiveTrafficRejected` alert could
+  never fire. The `UrlController.tooManyRequests` helper (the single 429 egress) now records it —
+  every rejected request counts exactly once; behavior (status, headers, anti-enumeration ordering)
+  unchanged. Verified live via `/actuator/prometheus` with `RATE_LIMITER_LIMIT=1`: two requests →
+  200 then 429 → `rate_limit_exceeded_total` > 0.
+
 - **Redis connection leak in `UrlShortenerHealthIndicator`** — `checkRedis()` borrowed a
   connection via `getConnectionFactory().getConnection()` and never closed it: one leaked
   `RedisConnection` per `/actuator/health` probe, exhausting the pool under continuous
