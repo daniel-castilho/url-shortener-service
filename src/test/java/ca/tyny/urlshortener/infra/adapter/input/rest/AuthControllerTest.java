@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import ca.tyny.urlshortener.config.WithMockSecurity;
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import ca.tyny.urlshortener.core.service.UserService;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.LoginRequest;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.RefreshTokenRequest;
@@ -34,6 +35,7 @@ class AuthControllerTest {
   @MockitoBean private UserService userService;
 
   @Test
+  @TracesRequirement("REQ-AUTH-001")
   @DisplayName("Should register user successfully")
   void shouldRegisterUser() throws Exception {
     // Given
@@ -56,6 +58,7 @@ class AuthControllerTest {
   }
 
   @Test
+  @TracesRequirement("REQ-AUTH-002")
   @DisplayName("Should login user successfully")
   void shouldLoginUser() throws Exception {
     // Given
@@ -76,6 +79,7 @@ class AuthControllerTest {
   }
 
   @Test
+  @TracesRequirement("REQ-AUTH-004")
   @DisplayName("Should validate register request")
   void shouldValidateRegisterRequest() throws Exception {
     // Given - Invalid request (empty fields)
@@ -91,6 +95,7 @@ class AuthControllerTest {
   }
 
   @Test
+  @TracesRequirement("REQ-AUTH-003")
   @DisplayName("Should refresh token successfully")
   void shouldRefreshToken() throws Exception {
     // Given

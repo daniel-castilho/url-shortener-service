@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import ca.tyny.urlshortener.core.model.User;
 import ca.tyny.urlshortener.core.ports.outgoing.AuthenticationPort;
 import ca.tyny.urlshortener.core.ports.outgoing.IdGeneratorPort;
@@ -38,6 +39,7 @@ class UserServiceTest {
   }
 
   @Test
+  @TracesRequirement("REQ-AUTH-001")
   @DisplayName("Should register new user successfully")
   void shouldRegisterUser() {
     // Given
@@ -62,6 +64,7 @@ class UserServiceTest {
   }
 
   @Test
+  @TracesRequirement("REQ-AUTH-001")
   @DisplayName("Should throw exception when registering existing email")
   void shouldThrowWhenEmailExists() {
     // Given
@@ -78,6 +81,7 @@ class UserServiceTest {
   }
 
   @Test
+  @TracesRequirement("REQ-AUTH-002")
   @DisplayName("Should login successfully")
   void shouldLoginUser() {
     // Given
@@ -101,6 +105,7 @@ class UserServiceTest {
   }
 
   @Test
+  @TracesRequirement("REQ-AUTH-003")
   @DisplayName("Should refresh token successfully")
   void shouldRefreshToken() {
     // Given
@@ -123,6 +128,7 @@ class UserServiceTest {
   }
 
   @Test
+  @TracesRequirement("REQ-AUTH-003")
   @DisplayName("Should throw exception when refresh token is invalid")
   void shouldThrowWhenRefreshTokenInvalid() {
     // Given
