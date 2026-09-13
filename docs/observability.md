@@ -103,7 +103,7 @@ prints the recommended action. It is a triage aid, not a gate.
 | Sustained 5xx / fast-burn alert | `error5xx` line + `SLOAvailabilityFastBurn` status in Alertmanager | `docs/slos.md` §Response runbook — **Fast burn** (critical) row |
 | `analytics.queue.depth` growing (>100s of events) | queue gauge + `click_events` insert stats | consumer (`ClickBatchWorker`) backed up/failing: check its logs; queue is bounded (`XADD MAXLEN`) and fail-open — watch for drops |
 | Cache hit ratio collapsing | `hits/(hits+misses)` from the cache counters | verify Redis reachable + L1/bloom reset; a single DB hit per redirect is by design (Rule 5), ratios must stay high |
-| Redirect latency p99 > 200ms | `url_retrieval_duration_seconds` + `redirect_latency_seconds` p99 panels | MongoDB/Redis latency + network; correlate with the k6 baseline (`docs/load-test-baseline.md`) |
+| Redirect latency p99 > 200ms (`RedirectLatencyP99AboveSLO` warning) | `url_retrieval_duration_seconds` + `redirect_latency_seconds` p99 panels; cache hit ratio | MongoDB/Redis latency + network; correlate with the k6 baseline (`docs/load-test-baseline.md`); runbook row "Latency p99" (`docs/slos.md`) |
 
 ## Run scripts
 
