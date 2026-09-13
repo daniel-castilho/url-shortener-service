@@ -247,6 +247,7 @@ jobs:
         # This produces the exact same jar as the gates job (deterministic build with same revision)
 
       - name: Build Docker image
+        run: |
           docker build \
             --build-arg VERSION="${{ steps.extract-tag.outputs.semver }}" \
             -t url-shortener:"${{ steps.extract-tag.outputs.semver }}" \
@@ -273,12 +274,6 @@ jobs:
           format: 'cyclonedx'
           output: 'sbom-url-shortener-${{ steps.extract-tag.outputs.semver }}.json'
           scanners: 'vuln'
-
-      - name: Download jar artifact (again for release assets)
-        uses: actions/download-artifact@v4
-        with:
-          name: url-shortener-jar
-          path: target/
 
       - name: Compute SHA256 of jar
         id: sha
