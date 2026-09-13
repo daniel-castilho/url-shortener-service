@@ -18,6 +18,13 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
   per `package-info.java` (a `# Component:` line opens a block), and `release.yml` runs the
   living-spec gate at tag time (parity with CI).
 
+- **Auth living spec complete (epic 9 story 9.2)** — the Auth Business Component is the third
+  spec-complete component (spec in `infra/security/package-info.java`): 4 EARS requirements
+  (REQ-AUTH-001..004) covering registration (happy + duplicate email), login, token refresh
+  (happy + invalid) and registration input validation — all traced to the 9 existing tests
+  (`AuthControllerTest`, `UserServiceTest`); no new tests needed. Gate: 14/14 across the three
+  gated components, 100%.
+
 - **Living specifications (spec-driven development, Phase 0+1)** — EARS requirements now live in
   `package-info.java` living specs per Business Component (pilot: RateLimiting, 5 requirements:
   429+headers on limit excess, SHORTEN/REDIRECT scope isolation, trusted-proxy CIDR for

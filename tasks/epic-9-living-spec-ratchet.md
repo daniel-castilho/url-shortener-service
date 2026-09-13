@@ -115,7 +115,20 @@ evict test added (no existing test observed the adapter's evict — D4 new-test 
 
 ### 9.2 — Auth
 
-_(pending)_
+```
+$ bash scripts/check-living-spec.sh        (after S2 merge)
+  OK      REQ-AUTH-001..004 (Auth) — traced (4 lines)
+Coverage: 14 / 14 requirements traced (100%)   (RateLimiting 5 + Cache 5 + Auth 4)
+
+$ ./mvnw test -Dtest='AuthControllerTest,UserServiceTest'
+Tests run: 4, Failures: 0 ... in AuthController Tests
+Tests run: 5, Failures: 0 ... in ca.tyny.urlshortener.core.service.UserServiceTest
+```
+
+Spec lives in `infra/security` (the component's authentic package; no test classes there → zero
+stray-class burden). REQ-AUTH-001..004 calibrated to the 9 existing tests (AuthControllerTest 4 +
+UserServiceTest 5): register happy+duplicate, login, refresh happy+invalid, registration input
+validation. No new tests needed. `@spec-complete true`.
 
 ### 9.3 — Analytics
 
