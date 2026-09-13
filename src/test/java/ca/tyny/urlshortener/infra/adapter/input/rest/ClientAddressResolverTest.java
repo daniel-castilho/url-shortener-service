@@ -2,6 +2,7 @@ package ca.tyny.urlshortener.infra.adapter.input.rest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import ca.tyny.urlshortener.infra.config.properties.RateLimiterProperties;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -24,6 +25,7 @@ class ClientAddressResolverTest {
 
   @Test
   @DisplayName("Uses remote address for untrusted peers even with a forwarded header")
+  @TracesRequirement("REQ-RATE-003")
   void untrustedPeerCannotSpoof() {
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.setRemoteAddr("203.0.113.50");
@@ -35,6 +37,7 @@ class ClientAddressResolverTest {
 
   @Test
   @DisplayName("Trusts left-most forwarded entry from a trusted proxy")
+  @TracesRequirement("REQ-RATE-003")
   void trustedProxyForwardedEntryWins() {
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.setRemoteAddr("10.0.0.5");
@@ -45,6 +48,7 @@ class ClientAddressResolverTest {
 
   @Test
   @DisplayName("Falls back to remote address when no forwarded header is present")
+  @TracesRequirement("REQ-RATE-003")
   void fallsBackToPeer() {
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.setRemoteAddr("10.0.0.5");
@@ -54,6 +58,7 @@ class ClientAddressResolverTest {
 
   @Test
   @DisplayName("Never trusts headers when no trusted CIDRs are configured")
+  @TracesRequirement("REQ-RATE-003")
   void noTrustedProxiesMeansPeerOnly() {
     MockHttpServletRequest request = new MockHttpServletRequest();
     request.setRemoteAddr("192.0.2.7");

@@ -452,6 +452,9 @@
                             <include>src/main/java/**/*.java</include>
                             <include>src/test/java/**/*.java</include>
                         </includes>
+                        <excludes>
+                            <exclude>**/package-info.java</exclude>
+                        </excludes>
                         <googleJavaFormat>
                             <version>1.36.1</version>
                             <style>GOOGLE</style>
@@ -476,7 +479,7 @@
         </plugins>
     </build>
 
-    <profiles>
+<profiles>
         <profile>
             <id>native</id>
             <build>
@@ -513,6 +516,8 @@
                                 <buildArg>-H:+ReportExceptionStackTraces</buildArg>
                                 <buildArg>--enable-http</buildArg>
                                 <buildArg>--enable-https</buildArg>
+                                <buildArg>--enable-http</buildArg>
+                                <buildArg>--enable-https</buildArg>
                                 <buildArg>-H:+AddAllCharsets</buildArg>
                             </buildArgs>
                         </configuration>
@@ -521,5 +526,4 @@
             </build>
         </profile>
     </profiles>
-
 </project>

@@ -27,6 +27,12 @@ jobs:
         run: bash scripts/check-doc-sync.sh
       - name: Doc-sync gate self-test
         run: bash scripts/check-doc-sync.sh --self-test
+      # Living specifications: >= 90% of declared EARS requirements in spec-complete
+      # package-info.java components are traced via @TracesRequirement (single source of truth).
+      - name: Living-spec traceability gate
+        run: bash scripts/check-living-spec.sh
+      - name: Living-spec gate self-test
+        run: bash scripts/check-living-spec.sh --self-test
 
   observability:
     name: Observability Gate (Epic 3)

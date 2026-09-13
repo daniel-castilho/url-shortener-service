@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 
 import ca.tyny.urlshortener.config.BaseIntegrationTest;
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import ca.tyny.urlshortener.core.model.ShortUrl;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlRepositoryPort;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.ShortenRequest;
@@ -54,6 +55,7 @@ class RedirectRateLimitIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Allows up to capacity then blocks redirects with Retry-After")
+  @TracesRequirement("REQ-RATE-001")
   void throttlesAfterCapacity() {
     for (int i = 0; i < 3; i++) {
       given()
@@ -78,6 +80,7 @@ class RedirectRateLimitIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Throttles unknown-code probing too (anti-enumeration)")
+  @TracesRequirement("REQ-RATE-001")
   void throttlesUnknownCodeProbing() {
     for (int i = 0; i < 3; i++) {
       given().redirects().follow(false).when().get("/nope" + i + "xx").then().statusCode(404);
@@ -91,6 +94,7 @@ class RedirectRateLimitIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Shorten scope keeps its own budget when redirect is exhausted")
+  @TracesRequirement("REQ-RATE-002")
   void scopesAreIsolated() {
     for (int i = 0; i < 3; i++) {
       given().redirects().follow(false).get("/ratelim1").then().statusCode(302);
@@ -108,6 +112,7 @@ class RedirectRateLimitIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Concurrent burst admits exactly the capacity")
+  @TracesRequirement("REQ-RATE-001")
   void concurrentBurstAdmitsExactlyCapacity() throws Exception {
     int threads = 12;
     ExecutorService executor = Executors.newFixedThreadPool(threads);

@@ -9,6 +9,18 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ### Added
 
+- **Living specifications (spec-driven development, Phase 0+1)** — EARS requirements now live in
+  `package-info.java` living specs per Business Component (pilot: RateLimiting, 5 requirements:
+  429+headers on limit excess, SHORTEN/REDIRECT scope isolation, trusted-proxy CIDR for
+  `X-Forwarded-For`, fail-open on Redis failure, bypass when disabled). `@TracesRequirement`
+  (`core/annotation`) is the single source of truth linking tests to requirements; the new
+  `scripts/check-living-spec.sh` hard gate (+ `--self-test`) enforces ≥ 90% traceability for
+  `@spec-complete` components, rejects dangling traces and unregistered untraced test classes
+  (debt registry in `AGENTS.md`), and runs in CI. Supporting tooling:
+  `scripts/extract-requirements.sh` (JSON export) and `scripts/generate-package-info.sh`
+  (scaffolding). Spotless excludes `package-info.java` (google-java-format would reflow the EARS
+  structure the gate parses).
+
 - **Alert rules for the frozen meters** — `RedirectLatencyP99AboveSLO` (warning, `redirect_latency_seconds{quantile="0.99"} > 0.2` with a 5m traffic guard, so idle windows never alert) and `RateLimitExcessiveTrafficRejected` (warning, share of all traffic rejected by the rate limiter > 5% — the enumeration/abuse signal), both in `deploy/monitoring/alerts.yml` with on-call runbook annotations, plus four `promtool` rule tests in `deploy/monitoring/rules_tests.yml` (fire/no-fire pairs). `docs/slos.md` now names the real rules instead of "threshold alerts from p99 panel".
 
 ### Fixed
