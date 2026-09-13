@@ -1,6 +1,9 @@
 package ca.tyny.urlshortener.infra.adapter.input.rest;
 
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -12,6 +15,7 @@ import ca.tyny.urlshortener.core.ports.outgoing.AnalyticsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.RateLimiterPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -96,6 +100,9 @@ class UrlControllerRateLimitingTest {
             result ->
                 org.junit.jupiter.api.Assertions.assertEquals(
                     "42", result.getResponse().getHeader("Retry-After")));
+
+    // Frozen meter rate.limit.exceeded.total: counted exactly once per rejected request
+    verify(metricsPort, times(1)).recordRateLimitExceeded();
   }
 
   @Test
@@ -120,5 +127,30 @@ class UrlControllerRateLimitingTest {
                     "15", result.getResponse().getHeader("Retry-After")));
 
     org.mockito.Mockito.verifyNoInteractions(getUrlUseCase);
+    // Frozen meter: the redirect rejection counts exactly once too (same single 429 egress)
+    verify(metricsPort, times(1)).recordRateLimitExceeded();
+  }
+
+  @Test
+  @DisplayName("Allowed requests never increment the rate-limit meter")
+  void whenAllowed_thenMeterNotIncremented() throws Exception {
+    when(rateLimiter.tryAcquire(
+            ca.tyny.urlshortener.core.ports.outgoing.RateLimitScope.REDIRECT, "127.0.0.1"))
+        .thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(10));
+    when(getUrlUseCase.getOriginalUrl(
+            org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.eq("abc123")))
+        .thenReturn("https://example.com/target");
+
+    mockMvc
+        .perform(
+            get("/abc123")
+                .with(
+                    request -> {
+                      request.setRemoteAddr("127.0.0.1");
+                      return request;
+                    }))
+        .andExpect(status().is3xxRedirection());
+
+    verify(metricsPort, never()).recordRateLimitExceeded();
   }
 }
