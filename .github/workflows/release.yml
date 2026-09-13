@@ -255,7 +255,11 @@ jobs:
 
       - name: Non-root gate (image must not run as root)
         run: |
-          docker run --rm --entrypoint id url-shortener:"${{ steps.extract-tag.outputs.semver }}" | grep -q '^uid=1000(' || exit 1
+          OUT=$(docker run --rm --entrypoint id url-shortener:"${{ steps.extract-tag.outputs.semver }}")
+          echo "id output: $OUT"
+          UID_NUM=$(echo "$OUT" | sed -n 's/^uid=\([0-9]*\).*/\1/p')
+          [ -n "$UID_NUM" ] && [ "$UID_NUM" != "0" ] || { echo "FAIL: image runs as root (uid=$UID_NUM)"; exit 1; }
+          echo "PASS: image runs as non-root uid=$UID_NUM"
 
       - name: Trivy scan (HIGH/CRITICAL, SHA-pinned)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
