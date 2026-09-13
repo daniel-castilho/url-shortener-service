@@ -44,31 +44,66 @@ run_gate() {
     local failures=0
 
     # --- Collect declared requirements (all package-info files) and the
-    # --- gated subset (spec-complete components only — ratchet, decision 5) ---
+    # --- gated subset (spec-complete components only — ratchet, decision 5).
+    # --- A package-info.java may host MULTIPLE components (e.g. the redis
+    # --- package hosts RateLimiting and Cache): a "# Component:" line opens a
+    # --- block; every following "### REQ-*" and any "@spec-complete true" in
+    # --- that block (until the next "# Component:" line) belongs to it.
+    # --- Two passes per file: (A) assign each REQ to its component;
+    # --- (B) attribute each @spec-complete marker to its component (the
+    # --- marker conventionally sits at the END of a block, after the reqs —
+    # --- pass B handles before/after uniformly). A marker preceding the first
+    # --- "# Component:" line has no block to attribute and is ignored
+    # --- (the template places markers at block end).
     declare -A REQ_COMPONENT=()
     declare -A GATED=()
     local gated_pkgs=()
     local package_infos=()
     mapfile -t package_infos < <(find "$main_dir" -name "package-info.java" -type f | sort)
     for file in "${package_infos[@]}"; do
-        local component
-        component=$(grep -m1 '# Component:' "$file" | sed 's/.*# Component:[[:space:]]*//' | sed 's/[[:space:]]*$//')
-        if [[ -z "$component" ]]; then
-            component=$(basename "$(dirname "$file")")
-        fi
-        local req
-        while IFS= read -r req; do
-            [[ -z "$req" ]] && continue
-            REQ_COMPONENT["$req"]="$component"
-            if grep -q "$SPEC_COMPLETE_MARKER" "$file"; then
-                GATED["$req"]=1
+        local file_pkg
+        file_pkg=$(dirname "$file")
+        local line component
+        local -A FILE_REQS=()
+        local -A FILE_GATED_COMPONENTS=()
+        # Pass A: requirements -> component
+        component=""
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            if [[ "$line" =~ ^[[:space:]]*[*]?[[:space:]]*#[[:space:]]*Component:[[:space:]]*(.+)[[:space:]]*$ ]]; then
+                component="${BASH_REMATCH[1]%%\**}"
+                component="${component//\*/}"
+                component="${component//[[:space:]]/}"
+            elif [[ "$line" =~ ^[[:space:]]*[*]?[[:space:]]*###[[:space:]]+(REQ-[A-Z0-9-]+) ]]; then
+                local req="${BASH_REMATCH[1]}"
+                if [[ -z "$component" ]]; then
+                    component=$(basename "$file_pkg")
+                fi
+                REQ_COMPONENT["$req"]="$component"
+                FILE_REQS["$req"]=1
             fi
-        done < <(grep -oE '###[[:space:]]+REQ-[A-Z0-9-]+' "$file" | awk '{print $2}')
-        if grep -q "$SPEC_COMPLETE_MARKER" "$file"; then
-            local pkg
-            pkg=$(dirname "$file")
-            gated_pkgs+=("${pkg#"$main_dir"/}")
-        fi
+        done < "$file"
+        # Pass B: @spec-complete markers -> component
+        component=""
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            if [[ "$line" =~ ^[[:space:]]*[*]?[[:space:]]*#[[:space:]]*Component:[[:space:]]*(.+)[[:space:]]*$ ]]; then
+                component="${BASH_REMATCH[1]%%\**}"
+                component="${component//\*/}"
+                component="${component//[[:space:]]/}"
+            elif [[ "$line" =~ @spec-complete[[:space:]]+true ]]; then
+                [[ -z "$component" ]] && continue
+                FILE_GATED_COMPONENTS["$component"]=1
+            fi
+        done < "$file"
+        # Gated requirements = reqs of this file whose component is gated here
+        for req in "${!FILE_REQS[@]}"; do
+            if [[ -n "${FILE_GATED_COMPONENTS["${REQ_COMPONENT["$req"]}"]:-}" ]]; then
+                GATED["$req"]=1
+                local gp="${file_pkg#"$main_dir"/}"
+                local dup=false
+                for e in "${gated_pkgs[@]}"; do [[ "$e" == "$gp" ]] && dup=true && break; done
+                $dup || gated_pkgs+=("$gp")
+            fi
+        done
     done
 
     # --- Collect traces (single source of truth: @TracesRequirement) ---
@@ -244,7 +279,61 @@ EOF
     fi
     grep -q "gate not active" "$TMP/out6" || { echo "FAIL: inactive message missing"; cat "$TMP/out6"; exit 1; }
 
-    echo "PASS: self-test verified — gate detects missing traces, stray classes, dangling refs, and respects the ratchet."
+    # Case 7: TWO components in ONE package-info — one gated+traced, one not
+    # gated -> PASS; the ungated component's untraced req must NOT count against
+    # coverage, and reqs must be attributed to the RIGHT component.
+    mkdir -p "$TMP/src/main/java/test/multi" "$TMP/src/test/java/test/multi"
+    cat > "$TMP/src/main/java/test/multi/package-info.java" <<'EOF'
+/**
+ * # Component: CompA
+ *
+ * ## Requirements (EARS)
+ *
+ * ### REQ-A-001
+ * **When** condition, **the Business Component shall** respond.
+ *
+ * @spec-complete true
+ *
+ * # Component: CompB
+ *
+ * ## Requirements (EARS)
+ *
+ * ### REQ-B-001
+ * **When** other, **the Business Component shall** respond too.
+ *
+ * ### REQ-B-002
+ * **When** more, **the Business Component shall** also do this.
+ *
+ * @spec-complete false
+ */
+package test.multi;
+EOF
+    cat > "$TMP/src/test/java/test/multi/CompATest.java" <<'EOF'
+package test.multi;
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
+class CompATest {
+    @TracesRequirement("REQ-A-001")
+    void a() {}
+}
+EOF
+    : > "$TMP/registry.md"
+    if ! run_gate "$TMP/src/main/java" "$TMP/src/test/java" "$TMP/registry.md" > "$TMP/out7" 2>&1; then
+        echo "FAIL: multi-component file was rejected:"; cat "$TMP/out7"; exit 1
+    fi
+    grep -q "REQ-A-001 (CompA)" "$TMP/out7" || { echo "FAIL: REQ-A not attributed to CompA"; cat "$TMP/out7"; exit 1; }
+    if grep -q "REQ-B-" "$TMP/out7"; then
+        echo "FAIL: ungated CompB requirements were gated:"; cat "$TMP/out7"; exit 1
+    fi
+    grep -q "Coverage: 1 / 1" "$TMP/out7" || { echo "FAIL: coverage counted ungated reqs"; cat "$TMP/out7"; exit 1; }
+
+    # Case 8: second component gated with untraced req -> FAIL names it
+    sed -i 's/@spec-complete false/@spec-complete true/' "$TMP/src/main/java/test/multi/package-info.java"
+    if run_gate "$TMP/src/main/java" "$TMP/src/test/java" "$TMP/registry.md" > "$TMP/out8" 2>&1; then
+        echo "FAIL: second gated component with 33% coverage passed"; exit 1
+    fi
+    grep -q "MISSING REQ-B-001 (CompB)" "$TMP/out8" || { echo "FAIL: REQ-B not attributed to CompB"; cat "$TMP/out8"; exit 1; }
+
+    echo "PASS: self-test verified — gate detects missing traces, stray classes, dangling refs, respects the ratchet, and parses multiple components per file."
     exit 0
 fi
 

@@ -38,12 +38,13 @@ jobs:
         run: |
           ./mvnw -B verify -Drevision="${{ steps.extract-tag.outputs.semver }}"
 
-      - name: Bash gates (boundaries, doc-sync, security, metrics-frozen)
+      - name: Bash gates (boundaries, doc-sync, security, metrics-frozen, living-spec)
         run: |
           bash scripts/check-boundaries.sh && bash scripts/check-boundaries.sh --self-test
           bash scripts/check-doc-sync.sh && bash scripts/check-doc-sync.sh --self-test
           bash scripts/check-security.sh && bash scripts/check-security.sh --self-test
           bash scripts/check-metrics-frozen.sh && bash scripts/check-metrics-frozen.sh --self-test
+          bash scripts/check-living-spec.sh && bash scripts/check-living-spec.sh --self-test
 
       - name: Promtool/amtool checks
         run: |
