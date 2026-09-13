@@ -9,6 +9,15 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ### Added
 
+- **Cache living spec complete (epic 9 story 9.1)** — the Cache Business Component is the second
+  spec-complete component (`@spec-complete true` in the redis `package-info.java`, sharing the
+  file with RateLimiting via the multi-component block format): 5 EARS requirements
+  (REQ-CACHE-001..005) covering shape-versioned keys, bloom-negative penetration guard,
+  L1/L2 read-through, eviction and TTL semantics, all traced to tests (gate: 10/10 across both
+  redis components, 100%). The living-spec gate and JSON extractor now parse multiple components
+  per `package-info.java` (a `# Component:` line opens a block), and `release.yml` runs the
+  living-spec gate at tag time (parity with CI).
+
 - **Living specifications (spec-driven development, Phase 0+1)** — EARS requirements now live in
   `package-info.java` living specs per Business Component (pilot: RateLimiting, 5 requirements:
   429+headers on limit excess, SHORTEN/REDIRECT scope isolation, trusted-proxy CIDR for

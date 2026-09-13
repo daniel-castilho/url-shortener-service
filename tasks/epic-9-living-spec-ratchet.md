@@ -72,11 +72,46 @@ src/test/java/ca/tyny/urlshortener/core/service/UrlShortenerServiceTest.java: 30
 
 ### 9.0 — Gate multi-component + release.yml
 
-_(pending)_
+```
+$ bash scripts/check-living-spec.sh --self-test
+PASS: self-test verified — gate detects missing traces, stray classes, dangling refs, respects
+the ratchet, and parses multiple components per file.   (8 cases)
 
-### 9.1 — Cache
+$ bash scripts/check-living-spec.sh
+=== Living Specification Gate ===
+Threshold: 90%
+  OK      REQ-RATE-005 (RateLimiting) — traced
+  ... (single-component output unchanged)
+Coverage: 5 / 5 requirements traced (100%)
+PASS: living specification gate.
+```
 
-_(pending)_
+`release.yml` gates job: `bash scripts/check-living-spec.sh && bash scripts/check-living-spec.sh --self-test`
+added (parity with ci.yml). Commit `5ce213f`.
+
+### 9.1 — Cache (S1a versioning + S1b spec-complete)
+
+```
+$ bash scripts/check-living-spec.sh        (after S1b merge)
+=== Living Specification Gate ===
+Threshold: 90%
+  OK      REQ-RATE-001..005 (RateLimiting) — traced (5 lines)
+  OK      REQ-CACHE-001 (Cache) — traced
+  OK      REQ-CACHE-002 (Cache) — traced
+  OK      REQ-CACHE-003 (Cache) — traced
+  OK      REQ-CACHE-004 (Cache) — traced
+  OK      REQ-CACHE-005 (Cache) — traced
+Coverage: 10 / 10 requirements traced (100%)
+PASS: living specification gate.
+
+$ ./mvnw test -Dtest=RedisUrlCacheTest
+Tests run: 10, Failures: 0, Errors: 0, Skipped: 0    (7 existing + REQ-CACHE-001 x2 + REQ-CACHE-004 evict)
+```
+
+S1a commit `7771d56` (key versioning `url:v1:<id>`, REQ-CACHE-001 declared, registry entry for
+`RedisUrlCacheTest` retired). S1b commit: REQ-CACHE-002..005 calibrated to existing tests,
+evict test added (no existing test observed the adapter's evict — D4 new-test case),
+`@spec-complete true`.
 
 ### 9.2 — Auth
 
