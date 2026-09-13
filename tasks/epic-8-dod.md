@@ -65,9 +65,44 @@ PASS: self-test verified
 exit=0
 ```
 
-Zero-downtime do cutover foi exercitado localmente (workflow 8.3/8.4, episódio anterior): loop de
-redirect durante os flips retornou apenas `302` (nenhum 5xx/connection-refused); cutover final 100%
-no verde.
+Cutover zero-downtime exercitado localmente (drill real, portas 18xxx isoladas — Mongo 27018 /
+Redis 6380, nginx container host-network como front :18080, azul 18081 / verde 18082; o render de
+`deploy.sh` é systemd/:8080-target, então o drill reproduziu os mesmos pesos no conf do front).
+Loop de redirect (`curl` do código semeado `yd02dah` via front, N=60 por flip):
+```
+--- flip: init: blue 100 / green down ---
+        server 127.0.0.1:18081 weight=100 max_fails=2 fail_timeout=10s;
+        server 127.0.0.1:18082 weight=100 max_fails=2 fail_timeout=10s down;
+status histogram (N=60):
+     60 302
+--- flip: canary 10: green 10 / blue 90 ---
+        server 127.0.0.1:18081 weight=90 max_fails=2 fail_timeout=10s;
+        server 127.0.0.1:18082 weight=10 max_fails=2 fail_timeout=10s;
+status histogram (N=60):
+     60 302
+--- flip: canary 30: green 30 / blue 70 ---
+        server 127.0.0.1:18081 weight=70 max_fails=2 fail_timeout=10s;
+        server 127.0.0.1:18082 weight=30 max_fails=2 fail_timeout=10s;
+status histogram (N=60):
+     60 302
+--- flip: cutover 100: green 100 / blue down (fail-closed) ---
+        server 127.0.0.1:18081 weight=100 max_fails=2 fail_timeout=10s down;
+        server 127.0.0.1:18082 weight=100 max_fails=2 fail_timeout=10s;
+status histogram (N=60):
+     60 302
+```
+Nenhum 5xx/ERR em 240 requests (4 flips × 60). Fail-closed provado matando o verde ativo
+pós-cutover (peers max_fails=2 citam o upstream): 40/40 → `502`, o front não silenciosamente
+reencaminha.
+
+Rollback real (mesmo front, pesos restaurados):
+```
+--- flip: rollback: blue 100 / green down (restored) ---
+        server 127.0.0.1:18081 weight=100 max_fails=2 fail_timeout=10s;
+        server 127.0.0.1:18082 weight=100 max_fails=2 fail_timeout=10s down;
+status histogram (N=60):
+     60 302
+```
 
 ### 8.4 Smoke + rollback (executado 2026-09-13)
 
@@ -87,12 +122,33 @@ ROLLBACK 22:23:37 ABORT: no last-deploy.txt — nothing to roll back (deploy.sh 
 exit=1
 ```
 
-### 8.5 Backup agendado e verificado
+### 8.5 Backup agendado e verificado (executado 2026-09-13)
 
-Executado e provado no CI com a síntese dos episódios 7 e 8 (drill isolado Mongo 27018/Redis 6380):
-seeds pré-backup `302` / pós-restore `404`, RTO 19s ≤ RTO_BUDGET_S=300s. Lições registradas em
-`docs/lessons.md`: (1) leftover stack faz health-check mentir; (2) mongodump exit 0 silencioso em db
-ausente → preflight + fail-closed.
+Drill real self-contained `scripts/ci-restore-drill.sh` (stack isolada própria: Mongo :18017 /
+Redis :16379 / app :18080, compose project `urlshortener-drill`).
+
+```
+$ bash scripts/ci-restore-drill.sh
+...
+[2026-09-12 22:54:47] --verify: all manifest collections match — restore VERIFIED
+DRILL 22:54:47: pre-backup seeds: 20/20 answered 302
+DRILL 22:54:48: post-backup seeds: 2/2 answered 404 (RPO proof)
+DRILL 22:54:48: RTO (backup -> restore -> verify): 21s <= 300s budget
+DRILL 22:54:48: RESTORE DRILL PASS (RTO 21s; pre=302, post=404; restore --verify green)
+```
+
+```
+COLLECTION               MANIFEST     RESTORED VERDICT
+short_urls                     20           20 ok
+users                           0            0 ok
+custom_domains                  0            0 ok
+click_events                    0            0 ok
+click_daily                     0            0 ok
+schema_migrations               9            9 ok
+```
+
+Lições registradas em `docs/lessons.md`: (1) leftover stack faz health-check mentir; (2) mongodump
+exit 0 silencioso em db ausente → preflight + fail-closed.
 
 ### 8.6 Release como gate (executado 2026-09-13)
 
@@ -160,9 +216,12 @@ Trivy fix) + `2e6d8db` (8.1–8.6 maior parte). CI verde no push final.
 
 - [x] `docs/release-engineering.md` + ADR 0007 + ADR 0008
 - [x] Versioning `revision` + flatten + gate CHANGELOG (red/green)
-- [x] `deploy.sh` blue-green fail-closed + units blue/green + self-test + exercício local
+- [x] `deploy.sh` blue-green fail-closed + units blue/green + self-test + **drill local real de cutover
+  (azul 18081/verde 18082 + front nginx container :18080; 240 redirects = 240× 302; fail-closed 502;
+  rollback 60/60 302)**
 - [x] `smoke.sh` (8 pernas) + `rollback.sh` + self-test + dead-port red
 - [x] Timer de backup + manifest + restore `--verify` (negative test) + `ci-restore-drill.sh` com RTO
+  **real (21s ≤ 300s; pre=20/20 302; post=2/2 404)**
 - [x] `release.yml` verde no primeiro tag (run 34732409909) + Release com assets (jar do build da CI)
 - [x] Runbook atualizado (deploy/rollback/checklist/post-deploy/incidente)
 - [x] `./mvnw verify` verde
