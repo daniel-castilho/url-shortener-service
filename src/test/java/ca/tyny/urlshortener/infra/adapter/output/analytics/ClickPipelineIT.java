@@ -3,6 +3,7 @@ package ca.tyny.urlshortener.infra.adapter.output.analytics;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import ca.tyny.urlshortener.config.BaseIntegrationTest;
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import ca.tyny.urlshortener.core.model.ClickEvent;
 import ca.tyny.urlshortener.core.model.ShortUrl;
 import ca.tyny.urlshortener.core.ports.outgoing.AnalyticsPort;
@@ -35,6 +36,7 @@ class ClickPipelineIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Should persist tracked click event and increment clickCount")
+  @TracesRequirement("REQ-ANALYTICS-002")
   void shouldPersistEventAndIncrementCount() {
     urlRepository.save(new ShortUrl("pipe001", "https://example.com/pipe", LocalDateTime.now()));
 
@@ -64,6 +66,7 @@ class ClickPipelineIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Should keep per-code counts exact across concurrent same-code events")
+  @TracesRequirement("REQ-ANALYTICS-002")
   void shouldKeepCountsExact() {
     urlRepository.save(new ShortUrl("pipe002", "https://example.com/multi", LocalDateTime.now()));
     List<ClickEvent> burst =
@@ -88,6 +91,7 @@ class ClickPipelineIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Should derive device from the User-Agent in the worker (end to end)")
+  @TracesRequirement("REQ-ANALYTICS-002")
   void shouldDeriveDeviceEndToEnd() {
     urlRepository.save(new ShortUrl("pipe003", "https://example.com/device", LocalDateTime.now()));
 
@@ -113,6 +117,7 @@ class ClickPipelineIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Should not persist events without a short code")
+  @TracesRequirement("REQ-ANALYTICS-002")
   void shouldSkipBlankCodeEvents() {
     analyticsPort.track(new ClickEvent("", LocalDateTime.now(), "UA", "203.0.113.11"));
     worker.processBatch();

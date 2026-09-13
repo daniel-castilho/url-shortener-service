@@ -6,6 +6,7 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
 
 import ca.tyny.urlshortener.config.BaseIntegrationTest;
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import ca.tyny.urlshortener.infra.adapter.output.persistence.config.MongoCollections;
 import ca.tyny.urlshortener.infra.adapter.output.persistence.entity.ClickDailyDocument;
 import ca.tyny.urlshortener.infra.adapter.output.persistence.entity.ClickEventDocument;
@@ -137,6 +138,7 @@ class ClickAnalyticsIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Owner reads daily series + breakdown")
+  @TracesRequirement("REQ-ANALYTICS-004")
   void ownerReadsDailySeries() {
     LocalDate yesterday = LocalDate.now(ZoneOffset.UTC).minusDays(1);
     LocalDate dayBefore = yesterday.minusDays(1);
@@ -172,6 +174,7 @@ class ClickAnalyticsIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Owner reads daily series with unique visitor counts")
+  @TracesRequirement("REQ-ANALYTICS-004")
   void ownerReadsDailySeriesWithUnique() {
     LocalDate yesterday = LocalDate.now(ZoneOffset.UTC).minusDays(1);
     LocalDate dayBefore = yesterday.minusDays(1);
@@ -203,6 +206,7 @@ class ClickAnalyticsIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Owner reads hourly series (bounded range)")
+  @TracesRequirement("REQ-ANALYTICS-004")
   void ownerReadsHourlySeries() {
     LocalDate from = LocalDate.now(ZoneOffset.UTC).minusDays(1);
     LocalDate to = LocalDate.now(ZoneOffset.UTC);
@@ -223,6 +227,7 @@ class ClickAnalyticsIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Hourly range wider than 30 days → 400")
+  @TracesRequirement("REQ-ANALYTICS-004")
   void hourlyRangeTooWide() {
     LocalDate from = LocalDate.now(ZoneOffset.UTC).minusDays(31);
     LocalDate to = LocalDate.now(ZoneOffset.UTC);
@@ -239,6 +244,7 @@ class ClickAnalyticsIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Invalid unit → 400")
+  @TracesRequirement("REQ-ANALYTICS-004")
   void invalidUnit() {
     given()
         .header("Authorization", "Bearer " + ownerToken)
@@ -250,6 +256,7 @@ class ClickAnalyticsIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Non-owner → 403")
+  @TracesRequirement("REQ-ANALYTICS-004")
   void nonOwnerForbidden() {
     given()
         .header("Authorization", "Bearer " + otherToken)
@@ -261,6 +268,7 @@ class ClickAnalyticsIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Unauthenticated → 401")
+  @TracesRequirement("REQ-ANALYTICS-004")
   void unauthenticated() {
     given().param("unit", "day").get("/api/v1/urls/" + linkCode + "/clicks").then().statusCode(401);
   }

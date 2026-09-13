@@ -25,6 +25,16 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
   (`AuthControllerTest`, `UserServiceTest`); no new tests needed. Gate: 14/14 across the three
   gated components, 100%.
 
+- **Analytics living spec complete (epic 9 story 9.3)** — the Analytics Business Component is the
+  fourth spec-complete component (spec in `infra/adapter/output/analytics/package-info.java`):
+  6 EARS requirements (REQ-ANALYTICS-001..006) covering fire-and-forget tracking with fail-open
+  queue, worker-side enrichment + bulk persist + atomic `$inc`, at-least-once PEL redelivery with
+  poison-batch finalization, idempotent daily rollups with HyperLogLog uniques, bounded-batch
+  retention purge, and **payload-shape compatibility across a release cycle** — the blue/green
+  cutover window requirement, promoted from checklist rule to EARS. 26 existing tests annotated;
+  one new test class added where none observed the behavior (`ClickEventsRetentionPurgeTest`,
+  4 cases). Gate: 20/20 across four components, 100%.
+
 - **Living specifications (spec-driven development, Phase 0+1)** — EARS requirements now live in
   `package-info.java` living specs per Business Component (pilot: RateLimiting, 5 requirements:
   429+headers on limit excess, SHORTEN/REDIRECT scope isolation, trusted-proxy CIDR for

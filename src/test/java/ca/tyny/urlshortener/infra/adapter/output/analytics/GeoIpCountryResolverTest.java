@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import com.maxmind.geoip2.DatabaseReader;
 import com.maxmind.geoip2.model.CountryResponse;
 import com.maxmind.geoip2.record.Country;
@@ -24,6 +25,7 @@ class GeoIpCountryResolverTest {
 
   @Test
   @DisplayName("Returns the country code for a public IP when enabled")
+  @TracesRequirement("REQ-ANALYTICS-002")
   void resolvesPublicIp() throws Exception {
     Country country = mock(Country.class);
     when(country.getIsoCode()).thenReturn("BR");
@@ -36,6 +38,7 @@ class GeoIpCountryResolverTest {
 
   @Test
   @DisplayName("Disabled resolver never returns a country")
+  @TracesRequirement("REQ-ANALYTICS-002")
   void disabledResolverReturnsNull() {
     GeoIpCountryResolver resolver = GeoIpCountryResolver.disabled();
 
@@ -44,6 +47,7 @@ class GeoIpCountryResolverTest {
 
   @Test
   @DisplayName("Private/internal IPs are never looked up")
+  @TracesRequirement("REQ-ANALYTICS-002")
   void skipsPrivateIps() {
     GeoIpCountryResolver resolver = new GeoIpCountryResolver(true, reader);
 
@@ -55,6 +59,7 @@ class GeoIpCountryResolverTest {
 
   @Test
   @DisplayName("Null and blank IPs return null")
+  @TracesRequirement("REQ-ANALYTICS-002")
   void nullAndBlankIps() {
     GeoIpCountryResolver resolver = new GeoIpCountryResolver(true, reader);
 
@@ -64,6 +69,7 @@ class GeoIpCountryResolverTest {
 
   @Test
   @DisplayName("Reader failures are swallowed (best-effort)")
+  @TracesRequirement("REQ-ANALYTICS-002")
   void readerFailureIsSwallowed() throws Exception {
     when(reader.country(any(InetAddress.class))).thenThrow(new RuntimeException("lookup exploded"));
     GeoIpCountryResolver resolver = new GeoIpCountryResolver(true, reader);

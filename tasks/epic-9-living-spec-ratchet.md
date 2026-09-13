@@ -132,7 +132,26 @@ validation. No new tests needed. `@spec-complete true`.
 
 ### 9.3 — Analytics
 
-_(pending)_
+```
+$ bash scripts/check-living-spec.sh        (after S3 merge)
+  OK      REQ-AUTH-001..004 (Auth) — traced (4 lines)
+  OK      REQ-ANALYTICS-001..006 (Analytics) — traced (6 lines)
+  OK      REQ-RATE-001..005 (RateLimiting) — traced (5 lines)
+  OK      REQ-CACHE-001..005 (Cache) — traced (5 lines)
+Coverage: 20 / 20 requirements traced (100%)
+
+$ ./mvnw test -Dtest='ClickEventsRetentionPurgeTest'
+Tests run: 4, Failures: 0, Errors: 0, Skipped: 0
+```
+
+Spec in `infra/adapter/output/analytics/package-info.java`: REQ-ANALYTICS-001 (fire-and-forget +
+fail-open queue), 002 (worker-side enrichment + bulk insert + atomic `$inc` + blank-code skip),
+003 (PEL redelivery + poison finalize, at-least-once), 004 (idempotent daily rollup + HLL uniques +
+owner-guarded series read), 005 (bounded-batch retention purge, fail-open), **006 (payload shape
+compatibility for one release cycle — the blue/green cutover window, project rule promoted to
+EARS)**. 26 existing tests annotated (pipeline, queue, fail-open, redelivery, worker mapping,
+rollup, GeoIP, UA parser, analytics read IT). New test only per D4: `ClickEventsRetentionPurgeTest`
+(4 cases — no existing test observed the purge). `@spec-complete true`.
 
 ### 9.4 — Persistence
 

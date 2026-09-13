@@ -2,6 +2,7 @@ package ca.tyny.urlshortener.infra.adapter.output.analytics;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import ca.tyny.urlshortener.core.model.ClickEvent;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -13,6 +14,7 @@ class RedisClickEventQueueTest {
 
   @Test
   @DisplayName("Should map ClickEvent to stream payload with UTC instant")
+  @TracesRequirement("REQ-ANALYTICS-006")
   void shouldMapToPayload() {
     LocalDateTime local = LocalDateTime.of(2026, 8, 26, 12, 0);
     ClickEvent event =
@@ -39,6 +41,7 @@ class RedisClickEventQueueTest {
 
   @Test
   @DisplayName("Should default null timestamp to a parseable instant")
+  @TracesRequirement("REQ-ANALYTICS-002")
   void shouldDefaultNullTimestamp() {
     ClickEvent event = new ClickEvent("abc123", null, null, null);
 
