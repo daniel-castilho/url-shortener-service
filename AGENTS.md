@@ -548,9 +548,12 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     `rate.limit.exceeded.total` exactly once; live-proven via `/actuator/prometheus` with
     `RATE_LIMITER_LIMIT=1` (two requests → 200 then 429 → counter > 0)**; (b) only RateLimiting is
     spec-complete — UrlShortener, Auth, Analytics, Persistence and Cache components have no living
-    specs yet (ratchet, next epics); (c) Spotless excludes `package-info.java` from google-java-format
-    because the formatter reflows the EARS/`###` markdown structure that the gate regexes parse —
-    revisit when the gate parses the AST instead of text. — `in-progress`
+    specs yet (ratchet, next epics); (c) ~~Spotless excludes `package-info.java` from google-java-format
+    because the formatter reflows the EARS/`###` markdown structure that the gate regexes parse~~
+    **resolved 2026-09-13: recorded as ADR 0009 — the Javadoc structure inside a living-spec
+    `package-info.java` is a machine-read contract, exempt from google-java-format by design; the
+    gate's `--self-test` is the format-contract test; revisit trigger = two or more extractor false
+    positives/negatives in practice.** — `in-progress`
 
 ## 🔍 Operational Discipline & Debugging Guidelines
 
