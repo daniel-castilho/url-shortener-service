@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import ca.tyny.urlshortener.config.BaseIntegrationTest;
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import ca.tyny.urlshortener.core.model.Cursor;
 import ca.tyny.urlshortener.core.model.PageResult;
 import ca.tyny.urlshortener.core.model.ShortUrl;
@@ -36,6 +37,7 @@ class MongoUrlRepositoryIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Should save and retrieve ShortUrl")
+  @TracesRequirement("REQ-PERSIST-004")
   void shouldSaveAndRetrieve() {
     ShortUrl shortUrl = new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now());
     repository.save(shortUrl);
@@ -48,6 +50,7 @@ class MongoUrlRepositoryIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Should return empty Optional for non-existent ID")
+  @TracesRequirement("REQ-PERSIST-004")
   void shouldReturnEmptyForNonExistentId() {
     Optional<ShortUrl> result = repository.findById("nonexistent999");
     assertThat(result).isEmpty();
@@ -55,6 +58,7 @@ class MongoUrlRepositoryIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Should persist multiple URLs")
+  @TracesRequirement("REQ-PERSIST-004")
   void shouldPersistMultipleUrls() {
     ShortUrl url1 = new ShortUrl("id1", "https://example1.com", LocalDateTime.now());
     ShortUrl url2 = new ShortUrl("id2", "https://example2.com", LocalDateTime.now());
@@ -69,6 +73,7 @@ class MongoUrlRepositoryIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Should handle URLs with special characters")
+  @TracesRequirement("REQ-PERSIST-004")
   void shouldHandleSpecialCharacters() {
     String special = "https://example.com/path?param=value&other=123#anchor";
     ShortUrl shortUrl = new ShortUrl("special123", special, LocalDateTime.now());
@@ -80,6 +85,7 @@ class MongoUrlRepositoryIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Should increment clickCount atomically")
+  @TracesRequirement("REQ-PERSIST-004")
   void shouldIncrementClickCount() {
     repository.save(new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now()));
 
@@ -93,6 +99,7 @@ class MongoUrlRepositoryIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Should not lose increments under concurrency")
+  @TracesRequirement("REQ-PERSIST-004")
   void shouldNotLoseConcurrentIncrements() throws Exception {
     repository.save(new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now()));
 
@@ -128,6 +135,7 @@ class MongoUrlRepositoryIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Should be a no-op when incrementing a non-existent code")
+  @TracesRequirement("REQ-PERSIST-004")
   void shouldBeNoOpForMissingCode() {
     repository.incrementClickCount("missing999");
 
@@ -138,6 +146,7 @@ class MongoUrlRepositoryIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("findByUserId - returns only own links, newest first")
+  @TracesRequirement("REQ-PERSIST-006")
   void findByUserId_returnsOnlyOwnLinks() {
     Instant base = Instant.now();
     ShortUrl u1 =
@@ -172,6 +181,7 @@ class MongoUrlRepositoryIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("findByUserId - cursor pagination advances correctly")
+  @TracesRequirement("REQ-PERSIST-006")
   void findByUserId_cursorPagination() {
     // Use UTC-based timestamps to match cursor encoding/decoding
     Instant base = Instant.now();
@@ -212,6 +222,7 @@ class MongoUrlRepositoryIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("findByUserId - limit capped at MAX_LIMIT (100)")
+  @TracesRequirement("REQ-PERSIST-006")
   void findByUserId_limitCapped() {
     for (int i = 0; i < 150; i++) {
       repository.save(
@@ -226,6 +237,7 @@ class MongoUrlRepositoryIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("findByUserId - malformed cursor throws IllegalArgumentException")
+  @TracesRequirement("REQ-PERSIST-006")
   void findByUserId_malformedCursorThrows() {
     assertThatThrownBy(() -> repository.findByUserId(USER_ID, 10, new Cursor("not-valid-base64!")))
         .isInstanceOf(IllegalArgumentException.class);
@@ -235,6 +247,7 @@ class MongoUrlRepositoryIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("update - keeps _id, persists new fields")
+  @TracesRequirement("REQ-PERSIST-008")
   void update_keepsIdPersistsFields() {
     ShortUrl original =
         new ShortUrl("keep123", "https://original.com", LocalDateTime.now(), USER_ID);
@@ -259,6 +272,7 @@ class MongoUrlRepositoryIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("archive - sets deletedAt; repeated call updates again (idempotency is at use case)")
+  @TracesRequirement("REQ-PERSIST-007")
   void archive_setsDeletedAt() {
     ShortUrl shortUrl =
         new ShortUrl("arch123", "https://archive.com", LocalDateTime.now(), USER_ID);

@@ -3,6 +3,7 @@ package ca.tyny.urlshortener.infra.adapter.output.persistence.migration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import ca.tyny.urlshortener.config.BaseIntegrationTest;
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import java.time.Duration;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -28,6 +29,7 @@ class SchemaMigrationIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Applying migrations on a fresh database creates history and all desired indexes")
+  @TracesRequirement("REQ-PERSIST-001")
   void appliesAllMigrationsOnFreshDatabase() {
     mongoTemplate.getDb().drop();
     migrator.migrate();
@@ -91,6 +93,7 @@ class SchemaMigrationIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Re-running migrations is idempotent and never duplicates history")
+  @TracesRequirement("REQ-PERSIST-001")
   void repeatedApplicationIsIdempotent() {
     mongoTemplate.getDb().drop();
     migrator.migrate();

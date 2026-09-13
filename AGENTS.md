@@ -215,8 +215,10 @@ src/main/java/com/example/urlshortener/
 Untraced test classes inside gated component packages. Fields: `class — reason (owner, deadline)`.
 Items expire at the next epic; do not add new ones without a reason that survives review.
 
-- _(empty — retired with the Cache component story 9.1: `RedisUrlCacheTest` now traces
-  REQ-CACHE-001)_
+- `ca.tyny.urlshortener.infra.adapter.output.persistence.UserEntityTest` — structural POJO test
+  (constructors/getters on `UserEntity`); observes no EARS requirement behavior — user round-trip
+  persistence is covered by `MongoUserRepositoryIT` (REQ-PERSIST-005). Fold into
+  `MongoUserRepositoryIT` or remove at the next epic (owner: daniel-castilho, deadline: next epic).
 
 Entries must be removed from this list before their deadline (next epic) or they block the gate.
 

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -48,6 +49,7 @@ class MongoSchemaMigratorTest {
 
   @Test
   @DisplayName("Applies all migrations once, in ascending version order, on a fresh database")
+  @TracesRequirement("REQ-PERSIST-001")
   void appliesAllOnFreshDatabase() {
     stubFreshDatabase();
     MongoSchemaMigrator migrator = new MongoSchemaMigrator(mongoTemplate, ALL_MIGRATIONS, metrics);
@@ -77,6 +79,7 @@ class MongoSchemaMigratorTest {
 
   @Test
   @DisplayName("Skips already applied migrations with matching checksums")
+  @TracesRequirement("REQ-PERSIST-001")
   void skipsAlreadyAppliedWithMatchingChecksums() {
     when(mongoTemplate.collectionExists(MongoSchemaMigrator.HISTORY_COLLECTION)).thenReturn(true);
     List<Document> history = new ArrayList<>();
@@ -96,6 +99,7 @@ class MongoSchemaMigratorTest {
 
   @Test
   @DisplayName("Re-applies an idempotent migration whose recorded checksum drifted")
+  @TracesRequirement("REQ-PERSIST-002")
   void reappliesIdempotentMigrationOnChecksumDrift() {
     when(mongoTemplate.collectionExists(MongoSchemaMigrator.HISTORY_COLLECTION)).thenReturn(true);
     List<Document> history = new ArrayList<>();
@@ -119,6 +123,7 @@ class MongoSchemaMigratorTest {
 
   @Test
   @DisplayName("Keeps going when the legacy unique-index drop is a no-op (index never existed)")
+  @TracesRequirement("REQ-PERSIST-002")
   void toleratesMissingOriginalUrlIndex() {
     stubFreshDatabase();
     org.mockito.Mockito.doThrow(new IllegalStateException("index not found"))
@@ -133,6 +138,7 @@ class MongoSchemaMigratorTest {
 
   @Test
   @DisplayName("Aborts startup (fail-fast) when a migration throws")
+  @TracesRequirement("REQ-PERSIST-002")
   void failsFastWhenMigrationThrows() {
     stubFreshDatabase();
     when(shortUrlsIndexOps.ensureIndex(any()))
@@ -150,6 +156,7 @@ class MongoSchemaMigratorTest {
 
   @Test
   @DisplayName("Rejects duplicate migration versions at construction time")
+  @TracesRequirement("REQ-PERSIST-002")
   void rejectsDuplicateVersions() {
     SchemaMigration dupA = new V1Baseline();
     SchemaMigration dupB = new V1Baseline();
