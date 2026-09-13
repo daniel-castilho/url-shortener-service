@@ -64,6 +64,29 @@
  * ({@code url:v<n>:<id>}) and bump that version with every shape change, so entries written
  * under a previous shape are never read by new readers (they miss and rebuild from the source).
  *
+ * ### REQ-CACHE-002
+ * **When** an id has never been cached (Bloom filter negative),
+ * **the Business Component shall** return a {@code BLOOM_NEGATIVE} absence without touching
+ * Redis, so cache-penetration probing of unknown codes costs one Bloom check instead of an
+ * L2 round-trip.
+ *
+ * ### REQ-CACHE-003
+ * **When** a Bloom-positive id is looked up,
+ * **the Business Component shall** serve from the L1 local cache on hit, else from the L2
+ * Redis entry under the versioned key (re-populating L1), else return a plain {@code MISS}
+ * for the caller to resolve from the source.
+ *
+ * ### REQ-CACHE-004
+ * **When** a link is updated or archived,
+ * **the Business Component shall** evict the id from L2 and invalidate L1 so the next lookup
+ * observes the change.
+ *
+ * ### REQ-CACHE-005
+ * **When** a link is put into the cache,
+ * **the Business Component shall** set the L2 TTL to base TTL (24h) plus jitter for
+ * never-expiring links, capped at the link's remaining lifetime for expiring links, and skip
+ * caching entirely for already-expired links.
+ *
  * ## Ports (Contracts)
  * - Outbound: {@link ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort}
  *
@@ -72,7 +95,10 @@
  *   stale entries expire by TTL, no scan/delete needed.
  * - Serialization: JSON with compact field names ({@code u} = original URL, {@code e} = expiry
  *   epoch second, {@code d} = bound domain).
+ * - L1 is Caffeine ({@code app.cache.l1-*}); the Bloom filter guards L2 against penetration
+ *   (ADR 0003); Redis/L2 failure degrades to a miss per ADR 0005 — the cache never blocks
+ *   the redirect path.
  *
- * @spec-complete false
+ * @spec-complete true
  */
 package ca.tyny.urlshortener.infra.adapter.output.redis;

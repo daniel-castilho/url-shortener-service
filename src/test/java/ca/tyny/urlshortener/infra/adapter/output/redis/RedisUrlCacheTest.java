@@ -66,6 +66,7 @@ class RedisUrlCacheTest {
 
   @Test
   @DisplayName("Should return bloom negative when Bloom Filter says ID doesn't exist")
+  @TracesRequirement("REQ-CACHE-002")
   void shouldReturnBloomNegativeWhenBloomFilterSaysNotExists() {
     // Given
     when(bloomFilter.contains(TEST_ID)).thenReturn(false);
@@ -82,6 +83,7 @@ class RedisUrlCacheTest {
 
   @Test
   @DisplayName("Should get from Redis when Bloom Filter says ID exists")
+  @TracesRequirement("REQ-CACHE-003")
   void shouldGetFromRedisWhenBloomFilterSaysExists() {
     // Given
     when(bloomFilter.contains(TEST_ID)).thenReturn(true);
@@ -107,6 +109,7 @@ class RedisUrlCacheTest {
 
   @Test
   @DisplayName("Should decode expiry from Redis")
+  @TracesRequirement("REQ-CACHE-003")
   void shouldDecodeExpiryFromRedis() {
     // Given
     when(bloomFilter.contains(TEST_ID)).thenReturn(true);
@@ -131,6 +134,7 @@ class RedisUrlCacheTest {
 
   @Test
   @DisplayName("Should put URL in Redis, Bloom Filter, and local cache")
+  @TracesRequirement("REQ-CACHE-003")
   void shouldPutUrlInAllLayers() {
     // When
     cache.put(TEST_ID, new CachedUrlValue(TEST_URL, null));
@@ -149,6 +153,7 @@ class RedisUrlCacheTest {
 
   @Test
   @DisplayName("Should use TTL with jitter for never-expiring links")
+  @TracesRequirement("REQ-CACHE-005")
   void shouldUseTtlWithJitter() {
     // When
     cache.put(TEST_ID, new CachedUrlValue(TEST_URL, null));
@@ -169,6 +174,7 @@ class RedisUrlCacheTest {
 
   @Test
   @DisplayName("Should cap TTL at link expiry when expiry is sooner than base TTL")
+  @TracesRequirement("REQ-CACHE-005")
   void shouldCapTtlAtExpiry() {
     // Given
     Instant expiresAt = Instant.now().plusSeconds(30);
@@ -187,6 +193,7 @@ class RedisUrlCacheTest {
 
   @Test
   @DisplayName("Should not cache an already-expired link")
+  @TracesRequirement("REQ-CACHE-005")
   void shouldNotCacheAlreadyExpiredLink() {
     // When
     cache.put(TEST_ID, new CachedUrlValue(TEST_URL, Instant.now().minusSeconds(60)));
@@ -230,5 +237,28 @@ class RedisUrlCacheTest {
     verify(valueOperations)
         .set(eq("url:v1:" + TEST_ID), argThat(s -> s.contains(TEST_URL)), any(Duration.class));
     verify(valueOperations, never()).set(eq("url:" + TEST_ID), anyString(), any(Duration.class));
+  }
+
+  @Test
+  @DisplayName("Evict deletes the versioned L2 key and invalidates L1")
+  @TracesRequirement("REQ-CACHE-004")
+  void evictRemovesVersionedKeyAndInvalidatesL1() {
+    // Given: a populated L1 entry
+    cache.put(TEST_ID, new CachedUrlValue(TEST_URL, null));
+    assertThat(
+            ((Cache<String, CachedUrlValue>) ReflectionTestUtils.getField(cache, "localCache"))
+                .getIfPresent(TEST_ID))
+        .isNotNull();
+
+    // When
+    cache.evict(TEST_ID);
+
+    // Then: the versioned key is deleted (not the legacy shape) and L1 is invalidated
+    verify(redisTemplate).delete("url:v1:" + TEST_ID);
+    verify(redisTemplate, never()).delete("url:" + TEST_ID);
+    assertThat(
+            ((Cache<String, CachedUrlValue>) ReflectionTestUtils.getField(cache, "localCache"))
+                .getIfPresent(TEST_ID))
+        .isNull();
   }
 }
