@@ -1,12 +1,12 @@
-# Epic 7 – Definition of Done (DoD) [evidências coladas]
+# Epic 7 – Definition of Done (DoD) [pasted evidence]
 
-**Regra zero — zero‑from‑memory:** Todo número, sha ou contagem neste documento deve ser colado de um output de comando incluído neste documento. Se não der para colar o comando que gerou, trata‑se de hipótese e deve ser etiquetado como tal (TD‑13 class).
+**Rule zero — zero‑from‑memory:** Every number, sha, or count in this document must be pasted from a command output included in this document. If the generating command cannot be pasted, it is a hypothesis and must be labelled as such (TD‑13 class).
 
-Preencher durante a execução. Não inventar valores antes de rodar.
+Fill in during execution. Do not invent values before running.
 
-## 1. Evidências obrigatórias (outputs reais coladas)
+## 1. Required evidence (real pasted outputs)
 
-### 7.1 Contrato de falha + ADRs (executado 2026-09-11)
+### 7.1 Failure contract + ADRs (executed 2026-09-11)
 
 ```
 $ git log --oneline -- docs/adr/ docs/reliability.md
@@ -16,34 +16,34 @@ ca9a29c docs(reliability): failure-mode matrix + ADR 0005 (fail-open vs fail-clo
 29dfd57 feat(reliability): real PEL redelivery for analytics worker (Epic 7 7.4)
 ```
 
-- Arquivos: `docs/reliability.md` (matriz 7.1), `docs/adr/0005-fail-open-vs-fail-closed.md`,
+- Files: `docs/reliability.md` (7.1 matrix), `docs/adr/0005-fail-open-vs-fail-closed.md`,
   `docs/adr/0006-analytics-at-least-once.md`.
-- RPO mapping (alvo, colado de `docs/reliability.md` §2): URL mappings (`short_urls`, `users`,
-  `custom_domains`) → **última execução agendada de `scripts/backup-mongodb.sh`** (cron do
-  operador; drill provado em 7.5).
-- RPO analytics (alvo, colado de `docs/reliability.md` §2): click events → **o que estiver no
-  Redis Stream** + purge de retenção 90d (pipeline at-least-once, ADR 0006).
+- Mapping RPO (target, pasted from `docs/reliability.md` §2): URL mappings (`short_urls`, `users`,
+  `custom_domains`) → **last scheduled run of `scripts/backup-mongodb.sh`** (operator cron;
+  drill proven in 7.5).
+- Analytics RPO (target, pasted from `docs/reliability.md` §2): click events → **whatever is in the
+  Redis Stream** + 90-day retention purge (at-least-once pipeline, ADR 0006).
 - Cache / rate buckets / bloom: RPO 0 (rebuildable).
-- Contrato (matriz 7.1, colado de `docs/reliability.md`):
-  - **Redis L2 cache / rate-limit / bloom / ID-gen**: fail-OPEN (ADR 0005) — redirect path degrada com
-    latência elevada em vez de bloquear.
-  - **Mongo (URL CRUD / redirect DB hit)**: fail-CLOSED via `databaseCb` — fast-fail com surge de 5xx,
-    carregamento não joga no Mongo morto; auto-recovery HALF_OPEN → CLOSED.
-  - **Analytics stream**: fail-OPEN no enqueue (fire-and-forget); persistência at-least-once, exactly-once
-    rejeitado (ADR 0006).
+- Contract (7.1 matrix, pasted from `docs/reliability.md`):
+  - **Redis L2 cache / rate-limit / bloom / ID-gen**: fail-OPEN (ADR 0005) — redirect path degrades with
+    elevated latency instead of blocking.
+  - **Mongo (URL CRUD / redirect DB hit)**: fail-CLOSED via `databaseCb` — fast-fail with a 5xx surge,
+    load does not hit dead Mongo; auto-recovery HALF_OPEN → CLOSED.
+  - **Analytics stream**: fail-OPEN on enqueue (fire-and-forget); at-least-once persistence, exactly-once
+    rejected (ADR 0006).
   - **OTel tracing**: fail-OPEN (proven by `TracingFailOpenIT`; collector unreachable → requests succeed).
 
-### 7.2 Isolamento CB / timeout / retry (executado 2026-09-11)
+### 7.2 CB / timeout / retry isolation (executed 2026-09-11)
 
-Inventário (lido de `application.yaml` + código, não inventado):
+Inventory (read from `application.yaml` + code, not invented):
 
-| Adapter | CB | Timeout | Retry | Contrato sob down |
-|---------|----|---------|-------|-------------------|
-| Mongo URL repo | `databaseCb` (window 10, min 5, 50%, open 20s, half-open 3, auto-HALF_OPEN) | connect 10s / socket 30s (Spring data) | n/a | fail-CLOSED: fast-fail 5xx, surto na janela de amostragem, auto-recovery |
-| Redis L2 cache | — | Redisson command/connect 500ms (`app.redis.*`, ADR 0005) | 1 attempt, sem retry | fail-OPEN: cache miss → DB (lento, não bloqueia) |
-| Redis rate-limit | `rateLimiterCb` (40%, open 10s) | Redisson 500ms | 1 attempt | fail-OPEN: sem limitação durante outage |
-| Redis Stream enqueue | — | Redisson 500ms | 1 attempt | fail-OPEN: evento dropado (fire-and-forget), redirect nunca bloqueia |
-| OTel exporter | — | uint batch timeout (collector tail_sampling `timeout: 5s` / batch) | exporter retries | fail-OPEN: sem tracing durante outage |
+| Adapter | CB | Timeout | Retry | Contract under outage |
+|---------|----|---------|-------|-----------------------|
+| Mongo URL repo | `databaseCb` (window 10, min 5, 50%, open 20s, half-open 3, auto-HALF_OPEN) | connect 10s / socket 30s (Spring data) | n/a | fail-CLOSED: fast-fail 5xx, surge in the sampling window, auto-recovery |
+| Redis L2 cache | — | Redisson command/connect 500ms (`app.redis.*`, ADR 0005) | 1 attempt, no retry | fail-OPEN: cache miss → DB (slow, does not block) |
+| Redis rate-limit | `rateLimiterCb` (40%, open 10s) | Redisson 500ms | 1 attempt | fail-OPEN: no limiting during outage |
+| Redis Stream enqueue | — | Redisson 500ms | 1 attempt | fail-OPEN: event dropped (fire-and-forget), redirect never blocks |
+| OTel exporter | — | uint batch timeout (collector tail_sampling `timeout: 5s` / batch) | exporter retries | fail-OPEN: no tracing during outage |
 
 ```
 $ ./mvnw test -Dtest='RedirectMongoFailureIT,RedirectRedisFailureIT,RedisClickEventQueueFailOpenTest,TracingFailOpenIT' -DfailIfNoTests=false
@@ -55,14 +55,14 @@ Tests run: 10, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
-Transição do `databaseCb`: observado no drill 7.5 (Mongo-down cold-cache) —
+`databaseCb` transition: observed in the 7.5 drill (Mongo-down cold-cache) —
 `GlobalExceptionHandler - Circuit breaker open: CircuitBreaker 'databaseCb' is HALF_OPEN
-and does not permit further calls`; recuperação automática pós `docker start` (HALF_OPEN → CLOSED,
-sem restart da app).
+and does not permit further calls`; automatic recovery after `docker start` (HALF_OPEN → CLOSED,
+without an app restart).
 
-### 7.3 Shutdown + health (executado 2026-09-11)
+### 7.3 Shutdown + health (executed 2026-09-11)
 
-App isolada (Mongo 27018 / Redis 6380 / porta 18081, rate limits relaxados, operator
+Isolated app (Mongo 27018 / Redis 6380 / port 18081, relaxed rate limits, operator
 `epic7ops`/`epic7-drill-pw-2026`):
 
 ```
@@ -79,10 +79,10 @@ $ PORT=18081 bash scripts/verify-graceful-shutdown.sh
 [verify] Graceful shutdown verification complete!
 ```
 
-(in-flight drena durante o grace period de 30s; novas requisições recusadas pós-SIGTERM —
-verde na infra isolada com httpbin externo como destino lento.)
+(in-flight drains during the 30s grace period; new requests rejected after SIGTERM —
+green on isolated infra with external httpbin as a slow destination.)
 
-Experimento liveness ≠ readiness (`docker stop urlshortener-redis-isolated`):
+liveness ≠ readiness experiment (`docker stop urlshortener-redis-isolated`):
 
 ```
 $ curl http://localhost:18081/actuator/health/liveness   -> 200
@@ -95,11 +95,11 @@ $ curl http://localhost:18081/actuator/health/liveness   -> 200
 $ curl http://localhost:18081/actuator/health/readiness   -> 200
 ```
 
-Veredito liveness ≠ readiness: **sim** — liveness (processo) fica UP durante a falha de
-dependência (sem restart-loop do systemd); readiness (processo + mongo/redis) vai DOWN e
-tira a instância da rotação (nginx `max_fails=2 fail_timeout=10s`). Sem correção necessária.
+liveness ≠ readiness verdict: **yes** — liveness (process) stays UP during the
+dependency failure (no systemd restart-loop); readiness (process + mongo/redis) goes DOWN and
+takes the instance out of rotation (nginx `max_fails=2 fail_timeout=10s`). No fix needed.
 
-Health detail via operator (perfil dev, `show-details` autorizado):
+Health detail via operator (dev profile, `show-details` authorized):
 
 ```
 $ curl -u epic7ops:*** http://localhost:18081/actuator/health
@@ -107,19 +107,19 @@ status=UP
 components: circuitBreakers, diskSpace, livenessState, mongo, ping, readinessState, redis, ssl
 ```
 
-O endpoint agregado inclui **circuitBreakers** (`databaseCb`, `rateLimiterCb`), `mongo`,
+The aggregate endpoint includes **circuitBreakers** (`databaseCb`, `rateLimiterCb`), `mongo`,
 `redis`, `diskSpace`, `ping` — readiness group = mongo/redis/circuitBreakers/diskSpace/ping
-(com `show-components: when-authorized`, o probe público não vaza detail de backend).
+(with `show-components: when-authorized`, the public probe does not leak backend detail).
 
-### 7.4 Pipeline analytics (executado 2026-09-11)
+### 7.4 Analytics pipeline (executed 2026-09-11)
 
-Contrato lido do código (`ClickBatchWorker` + `application.yaml`, não inventado):
+Contract read from the code (`ClickBatchWorker` + `application.yaml`, not invented):
 
 - Stream: `urlshortener:clicks` (`app.analytics.stream-key`, default `${APP_ANALYTICS_STREAM_KEY:urlshortener:clicks}`)
 - Group: `click-worker` (`app.analytics.group`, default `${APP_ANALYTICS_GROUP:click-worker}`)
 - Consumer: `worker-1` (`app.analytics.consumer`)
 - Batch: `500` (`app.analytics.batch-size`), poll: `5000`ms (`app.analytics.poll-interval-ms`)
-- Ack: `redisTemplate.opsForStream().acknowledge(streamKey, groupName, ...)` por lote, no grupo `click-worker`
+- Ack: `redisTemplate.opsForStream().acknowledge(streamKey, groupName, ...)` per batch, on the `click-worker` group
 
 $ ./mvnw test -Dtest='ClickPipelineIT,ClickDailyRollupIT,RedisClickEventQueueFailOpenTest,RedisClickEventQueueTest,ClickPipelineRedeliveryIT' -DfailIfNoTests=false
 
@@ -133,13 +133,13 @@ Tests run: 12, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
-**Descoberta (fix real):** o worker lia apenas `>` (`ReadOffset.lastConsumed()`), que entrega
-só mensagens NUNCA entregues — batch não-ackado ficava órfão no PEL para sempre (redelivery +
-finalize de 3 falhas eram código morto). Agora drena o PEL com offset `0` antes de ler `>`
-(padrão de crash-recovery do Redis). Red/green: `ClickPipelineRedeliveryIT#failedBatchIsReclaimedAfterRecovery`
-falha no código antigo (`expected: 5L but was: 0L` no PEL) e passa no novo.
+**Finding (real fix):** the worker read only `>` (`ReadOffset.lastConsumed()`), which delivers
+only NEVER-DELIVERED messages — an unacked batch stayed orphaned in the PEL forever (redelivery +
+finalize of 3 failures was dead code). Now it drains the PEL with offset `0` before reading `>`
+(Redis crash-recovery pattern). Red/green: `ClickPipelineRedeliveryIT#failedBatchIsReclaimedAfterRecovery`
+fails on the old code (`expected: 5L but was: 0L` in the PEL) and passes on the new.
 
-Restart no meio do batch: publicados=**5** persistidos=**5** (prova `M >= N`, ADR 0006):
+Restart mid-batch: published=**5** persisted=**5** (proves `M >= N`, ADR 0006):
 
 $ ./mvnw test -Dtest='ClickPipelineRedeliveryIT#failedBatchIsReclaimedAfterRecovery' -DfailIfNoTests=false
 
@@ -149,19 +149,19 @@ Tests run: 2, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
-Poison (batch injetado com `databaseCb` aberto → 3 tentativas → finalizado/acked; evento válido
-posterior persiste), log real do worker:
+Poison (batch injected with `databaseCb` open → 3 attempts → finalized/acked; the valid event
+afterwards persists), real worker log:
 
 ```
 ERROR c.t.u.i.a.o.a.ClickBatchWorker - Finalizing click batch of 2 events after 3 consecutive failures
 ```
 
-$ ./mvnw test -Dtest='ClickPipelineRedeliveryIT#poisonBatchIsFinalizedAndGroupKeepsProcessing' -DfailIfNoTests=false → verde (parte dos 2 acima; PEL 2→0, métrica `analytics.events.failed.total` +6, `click_events` 0 para o poison, evento válido=1).
+$ ./mvnw test -Dtest='ClickPipelineRedeliveryIT#poisonBatchIsFinalizedAndGroupKeepsProcessing' -DfailIfNoTests=false → green (part of the 2 above; PEL 2→0, metric `analytics.events.failed.total` +6, `click_events` 0 for the poison, valid event=1).
 
-### 7.5 DR + injeção sob carga (executado 2026-09-11)
+### 7.5 DR + fault injection under load (executed 2026-09-11)
 
-Infra isolada: app **18080**, Mongo **27018** (`urlshortener-mongo-isolated`), Redis **6380** (`urlshortener-redis-isolated`).
-Seeds (códigos): `WvbkQL9`, `ikNnZMP`, `8l9Zi1J`, `sjuq5b0`, `IAa4KHx` (criados via `POST /api/v1/urls` na isolada) + `cZLYsMv`, `cZxmLOD`, `4TcKm26` (drill, pós-backup).
+Isolated infra: app **18080**, Mongo **27018** (`urlshortener-mongo-isolated`), Redis **6380** (`urlshortener-redis-isolated`).
+Seeds (codes): `WvbkQL9`, `ikNnZMP`, `8l9Zi1J`, `sjuq5b0`, `IAa4KHx` (created via `POST /api/v1/urls` on the isolated instance) + `cZLYsMv`, `cZxmLOD`, `4TcKm26` (drill, post-backup).
 
 $ docker exec urlshortener-mongo-isolated mongodump --uri="mongodb://127.0.0.1:27017/url_shortener" --db=url_shortener --out=/tmp/epic7-backup --gzip
 
@@ -180,55 +180,55 @@ $ docker cp urlshortener-mongo-isolated:/tmp/epic7-backup /tmp/opencode/epic7/ba
 -rw-r--r--  3546379  click_events.bson.gz
 3.9M    /tmp/opencode/epic7/backup-drill
 ```
-> Nota: `mongodump` não existe no PATH do host (apenas no container mongo); o drill usou as ferramentas
-> do container — os mesmos flags que `scripts/backup-mongodb.sh` invoca em hosts bare-metal com o CLI.
+> Note: `mongodump` is not on the host PATH (only inside the mongo container); the drill used the
+> container tools — the same flags `scripts/backup-mongodb.sh` invokes on bare-metal hosts with the CLI.
 
-drop + restore + curl -sI dos seeds:
+drop + restore + curl -sI of the seeds:
 
 ```
 $ mongosh --eval 'db.short_urls.drop()'          # -> true; count=0
 $ curl -s -o /dev/null -w '%{http_code}\n' localhost:18080/cZLYsMv   # AFTER drop, cold cache -> 404
 $ mongorestore --uri=...url_shortener --db=url_shortener --gzip /tmp/epic7-backup/url_shortener
-     7640 document(s) restored successfully. 303876 document(s) failed to restore.   # click_events: collection
-                                                                # nunca foi dropada — _id existentes pulados
-$ curl -s -o /dev/null -w '%{http_code}\n' localhost:18080/WvbkQL9   # 302  (pré-backup: restaurado)
-$ curl -s -o /dev/null -w '%{http_code}\n' localhost:18080/cZLYsMv   # 404  (pós-backup: não é restaurado, RPO correto)
+7640 document(s) restored successfully. 303876 document(s) failed to restore.   # click_events: collection
+                                                                 # never dropped — existing _id skipped
+$ curl -s -o /dev/null -w '%{http_code}\n' localhost:18080/WvbkQL9   # 302  (pre-backup: restored)
+$ curl -s -o /dev/null -w '%{http_code}\n' localhost:18080/cZLYsMv   # 404  (post-backup: not restored, correct RPO)
 ```
-> Códigos pós-backup ficam 404 após restore — esperado: RPO = última execução do backup. Curl usado com
-> `-s` (GET); `HEAD` também responde 302 (fix aplicado em `SecurityConfig` + `ReadPathIT#headMirrorsGetOnRedirectPath`).
+> Post-backup codes stay 404 after restore — expected: RPO = last backup execution. Curl used with
+> `-s` (GET); `HEAD` also responds 302 (fix applied in `SecurityConfig` + `ReadPathIT#headMirrorsGetOnRedirectPath`).
 
-k6 happy isolado (`load-tests/redirect.js`, 30s @100rps):
+k6 isolated happy run (`load-tests/redirect.js`, 30s @100rps):
 
 ```
 checks_succeeded 100.00% (3001/3001)   http_req_failed 0.00% (0/3201)
 http_req_duration: avg=4.8ms  p(50)=4.05ms  p(95)=10.56ms  p(99)=13.58ms
 ```
 
-Redis down no meio (45s @150rps; `docker stop urlshortener-redis-isolated` em +20s):
+Redis down midway (45s @150rps; `docker stop urlshortener-redis-isolated` at +20s):
 
 ```
 checks_succeeded 100.00% (5730/5730)   http_req_failed 0.00% (0/5930)
 http_req_duration: avg=208.78ms  p(50)=6.45ms  p(95)=744.22ms  p(99)=753.89ms
 ```
-Veredito: **alinhado à matriz 7.1** — rate-limit + cache fail-open (ADR 0005): 100% 302 sem 4xx/5xx;
-latência p95 sobe (~744ms) no período do outage (cache/RL fallback para Mongo), sem falhas de cliente.
+Verdict: **aligned with the 7.1 matrix** — rate-limit + cache fail-open (ADR 0005): 100% 302 with no 4xx/5xx;
+p95 latency rises (~744ms) during the outage window (cache/RL fallback to Mongo), no client failures.
 
-Mongo down (cache frio; flush Redis + espera L1 TTL, depois `docker stop urlshortener-mongo-isolated`;
-`fixed-redirect.js` 60s @150rps contra os seeds reais; `databaseCb` abre após ~5 falhas):
+Mongo down (cold cache; flush Redis + wait for the L1 TTL, then `docker stop urlshortener-mongo-isolated`;
+`fixed-redirect.js` 60s @150rps against the real seeds; `databaseCb` opens after ~5 failures):
 
 ```
 http_req_failed: 100.00% (4504/4504)   http_req_duration: avg=324ms  p(50)=3.56ms  p(95)=6.85ms  p(99)=27.09s
 iterations 4504 / dropped_iterations 4497
 ```
 Log: `GlobalExceptionHandler - Circuit breaker open: CircuitBreaker 'databaseCb' is HALF_OPEN and does not permit further calls`
-Veredito: **alinhado à matriz 7.1** — fail-closed: cold-cache redirects fail 503/5xx (p50 3.6ms é o
-estado OPEN fast-fail; p99 27s é a janela de amostragem do CB com server-selection timeout do driver);
-recuperação pós `docker start` → **302** (HALF_OPEN → CLOSED, sem restart da app).
+Verdict: **aligned with the 7.1 matrix** — fail-closed: cold-cache redirects fail 503/5xx (p50 3.6ms is the
+OPEN fast-fail state; p99 27s is the CB sampling window with the driver's server-selection timeout);
+recovery after `docker start` → **302** (HALF_OPEN → CLOSED, without an app restart).
 
-Alinhado à matriz 7.1? **sim**, sem gaps a corrigir (Redis-down fail-open e Mongo-down fail-closed
-comportam-se exatamente como contratado).
+Aligned with the 7.1 matrix? **yes**, no gaps to fix (Redis-down fail-open and Mongo-down fail-closed
+behave exactly as contracted).
 
-### 7.6 Gates finais (executado 2026-09-11)
+### 7.6 Final gates (executed 2026-09-11)
 
 ```
 $ ./scripts/check-metrics-frozen.sh  && ./scripts/check-metrics-frozen.sh --self-test
@@ -259,12 +259,12 @@ $ amtool check-config alertmanager.yml            # via prom/alertmanager:v0.27.
 Checking '/mon/alertmanager.yml'  SUCCESS
 ```
 
-**Correção no caminho da gate (real):** `promtool test rules` reprovou com
-`invalid annotation name: runbook-§Fast-burn` (e Slow-burn/Budget-exhausted) — `§` e hífen não
-são permitidos em annotation names Prometheus. Ajustadas para `runbook_fast_burn` /
-`runbook_slow_burn` / `runbook_budget_exhausted` em `deploy/monitoring/alerts.yml`, com
-`docs/slos.md` e o comentário do `alertmanager.yml` sincronizados (a mesma disciplinaridade
-que pegou as dívidas 19–29: gate que morde). `promtool check-config`/`test rules` voltaram verdes.
+**Gate-path fix (real):** `promtool test rules` failed with
+`invalid annotation name: runbook-§Fast-burn` (and Slow-burn/Budget-exhausted) — `§` and hyphens are not
+allowed in Prometheus annotation names. Adjusted to `runbook_fast_burn` /
+`runbook_slow_burn` / `runbook_budget_exhausted` in `deploy/monitoring/alerts.yml`, with
+`docs/slos.md` and the `alertmanager.yml` comment synced (the same discipline
+that caught debt items 19–29: a gate that bites). `promtool check-config`/`test rules` are green again.
 
 ```
 $ ./mvnw verify
@@ -273,27 +273,27 @@ All coverage checks have been met.
 BUILD SUCCESS
 ```
 
-Sha de fechamento do Épico: `1286f1a` (gates 7.6); commits do épico: `29dfd57` (7.4 PEL),
-`59bdc70` (7.5 drill/HEAD fix), `1286f1a` (7.6 gates + promtool fix). CI verde no push final
-(jobs Unit, Integration, Build, Security Gate, Observability Gate — todos `success`).
+Epic closing sha: `1286f1a` (7.6 gates); epic commits: `29dfd57` (7.4 PEL),
+`59bdc70` (7.5 drill/HEAD fix), `1286f1a` (7.6 gates + promtool fix). CI green on the final push
+(jobs Unit, Integration, Build, Security Gate, Observability Gate — all `success`).
 
-## 2. Checklist de conclusão
+## 2. Completion checklist
 
 - [x] `docs/reliability.md` + ADR 0005 + ADR 0006
-- [x] Inventário CB/timeout/retry + ITs de falha
-- [x] Shutdown script verde + probes evidenciados
-- [x] Worker/PEL/poison evidenciados
-- [x] Restore isolado + dois fault-injections com números
-- [x] Runbook atualizado com os comandos desta execução
-- [x] `./mvnw verify` verde
-- [x] Nenhuma cifra neste arquivo sem comando acima
+- [x] CB/timeout/retry inventory + failure ITs
+- [x] Shutdown script green + probes evidenced
+- [x] Worker/PEL/poison evidenced
+- [x] Isolated restore + two fault-injections with numbers
+- [x] Runbook updated with the commands from this execution
+- [x] `./mvnw verify` green
+- [x] No figure in this file without the pasted command above
 
-## 3. Fora de escopo confirmado (não vira dívida fantasma)
+## 3. Confirmed out of scope (does not become ghost debt)
 
-- Replica set / Redis cluster — não feito, SPOF aceito e escrito na matriz.
-- Dívida AGENTS #26 (ROLE_ADMIN) — não resolvida aqui.
-- Exactly-once de clique — rejeitado no ADR 0006.
+- Replica set / Redis cluster — not done, SPOF accepted and recorded in the matrix.
+- AGENTS debt #26 (ROLE_ADMIN) — not resolved here.
+- Exactly-once clicks — rejected in ADR 0006.
 
 ---
 
-*Quando a seção 2 estiver 100% marcada e a seção 1 tiver outputs reais, o Épico 7 está **concluído**.*
+*When section 2 is 100% checked and section 1 has real outputs, Epic 7 is **complete**.*

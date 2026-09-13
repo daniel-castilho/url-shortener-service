@@ -1,54 +1,54 @@
-# Epic 6 – Estratégia de Testes [aterrado]
+# Epic 6 – Testing Strategy [grounded]
 
 ## 6.1 ADRs
-- **Objetivo:** Decisões de escala registradas e revisáveis.
-- **Ação:** 4 ADRs em `docs/adr/` (template status/date/context/decision/consequences); `git log --oneline -- docs/adr/` colado.
-- **Critério aceite:** ≥2 ADRs (target 4) presentes; saída colada no `epic-6-dod.md`.
+- **Objective:** Scale decisions recorded and reviewable.
+- **Action:** 4 ADRs in `docs/adr/` (status/date/context/decision/consequences template); `git log --oneline -- docs/adr/` pasted.
+- **Accepted criterion:** ≥2 ADRs (target 4) present; output pasted in `epic-6-dod.md`.
 
-## 6.2 Índices MongoDB + explain
-- **Objetivo:** Provar que as queries críticas usam os índices V1–V9 (não criar às cegas).
-- **Ação:**
-  - mongosh na infra isolada com dados reais (pool do stress).
-  - `getIndexes()` + `explain("executionStats")`: lookup `_id` (redirect), cursor pagination (V7), analytics (V4), TTL (V5).
-  - Confirmar `ID_SCAN`/`IXSCAN` e `totalDocsExamined` mínimo; **sem** novas migrations.
-- **Critério aceite:** Outputs colados no `epic-6-dod.md`; `./mvnw verify` verde.
+## 6.2 MongoDB indexes + explain
+- **Objective:** Prove that the critical queries use the V1–V9 indexes (no blind creation).
+- **Action:**
+  - mongosh on the isolated infra with real data (stress pool).
+  - `getIndexes()` + `explain("executionStats")`: `_id` lookup (redirect), cursor pagination (V7), analytics (V4), TTL (V5).
+  - Confirm `ID_SCAN`/`IXSCAN` and minimal `totalDocsExamined`; **no** new migrations.
+- **Accepted criterion:** Outputs pasted in `epic-6-dod.md`; `./mvnw verify` green.
 
 ## 6.3 Rate-limit + circuit breakers
-- **Objetivo:** Evidenciar o comportamento dos mecanismos já implementados.
-- **Ação:**
-  - `./mvnw test -Dtest='RedirectRateLimitIT'` → verde (429 após capacidade, escopos, burst).
-  - Sob carga 2×: `GET /actuator/circuitbreakers` → estados `CLOSED`.
-- **Critério aceite:** Outputs colados.
+- **Objective:** Provide evidence of the behavior of the already-implemented mechanisms.
+- **Action:**
+  - `./mvnw test -Dtest='RedirectRateLimitIT'` → green (429 after capacity, scopes, burst).
+  - Under 2× load: `GET /actuator/circuitbreakers` → `CLOSED` states.
+- **Accepted criterion:** Outputs pasted.
 
-## 6.4 Deploy multi-instância (artefatos)
-- **Objetivo:** Artefatos prontos para N instâncias em bare-metal.
-- **Ação:**
-  - nginx upstream multi-server (weight-flip), systemd template `url-shortener@.service`, build da imagem (tamanho + tag sha), runbook atualizado.
-- **Critério aceite:** Configs no repo; `docker images` e procedimento colados.
+## 6.4 Multi-instance deploy (artifacts)
+- **Objective:** Artifacts ready for N instances on bare metal.
+- **Action:**
+  - nginx multi-server upstream (weight-flip), systemd template `url-shortener@.service`, image build (size + sha tag), updated runbook.
+- **Accepted criterion:** Configs in the repo; `docker images` and procedure pasted.
 
-## 6.5 Escala horizontal sob carga (2 instâncias + LB)
-- **Objetivo:** Validar que o design stateless de fato escala horizontalmente.
-- **Ação:**
-  - 2 instâncias compartilhando Mongo/Redis atrás de nginx LB.
+## 6.5 Horizontal scale under load (2 instances + LB)
+- **Objective:** Validate that the stateless design actually scales horizontally.
+- **Action:**
+  - 2 instances sharing Mongo/Redis behind an nginx LB.
   - `stress.js` 2× via LB: p95 < 200ms, 0 5xx.
-  - Prova de rate-limit compartilhado: limites reais → burst via LB → 429 após a capacidade **global**.
-- **Critério aceite:** Relatórios colados no `epic-6-dod.md`.
+  - Shared rate-limit proof: real limits → burst via LB → 429 after the **global** capacity.
+- **Accepted criterion:** Reports pasted in `epic-6-dod.md`.
 
-## 6.6 Integração retro-compatível (gates)
-- [x] `./mvnw verify` conjunto → verde (métricas frozen, boundaries, doc-sync, SpotBugs, OWASP).
-- [x] `promtool` + `amtool` verdes.
-- [x] Saídas coladas no `epic-6-dod.md`.
+## 6.6 Backward-compatible integration (gates)
+- [x] `./mvnw verify` full suite → green (frozen metrics, boundaries, doc-sync, SpotBugs, OWASP).
+- [x] `promtool` + `amtool` green.
+- [x] Outputs pasted in `epic-6-dod.md`.
 
 ---
 
-**Checklist de conclusão do Épico 6:**
+**Epic 6 completion checklist:**
 
-- [x] 4 ADRs criados (`docs/adr/`)
-- [x] Auditoria explain limpa
-- [x] `RedirectRateLimitIT` verde + circuit breakers CLOSED sob carga
-- [x] Artefatos multi-instância prontos (nginx, systemd template, imagem sha, runbook)
-- [x] Stress 2× via LB (2 instâncias) com SLOs ok e rate-limit compartilhado provado
-- [x] `./mvnw verify` conjunto verde
-- [x] Evidências coladas no `epic-6-dod.md`
+- [x] 4 ADRs created (`docs/adr/`)
+- [x] Clean explain audit
+- [x] `RedirectRateLimitIT` green + circuit breakers CLOSED under load
+- [x] Multi-instance artifacts ready (nginx, systemd template, sha image, runbook)
+- [x] Stress 2× via LB (2 instances) with SLOs ok and shared rate-limit proven
+- [x] `./mvnw verify` full suite green
+- [x] Evidence pasted in `epic-6-dod.md`
 
-*Ao marcar todos os itens acima, o Épico 6 está **concluído**.*
+*Once all the items above are checked, Epic 6 is **complete**.*

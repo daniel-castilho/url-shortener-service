@@ -1,86 +1,86 @@
-# Epic 8 – Estratégia de Testes
+# Epic 8 – Testing Strategy
 
-Princípio: testar o **contrato de deploy** (fail-closed, zero-downtime, rollback, backup verificado), não a implementação do bash. Happy path de negócio já foi EP4/5/6; falha de dependência já foi EP7. Aqui o teste é: **o pipeline de release e o cutover fazem o que o ADR 0007/0008 promete, e falham da forma prometida.**
+Principle: test the **deploy contract** (fail-closed, zero-downtime, rollback, verified backup), not the bash implementation. The business happy path was already done in EP4/5/6; dependency failure was already done in EP7. Here the test is: **the release pipeline and the cutover do what ADR 0007/0008 promise, and fail the way they promise.**
 
-## 8.1 Contrato de release
+## 8.1 Release contract
 
-- **Objetivo:** Decisões revisáveis; o operador não depende de memória do autor; o fluxo tag→produção é legível em uma sessão.
-- **Ação:** `docs/release-engineering.md` + ADR 0007/0008; `git log` colado.
-- **Critério aceite:** fluxo completo escrito (etapa × executor × falha × comportamento); rejeitados escritos (k8s, SSH-deploy, registry obrigatório, rolling sem canary); consequência da frota 1 ativa + 1 idle aceita e documentada.
-- **Não fazer:** inventar métricas novas para "vigiar o deploy" — o canary usa as séries frozen existentes (`http.server.requests`, `*.latency`, `schema.migrations.*`). Se surgir necessidade nova, passa pelo freeze gate **no mesmo PR**.
+- **Goal:** Reviewable decisions; the operator does not depend on the author's memory; the tag→production flow is readable in one session.
+- **Action:** `docs/release-engineering.md` + ADR 0007/0008; `git log` pasted.
+- **Acceptance criteria:** full flow written (step × executor × failure × behaviour); rejections written (k8s, SSH-deploy, mandatory registry, rolling without canary); the 1 active + 1 idle fleet consequence accepted and documented.
+- **Do not:** invent new metrics to "watch the deploy" — the canary uses the existing frozen series (`http.server.requests`, `*.latency`, `schema.migrations.*`). If a new need arises, it goes through the freeze gate **in the same PR**.
 
-## 8.2 Identidade do artifact
+## 8.2 Artifact identity
 
-- **Objetivo:** `0.14.0` na tag = `url-shortener-service-0.14.0.jar` promovido; ninguém recompila na mão.
-- **Ação:**
-  - `./mvnw -q help:evaluate -Dexpression=project.version -Drevision=0.14.0 -DforceStdout` → `0.14.0` (colado).
-  - `./mvnw clean package -DskipTests -Drevision=0.14.0` → nome do jar colado (`ls target/*.jar`).
-  - `./mvnw verify` completo verde com o flatten (nenhum gate regredido) — output colado.
-  - Gate CHANGELOG red/green: tag real verde + run intencionalmente vermelho (Unreleased sujo em branch descartável) — os dois outputs colados.
-- **Critério aceite:** semver da tag propagada para jar e label da imagem; tag com Unreleased sujo **não** pode criar Release.
-- **Não fazer:** `mvn release:perform` ou git-flow de version — o padrão `revision`+tag é o escolhido (ADR 0008); não adicionar mais um mecanismo.
+- **Goal:** `0.14.0` on the tag = `url-shortener-service-0.14.0.jar` promoted; nobody recompiles by hand.
+- **Action:**
+  - `./mvnw -q help:evaluate -Dexpression=project.version -Drevision=0.14.0 -DforceStdout` → `0.14.0` (pasted).
+  - `./mvnw clean package -DskipTests -Drevision=0.14.0` → jar name pasted (`ls target/*.jar`).
+  - Full `./mvnw verify` green with flatten (no gate regressed) — output pasted.
+  - CHANGELOG gate red/green: real tag green run + intentionally red run (dirty Unreleased on a throwaway branch) — both outputs pasted.
+- **Acceptance criteria:** tag semver propagated to the jar and the image label; a tag with a dirty Unreleased **cannot** create a Release.
+- **Do not:** `mvn release:perform` or git-flow versioning — the `revision`+tag pattern is the chosen one (ADR 0008); do not add another mechanism.
 
 ## 8.3 Blue-green fail-closed
 
-- **Objetivo:** O cutover zero-downtime acontece no sucesso e **aborta para a cor antiga** em qualquer falha — ambos os caminhos provados, não narrados.
-- **Ação:**
-  - `scripts/deploy.sh --self-test`: render em dir temporário com asserções de peso (10/30/100 e complementos), `nginx -t` quando disponível, e **prova do abort** (`READY_BUDGET_SECONDS=1` contra porta morta → runtime conf volta com a cor antiga a 100%, exit ≠ 0, passo nomeado). Output colado.
-  - Exercício local completo (stack dev: compose + jar + nginx ou render asserido): deploy de uma "tag" fake → canary 10/30/100 com smoke verde em cada bump → `last-deploy.txt` correto → cor antiga parada. Colar pesos do runtime conf em cada bump + summary do smoke.
-  - Zero-downtime do cutover: durante o flip 10→30→100, um loop `curl` de redirect (os seeds do EP7 ou da smoke) não recebe 5xx/connection-refused — contagem colada (permissão: o único downtime aceitável é o `systemctl restart` da cor **idle**, que não carrega tráfego — afirmar com `--active` antes do restart).
-- **Critério aceite:** self-test verde; exercício local com outputs; abort provado com a cor antiga de volta a 100%.
-- **Não fazer:** mockar o `systemctl` — o self-test testa render + lógica de abort; o exercício local testa systemd de verdade (host/VM do operador, evidence no DoD). Não mutar o template `deploy/proxy/nginx.conf` em nenhuma asserção.
+- **Goal:** The zero-downtime cutover happens on success and **aborts to the old colour** on any failure — both paths proven, not narrated.
+- **Action:**
+  - `scripts/deploy.sh --self-test`: render in a temp dir with weight assertions (10/30/100 and complements), `nginx -t` when available, and **proof of the abort** (`READY_BUDGET_SECONDS=1` against a dead port → runtime conf back with the old colour at 100%, exit ≠ 0, step named). Output pasted.
+  - Full local exercise (dev stack: compose + jar + nginx or asserted render): deploy a "fake" tag → canary 10/30/100 with green smoke on each bump → correct `last-deploy.txt` → old colour stopped. Paste the runtime conf weights at each bump + the smoke summary.
+  - Zero-downtime of the cutover: during the 10→30→100 flip, a redirect `curl` loop (the EP7 seeds or the smoke ones) receives no 5xx/connection-refused — count pasted (allowance: the only acceptable downtime is the `systemctl restart` of the **idle** colour, which carries no traffic — assert with `--active` before the restart).
+- **Acceptance criteria:** green self-test; local exercise with outputs; abort proven with the old colour back at 100%.
+- **Do not:** mock `systemctl` — the self-test tests render + abort logic; the local exercise tests real systemd (operator host/VM, evidence in the DoD). Do not mutate the `deploy/proxy/nginx.conf` template in any assertion.
 
 ## 8.4 Smoke + rollback
 
-- **Objetivo:** a sonda é **crucial e barata o suficiente** para rodar em cada bump e em cada release; o rollback desfaz sem rebuild.
-- **Ação:**
-  - `smoke.sh` contra stack local dev (rate limits padrão — as 8 pernas convivem com o bucket de 60/min, 2 shortens por run): verde colado.
-  - **Perna de expiração** (410): `ttlSeconds: 1` + poll ≤15s — valida o contrato eager de expiry (EP: expired nunca sai do cache) sem depender do TTL index (purge ~60s).
-  - CI `runtime-smoke` (job da `release.yml`): services mongo+redis + jar do artifact → `smoke.sh` → `verify-graceful-shutdown.sh` (dreno EP7: zero connection-refused). Run colado.
-  - `rollback.sh --self-test` (last-deploy sintético → asserções do render da cor anterior) + exercício local: deploy fake → rollback → pesos asseridos (anterior 100 / atual down) + one-liner impresso.
-- **Critério aceite:** 8 pernas verdes em stack real; rollback simétrico ao deploy (mesmo mecanismo de render); falha de perna nomeada no exit (provar rodando contra porta morta — exit message colada).
-- **Não fazer:** smoke não deve criar usuário/autenticar (anônimo é o contrato público do shorten); smoke não pode seguir redirects (`curl -o /dev/null -w '%{http_code}'` + inspecionar `Location`, nunca `-L`).
+- **Goal:** the probe is **crucial and cheap enough** to run on every bump and every release; the rollback undoes without rebuild.
+- **Action:**
+  - `smoke.sh` against the local dev stack (default rate limits — the 8 legs coexist with the 60/min bucket, 2 shortens per run): green pasted.
+  - **Expiry leg** (410): `ttlSeconds: 1` + poll ≤15s — validates the eager expiry contract (expired never leaves the cache) without depending on the TTL index (purge ~60s).
+  - CI `runtime-smoke` (job in `release.yml`): mongo+redis services + artifact jar → `smoke.sh` → `verify-graceful-shutdown.sh` (EP7 drain: zero connection-refused). Run pasted.
+  - `rollback.sh --self-test` (synthetic last-deploy → render assertions of the previous colour) + local exercise: fake deploy → rollback → weights asserted (previous 100 / current down) + one-liner printed.
+- **Acceptance criteria:** 8 legs green on a real stack; rollback symmetric to the deploy (same render mechanism); failed leg named in the exit (prove by running against a dead port — exit message pasted).
+- **Do not:** smoke must not create a user or authenticate (anonymous is the public shorten contract); smoke must not follow redirects (`curl -o /dev/null -w '%{http_code}'` + inspect `Location`, never `-L`).
 
-## 8.5 Backup agendado e verificado
+## 8.5 Scheduled and verified backup
 
-- **Objetivo:** o backup roda sozinho e o restore é um **contrato que falha** — divergência é exit ≠ 0, não log amarelo.
-- **Ação:**
-  - `backup-mongodb.sh` em stack dev → `manifest.json` colado (counts reais).
-  - `restore-mongodb.sh --verify` verde (stack dev isolada/paralela) + **negative test**: manifest corrompido (count divergente) → exit ≠ 0 com a tabela de divergência colada.
-  - `ci-restore-drill.sh` completo (projeto isolado `urlshortener-drill`): seeds pré=302 / pós=404 (semântica de RPO do EP7), RTO medido ≤ 300s, manifests em artifact. Output + RTO colados.
-  - Timer: `systemd-analyze verify` quando disponível + `systemctl list-timers` no host de homologação colado (CI sem systemd: o timer é evidence de host, não de CI — declarar).
-- **Critério aceite:** restore divergente **falha**; drill verde com RTO; timer enabled no host de homologação.
-- **Não fazer:** destruir o volume de dev do dia a dia — o drill é isolado por projeto + portas 18xxx (padrão EP5/6/7, `down -v` só atinge `urlshortener-drill`). Não exigir backup off-host neste épico (fora de escopo, TD nomeado).
+- **Goal:** the backup runs on its own and the restore is a **contract that fails** — divergence is exit ≠ 0, not a yellow log.
+- **Action:**
+  - `backup-mongodb.sh` on the dev stack → `manifest.json` pasted (real counts).
+  - `restore-mongodb.sh --verify` green (isolated/parallel dev stack) + **negative test**: corrupted manifest (divergent count) → exit ≠ 0 with the divergence table pasted.
+  - Full `ci-restore-drill.sh` (isolated `urlshortener-drill` project): pre seeds=302 / post=404 (EP7 RPO semantics), measured RTO ≤ 300s, manifests as artifacts. Output + RTO pasted.
+  - Timer: `systemd-analyze verify` when available + `systemctl list-timers` on the staging host pasted (CI has no systemd: the timer is host evidence, not CI evidence — state it).
+- **Acceptance criteria:** divergent restore **fails**; green drill with RTO; timer enabled on the staging host.
+- **Do not:** destroy the day-to-day dev volume — the drill is isolated by project + 18xxx ports (EP5/6/7 pattern, `down -v` only reaches `urlshortener-drill`). Do not require off-host backup in this epic (out of scope, named TD).
 
-## 8.6 Release como gate
+## 8.6 Release as a gate
 
-- **Objetivo:** a primeira tag real prova o pipeline inteiro; nenhum gate do CI é pulado no caminho da release.
-- **Ação:**
-  - Tag `v0.14.0` (ou `v0.14.0-epic8`) no `main` → workflow `release.yml` de ponta a ponta: gates (verify + bash + promtool/amtool + CHANGELOG), k6-gate (thresholds de SLO no artifact — o exit do k6 é o gate), runtime-smoke, restore-drill, release (non-root gate, Trivy HIGH/CRITICAL, SBOM, `gh release create`).
-  - Artifacts do Release listados no DoD: `url-shortener-service-<semver>.jar` + sha256 (o mesmo sha256 que o `deploy.sh` vai verificar), `SHA256SUMS`, SBOM CycloneDX, notas.
-  - `deploy.sh <tag>` no host de homologação baixando **aquele** jar da Release (sha256 verificado no download) — colado.
-- **Critério aceite:** workflow 100% verde; Release existindo com assets; jar da Release = jar que o deploy consome (mesmo sha256 nos dois lugares).
-- **Não fazer:** `if: always()` escondendo falha de gate (o release precisa de **todos** os jobs verdes); Trivy com `ignore-failure: true`; pular o k6-gate "porque o CI já rodou" — o artifact da tag é o que o k6 valida.
+- **Goal:** the first real tag proves the whole pipeline; no CI gate is skipped on the road to release.
+- **Action:**
+  - Tag `v0.14.0` (or `v0.14.0-epic8`) on `main` → end-to-end `release.yml` workflow: gates (verify + bash + promtool/amtool + CHANGELOG), k6-gate (SLO thresholds on the artifact — the k6 exit is the gate), runtime-smoke, restore-drill, release (non-root gate, Trivy HIGH/CRITICAL, SBOM, `gh release create`).
+  - Release artifacts listed in the DoD: `url-shortener-service-<semver>.jar` + sha256 (the same sha256 that `deploy.sh` will verify), `SHA256SUMS`, CycloneDX SBOM, notes.
+  - `deploy.sh <tag>` on the staging host downloading **that** Release jar (sha256 verified on download) — pasted.
+- **Acceptance criteria:** 100% green workflow; Release existing with assets; Release jar = the jar the deploy consumes (same sha256 in both places).
+- **Do not:** `if: always()` hiding a gate failure (the release needs **all** jobs green); Trivy with `ignore-failure: true`; skipping the k6-gate "because CI already ran" — the tag artifact is what k6 validates.
 
-## 8.7 Integração retro-compatível (gates)
+## 8.7 Retro-compatible integration (gates)
 
-- [ ] `./mvnw verify` conjunto → verde (JaCoCo floors, SpotBugs, Spotless, OWASP, ArchUnit, doc-sync, metrics-frozen).
-- [ ] `promtool` + `amtool` verdes.
-- [ ] Self-tests dos novos scripts verdes (`deploy.sh`, `rollback.sh`, `--verify` do restore).
-- [ ] Nenhuma série nova sem passar pelo freeze gate (se algo criar métrica, atualizar `scripts/check-metrics-frozen.sh` **no mesmo PR**).
-- [ ] `.gitignore` cobre `deploy/runtime/` (e artifacts k6/dumps de dev) — `git status` limpo após os exercícios.
+- [ ] Full `./mvnw verify` → green (JaCoCo floors, SpotBugs, Spotless, OWASP, ArchUnit, doc-sync, metrics-frozen).
+- [ ] `promtool` + `amtool` green.
+- [ ] Self-tests of the new scripts green (`deploy.sh`, `rollback.sh`, the restore `--verify`).
+- [ ] No new series without going through the freeze gate (if something creates a metric, update `scripts/check-metrics-frozen.sh` **in the same PR**).
+- [ ] `.gitignore` covers `deploy/runtime/` (and k6/dev-dump artifacts) — `git status` clean after the exercises.
 
 ---
 
-**Checklist de conclusão do Épico 8:**
+**Epic 8 completion checklist:**
 
-- [ ] Matriz/fluxo + ADRs 0007/0008
-- [ ] Versioning + gate CHANGELOG (red/green)
-- [ ] `deploy.sh` self-test + exercício local (abort provado)
-- [ ] `smoke.sh` 8 pernas + `rollback.sh` self-test + exercício
-- [ ] Backup manifest + restore `--verify` (negative test) + drill com RTO
-- [ ] `release.yml` verde no primeiro tag + Release com assets
-- [ ] `./mvnw verify` verde
-- [ ] Evidências coladas no `epic-8-dod.md`
+- [ ] Matrix/flow + ADRs 0007/0008
+- [ ] Versioning + CHANGELOG gate (red/green)
+- [ ] `deploy.sh` self-test + local exercise (abort proven)
+- [ ] `smoke.sh` 8 legs + `rollback.sh` self-test + exercise
+- [ ] Backup manifest + restore `--verify` (negative test) + drill with RTO
+- [ ] `release.yml` green on the first tag + Release with assets
+- [ ] `./mvnw verify` green
+- [ ] Evidence pasted in `epic-8-dod.md`
 
-*Ao marcar todos os itens acima, o Épico 8 está **concluído**.*
+*When all items above are checked, Epic 8 is **complete**.*

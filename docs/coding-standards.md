@@ -409,7 +409,7 @@ current. The hard rule lives in `AGENTS.md` (rule 10).
 
 ---
 
-## 14. Herde-de-Lições (promoted from lessons.md — Epic 1 story 1.2)
+## 14. Inherited lessons (promoted from lessons.md — Epic 1 story 1.2)
 
 Patterns that appeared ≥ 3 times in `docs/lessons.md` are promoted here as standing rules and marked
 `→ coding-standards` at the source. The lessons file keeps the narrative (the debugging story); this

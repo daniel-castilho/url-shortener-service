@@ -89,7 +89,7 @@ k6 scripts in `load-tests/` (`shorten.js`, `redirect.js`, `mixed.js`), manual
 dispatch via `.github/workflows/load-test.yml`. Baselines tracked in
 `docs/load-test-baseline.md`.
 
-## Diagnóstico (quick triage)
+## Diagnosis (quick triage)
 
 `scripts/debug-health.sh [base_url]` probes `/actuator/health/liveness`+
 `/actuator/health/readiness` and, when the scrape is reachable,

@@ -461,9 +461,9 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
      = 165.499 reqs, **0 5xx, p95 7.28ms** (27× headroom); **rate-limit global proven**:
      burst concurrent of 300 via LB → exactly 120×302 + 180×429 (single bucket
      `rl:redirect:127.0.0.1`). `./mvnw verify` green (271 unit + 144 IT, rerun 144/0); evidence
-     in `tasks/epic-6/epic-6-dod.md`. Leitura HTTP do estado do CB (`/actuator/circuitbreakers`)
-     está disponível pelo **papel de operador** da dívida 26 — status `resolved` desde 2026-09-11,
-     coberta pelo `OperatorAccessIT` (circuitbreakers → 200 via BasicAuth, sem JWT/role). — `resolved`
+     in `tasks/epic-6/epic-6-dod.md`. HTTP read of the CB state (`/actuator/circuitbreakers`)
+     is available through the **operator role** of debt 26 — status `resolved` since 2026-09-11,
+     covered by `OperatorAccessIT` (circuitbreakers → 200 via BasicAuth, no JWT/role). — `resolved`
 
 30. **Epic 7 (Reliable) — failure mode contract, real PEL, proven DR drill** — completed
      2026-09-11. (a) Failure mode matrix 7.1 (fail-open/fail-closed per dependency) in

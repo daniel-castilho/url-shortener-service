@@ -1,51 +1,51 @@
-# Epic 1: Maintainable – Fundação & Padrões
+# Epic 1: Maintainable – Foundation & Patterns
 
-**Projeto:** url-shortener-service  
-**Contexto:** Java 25, Spring Boot 4.1.1, Arquitetura Hexagonal (Ports & Adapters), MongoDB, Redis  
-**Objetivo:** Consolidar a base do projeto para que todas as entregas futuras respeitem contratos claros, convenções compartilhadas e estrutura de código verificável, evitando retrabalho e decadência arquitetural.
+**Project:** url-shortener-service  
+**Context:** Java 25, Spring Boot 4.1.1, Hexagonal Architecture (Ports & Adapters), MongoDB, Redis  
+**Objective:** Consolidate the project foundation so that all future deliverables respect clear contracts, shared conventions and verifiable code structure, avoiding rework and architectural decay.
 
 ---
 
-## Por que este épico em primeiro lugar?
+## Why this epic first?
 
-A manutenibilidade é o alicerce sobre o qual todos os outros pilares são construídos. Sem um padrão comum definido agora, as seguintes problémáticas se multiplicam nas iterações seguintes:
+Maintainability is the foundation upon which all other pillars are built. Without a common standard defined now, the following problems multiply in subsequent iterations:
 
-- Importações cruzadas `infra.*` em `core/` (violando a regra hexagonal) → exigir refatoração laterante em EP2/EP3.
-- Convenções de logging, naming e erro não definidas → testes cegos e ruído nos logs (EP3).
-- Matriz de dívida técnica desconectada dos documentos de código → dificuldade de onboarding e auditoria (EP7/EP8).
+- Cross imports of `infra.*` in `core/` (violating the hexagonal rule) → requiring later refactoring in EP2/EP3.
+- Undefined logging, naming and error conventions → blind tests and log noise (EP3).
+- Technical debt matrix disconnected from the code documents → onboarding and audit difficulty (EP7/EP8).
 
-**Relação com outros épicos:**
+**Relationship with other epics:**
 
-| Epico | Dependência direta |
+| Epic | Direct dependency |
 |--------|-------------------|
-| EP2 – Secure | Convenções de logging (`logSafe`), nomes de classes e DTOs; regras de validação de entrada. |
-| EP3 – Observable | Formato de métricas Prometheus, séries `dargent_*`, estrutura de MDC e correlation‑id. |
-| EP4 – Testes | Histórias de teste derivadas dos *stories* abaixo; regra de cobertura por módulo. |
-| EP5 – Performance | Gargalos identificados apenas após o código estar dentro de convenções estáveis. |
-| EP6 – Scalable | Front‑door (NGINX, rate‑limiter) depende de nomes de endpoints e payloads definidos aqui. |
-| EP7 – Reliable | Circuit‑breaker e bulkhead names alinhados com os pacotes e exceções definidos. |
-| EP8 – Deployable | Imagens Docker, tags e scripts de CI baseiam‑se nos pacotes e configurações estáveis. |
+| EP2 – Secure | Logging conventions (`logSafe`), class and DTO names; input validation rules. |
+| EP3 – Observable | Prometheus metrics format, `dargent_*` series, MDC structure and correlation‑id. |
+| EP4 – Testing | Test stories derived from the *stories* below; coverage rule per module. |
+| EP5 – Performance | Bottlenecks identified only after the code is within stable conventions. |
+| EP6 – Scalable | Front‑door (NGINX, rate‑limiter) depends on endpoint and payload names defined here. |
+| EP7 – Reliable | Circuit‑breaker and bulkhead names aligned with the defined packages and exceptions. |
+| EP8 – Deployable | Docker images, tags and CI scripts are based on the stable packages and configurations. |
 
-**Critério de Aceitação Elevado:**
+**Elevated Acceptance Criteria:**
 
-1. `bash scripts/check-boundaries.sh` → **PASS** (0 violações)  
-2. `bash scripts/check-boundaries.sh --self-test` → **PASS** (gate auto‑verifica).  
-3. Todas as anotações `@Component/@Service/@Repository` removidas de `core/`; beans registrados via `infra/config/ServiceConfig`.  
-4. `lessons.md` → `coding-standards.md` promoções concluídas; lições repetidas > 2 migradas, removidas da lista de pendentes.  
-5. Pacote `core/` livre de wildcard imports; todos os imports são explícitos e ≤ 3 linhas.  
-6. Matriz de dívida técnica em `AGENTS.md` sincronizada: status `open/in-progress/resolved` para cada item, com data de previsão.  
-7. `./mvnw compile` + `./mvnw spotless:check` → **verde**; `./mvnw spotbugs:check` → 0 bugs novo; ArchUnit boundary tests → verdes.
+1. `bash scripts/check-boundaries.sh` → **PASS** (0 violations)  
+2. `bash scripts/check-boundaries.sh --self-test` → **PASS** (gate self‑verifies).  
+3. All `@Component/@Service/@Repository` annotations removed from `core/`; beans registered via `infra/config/ServiceConfig`.  
+4. `lessons.md` → `coding-standards.md` promotions completed; lessons repeated > 2 migrated, removed from the pending list.  
+5. `core/` package free of wildcard imports; all imports are explicit and ≤ 3 lines.  
+6. Technical debt matrix in `AGENTS.md` synced: `open/in-progress/resolved` status for each item, with a forecast date.  
+7. `./mvnw compile` + `./mvnw spotless:check` → **green**; `./mvnw spotbugs:check` → 0 new bugs; ArchUnit boundary tests → green.
 
-**Rastreabilidade:**
+**Traceability:**
 
-| Story | Documento de referência | Agentes/AGENTS.md |
+| Story | Reference document | Agents/AGENTS.md |
 |-------|------------------------|-------------------|
-| 1.1 | `core/` livres de imports `infra.*` | Regra 1 (Arquitetura de Borda) |
-| 1.2 | `lessons.md` → `coding-standards.md` promoção | Regra 10 (Doc Sync is Part of Done) |
-| 1.3 | Pacote `core/model/`, `core/ports/{incoming,outgoing}/`, `infra/adapter/` definidos | Regra 9 (Namig & Structure) |
-| 1.4 | Remoção de classes `unused`, javatrans em inglês, comentários “por que” | Regra 1 (Coding Conventions) |
-| 1.5 | `AGENTS.md` ↔ `lessons.md` ↔ `coding-standards.md` sincronizados | Regra 10 + Regra 11 (recém‑adicionada) |
+| 1.1 | `core/` free of `infra.*` imports | Rule 1 (Boundary Architecture) |
+| 1.2 | `lessons.md` → `coding-standards.md` promotion | Rule 10 (Doc Sync is Part of Done) |
+| 1.3 | `core/model/`, `core/ports/{incoming,outgoing}/`, `infra/adapter/` packages defined | Rule 9 (Namig & Structure) |
+| 1.4 | Removal of `unused` classes, English javadocs, "why" comments | Rule 1 (Coding Conventions) |
+| 1.5 | `AGENTS.md` ↔ `lessons.md` ↔ `coding-standards.md` synced | Rule 10 + Rule 11 (newly added) |
 
 --- 
 
-*Próximo passo: revisar `core/` com `check-boundaries.sh` e promover a primeira lição repetida para `coding-standards.md`.*
+*Next step: review `core/` with `check-boundaries.sh` and promote the first repeated lesson to `coding-standards.md`.*

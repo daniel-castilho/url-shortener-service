@@ -1,59 +1,59 @@
-# Epic 2 – Tasks Técnicas
+# Epic 2 – Technical Tasks
 
-## 2.1 Implementar `logSafe(String)` em todo o `infra/`
-- [x] Localizar todos os `log.warn(` e `log.info(` em `src/main/java/ca/tyny/urlshortener/infra/` (fonte de log: `LoggerFactory` por classe — não existe `LoggingService` central).
-- [x] Adicionar chamada privada `logSafe(String s) { return s.replace('\n', '_').replace('\r', '_'); }` **em cada classe que loga valor client‑controlado** (sanitizer no sink — lição 20).
-- [x] Substituir cada argumento client‑controlado daquele `log` por `logSafe(arg)`.
-- [x] `DefaultUrlValidator`: logar **host + reason** em vez da URL completa (Rule 6: never log full destination URLs).
-- [x] Confirmar `grep -R logSafe src/main/java/ca/tyny/urlshortener/infra` → todos os sinks client‑controlled cobertos.
-- [ ] Executar `./mvnw verify` → gate de log‑injection PASS.
-- [ ] Colar output do `grep` e do `./mvnw verify` no handoff‑DOD.
+## 2.1 Implement `logSafe(String)` across all of `infra/`
+- [x] Locate all `log.warn(` and `log.info(` in `src/main/java/ca/tyny/urlshortener/infra/` (log source: `LoggerFactory` per class — there is no central `LoggingService`).
+- [x] Add a private `logSafe(String s) { return s.replace('\n', '_').replace('\r', '_'); }` helper **in every class that logs a client-controlled value** (sanitizer at the sink — lesson 20).
+- [x] Replace each client-controlled argument of that `log` with `logSafe(arg)`.
+- [x] `DefaultUrlValidator`: log **host + reason** instead of the full URL (Rule 6: never log full destination URLs).
+- [x] Confirm `grep -R logSafe src/main/java/ca/tyny/urlshortener/infra` → all client-controlled sinks covered.
+- [ ] Run `./mvnw verify` → log-injection gate PASS.
+- [ ] Paste the `grep` and `./mvnw verify` outputs into the handoff‑DOD.
 
-## 2.2 Proteger contra SSRF no shorten
-- [x] A validação já existe (`DefaultUrlValidator`: HTTPS‑only, DNS resolve + blocklist RFC1918/loopback/link‑local/metadata, userinfo reject, `SsrfProtectionIT` 7 testes). Gap do épico: **cobertura de IP literal**.
-- [x] Estender `SsrfProtectionIT` com casos de IP literal: `127.0.0.1`, `10.0.0.1`, `172.16.0.1`, `192.168.0.1`, `169.254.169.254`, `[::1]`.
-- [x] Adicionar métrica `security.ssrf.blocked.total` (namespace do repo) via `MetricsPort` → `MicrometerMetricsAdapter`, exportada em `/actuator/prometheus`.
-- [x] Executar `./mvnw test -Dtest='SsrfProtectionIT'` → verde.
-- [ ] Colar output do teste no handoff‑DOD.
+## 2.2 Protect against SSRF in shorten
+- [x] The validation already exists (`DefaultUrlValidator`: HTTPS-only, DNS resolve + RFC1918/loopback/link-local/metadata blocklist, userinfo rejection, `SsrfProtectionIT` 7 tests). Epic gap: **literal IP coverage**.
+- [x] Extend `SsrfProtectionIT` with literal IP cases: `127.0.0.1`, `10.0.0.1`, `172.16.0.1`, `192.168.0.1`, `169.254.169.254`, `[::1]`.
+- [x] Add `security.ssrf.blocked.total` metric (repo namespace) via `MetricsPort` → `MicrometerMetricsAdapter`, exported in `/actuator/prometheus`.
+- [x] Run `./mvnw test -Dtest='SsrfProtectionIT'` → green.
+- [ ] Paste the test output into the handoff‑DOD.
 
-## 2.3 ConfigValidator fail‑fast em perfil prod
-- [x] `ProdConfigValidator` já existe (`infra/config/`: null/blank/<32 chars/default → erro). Gap do épico: **IT que prova o fail‑fast**.
-- [x] Criar `ProdConfigValidatorIT`: profile `prod` + secret default/curto → boot falha com mensagem clara; secret ≥ 32 chars → passa.
-- [x] Executar `./mvnw test -Dtest='ProdConfigValidatorIT'` → verde.
-- [ ] Colar output do teste no handoff‑DOD.
+## 2.3 ConfigValidator fail‑fast in the prod profile
+- [x] `ProdConfigValidator` already exists (`infra/config/`: null/blank/<32 chars/default → error). Epic gap: **an IT that proves the fail‑fast**.
+- [x] Create `ProdConfigValidatorIT`: `prod` profile + default/short secret → boot fails with a clear message; secret ≥ 32 chars → passes.
+- [x] Run `./mvnw test -Dtest='ProdConfigValidatorIT'` → green.
+- [ ] Paste the test output into the handoff‑DOD.
 
-## 2.4 Adicionar headers de segurança HTTP globalmente
-- [x] Via **Spring Security nativo** (decisão do owner): `.headers()` no `SecurityConfig` — `contentTypeOptions`, `frameOptions deny`, `referrerPolicy strict-origin-when-cross-origin` (sem `OncePerRequestFilter` manual).
-- [x] Teste `SecurityHeadersIT`: RestAssured asserta os 3 headers em rotas representativas (redirect, API, actuator liveness).
-- [x] Executar `./mvnw test -Dtest='SecurityHeadersIT'` → verde.
-- [ ] Colar output do teste e do `curl -I` (dev server) no handoff‑DOD.
+## 2.4 Add HTTP security headers globally
+- [x] Via **native Spring Security** (owner decision): `.headers()` in `SecurityConfig` — `contentTypeOptions`, `frameOptions deny`, `referrerPolicy strict-origin-when-cross-origin` (no manual `OncePerRequestFilter`).
+- [x] `SecurityHeadersIT` test: RestAssured asserts the 3 headers on representative routes (redirect, API, actuator liveness).
+- [x] Run `./mvnw test -Dtest='SecurityHeadersIT'` → green.
+- [ ] Paste the test output and the `curl -I` (dev server) into the handoff‑DOD.
 
-## 2.5 Configurar gate OWASP Dependency‑Check
-- [x] Adicionar `org.owasp:dependency-check-maven` **12.2.2** (pin do 12.x — keyless na 13.x é broken, upstream #8715; dependabot PRs não recebem secrets; padrão dargent) ao `pom.xml` (aprovado Regra 9).
-- [x] `failBuildOnCVSS=7`; `suppressionFile=owasp-suppressions.xml` versionada **vazia** (cada entrada futura: rationale + review date); data dir `~/.m2/dependency-check-data` com cache no CI; `nvdApiDelay=6000`.
-- [x] Job CI com `NVD_API_KEY` passado via `-DnvdApiKey` **apenas quando o secret existe** (keyless = throttled‑but‑working); retry documentado (tool error falha o job — never silent‑pass).
-- [x] Executar `./mvnw dependency-check:check -DskipTests` → verde (sem CVE ≥ 7 conhecidas).
-- [ ] Colar output do gate e do `dependency:tree` no handoff‑DOD.
+## 2.5 Configure the OWASP Dependency‑Check gate
+- [x] Add `org.owasp:dependency-check-maven` **12.2.2** (12.x pin — keyless on 13.x is broken, upstream #8715; dependabot PRs receive no secrets; dargent pattern) to `pom.xml` (approved under Rule 9).
+- [x] `failBuildOnCVSS=7`; `suppressionFile=owasp-suppressions.xml` versioned **empty** (each future entry: rationale + review date); data dir `~/.m2/dependency-check-data` with cache in CI; `nvdApiDelay=6000`.
+- [x] CI job with `NVD_API_KEY` passed via `-DnvdApiKey` **only when the secret exists** (keyless = throttled-but-working); documented retry (tool error fails the job — never silent-pass).
+- [x] Run `./mvnw dependency-check:check -DskipTests` → green (no known CVE ≥ 7).
+- [ ] Paste the gate and `dependency:tree` outputs into the handoff‑DOD.
 
-## 2.6 Auto‑auditoria de segurança (checklist rápido)
-- [x] Criar `scripts/check-security.sh` (+ `--self-test`, padrão dos gates existentes) que verifica:
-    - presença de `logSafe` nos sinks client‑controlled de `infra/`
-    - os 3 headers de segurança declarados no `SecurityConfig`
-    - validação do JWT secret no `ProdConfigValidator` (length + default)
-    - ausência de IPs internos hardcoded fora de testes/bloqueio
-- [x] Confirmar saída “PASS” ou listar itens faltantes.
-- [x] Integrar como job GitHub Actions `security-check` que bloqueia merge se falhar.
+## 2.6 Security self-audit (quick checklist)
+- [x] Create `scripts/check-security.sh` (+ `--self-test`, standard for the existing gates) that verifies:
+    - presence of `logSafe` in the client-controlled sinks of `infra/`
+    - the 3 security headers declared in `SecurityConfig`
+    - JWT secret validation in `ProdConfigValidator` (length + default)
+    - absence of hardcoded internal IPs outside tests/blocking
+- [x] Confirm “PASS” output or list the missing items.
+- [x] Integrate as a GitHub Actions job `security-check` that blocks the merge if it fails.
 
 --- 
 
-**Checklist de conclusão do Épico 2:**
+**Epic 2 completion checklist:**
 
-- [ ] `logSafe` em 100 % dos logs `infra` (grep + CI green)
-- [ ] `SSRFIT` → 400 para IPs internos
-- [ ] `ConfigValidatorIT` → falha em prod com secret default
-- [ ] `SecurityHeadersIT` → headers presentes em resposta `curl -I`
-- [ ] `./mvnw verify` verde com `owasp-dependency-check` green
+- [ ] `logSafe` in 100 % of `infra` logs (grep + CI green)
+- [ ] `SSRFIT` → 400 for internal IPs
+- [ ] `ConfigValidatorIT` → fails in prod with a default secret
+- [ ] `SecurityHeadersIT` → headers present in the `curl -I` response
+- [ ] `./mvnw verify` green with `owasp-dependency-check` green
 - [ ] `scripts/check-security.sh` → PASS
-- [ ] `./mvnw verify` completo verde (unit + IT + gates)
+- [ ] Full `./mvnw verify` green (unit + IT + gates)
 
-*Ao marcar todos os itens acima, o Épico 2 está **concluído** e o próximo épico (EP3 – Observable) pode iniciar.*
+*By checking all items above, Epic 2 is **complete** and the next epic (EP3 – Observable) can start.*

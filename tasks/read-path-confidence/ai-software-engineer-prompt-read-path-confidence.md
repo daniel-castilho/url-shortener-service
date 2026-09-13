@@ -2,7 +2,7 @@
 
 **Status:** ready for implementation from current `main` (`293bb9e`, `v0.10.0`).
 **Priority:** P1 — foundation of the "Bitly-like" turn. First epic of the next phase.
-**Target:** make the redirect path **chatto, previsível e medido** — close the read-path residue (the
+**Target:** make the redirect path **fast, predictable and measured** — close the read-path residue (the
 Bloom filter does not actually avoid MongoDB), publish the measured redirect baseline, and gate the
 redirect path with k6 in CI. This is the foundation the product phases (PATCH, branded domain, analytics)
 build on.

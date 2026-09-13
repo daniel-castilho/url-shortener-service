@@ -1,93 +1,93 @@
-# Epic 4 – Estratégia de Testes
+# Epic 4 – Testing Strategy
 
-**Contexto real:** Java 25 / Spring Boot 4.1.1 / Testcontainers 2.0.5 / JUnit 5 + Mockito +
-RestAssured 6.0.1 + ArchUnit. Estratificação completa documentada em
-`docs/testing-playbook.md` §1–2 e §Placement — fonte única, já aterrada.
+**Real context:** Java 25 / Spring Boot 4.1.1 / Testcontainers 2.0.5 / JUnit 5 + Mockito +
+RestAssured 6.0.1 + ArchUnit. Complete stratification documented in
+`docs/testing-playbook.md` §1–2 and §Placement — single source, already landed.
 
-## 4.1 Pirâmide de testes (unit / slice / IT)
+## 4.1 Test pyramid (unit / slice / IT)
 
-- **Objetivo:** confirmar que a estratificação funciona como esperado e é rápida no loop de dev.
-- **Ação:**
-  - `./mvnw test` (unit `*Test` + slices `@WebMvcTest`; **sem Docker**) — medir tempo, colar no DoD.
+- **Objective:** confirm the stratification works as expected and is fast in the dev loop.
+- **Action:**
+  - `./mvnw test` (unit `*Test` + slices `@WebMvcTest`; **no Docker**) — measure time, paste in the DoD.
   - `./mvnw test -Dtest='*IT'` (Testcontainers: MongoDB + Redis **singleton** via
-    `BaseIntegrationTest`, sem `@DirtiesContext`) — medir tempo, colar no DoD.
-  - Verificar JaCoCo: BUNDLE LINE/BRANCH ≥ 60%, PACKAGE `core.*` LINE/BRANCH ≥ 70% (check bound
-    ao `verify`; report colado).
-- **Critério aceite:** suíte determinística; floors de cobertura respeitados; tempos colados.
+    `BaseIntegrationTest`, no `@DirtiesContext`) — measure time, paste in the DoD.
+  - Verify JaCoCo: BUNDLE LINE/BRANCH ≥ 60%, PACKAGE `core.*` LINE/BRANCH ≥ 70% (check bound
+    at `verify`; report pasted).
+- **Acceptance criterion:** deterministic suite; coverage floors respected; timings pasted.
 
-## 4.2 Boundary gates (fronteira)
+## 4.2 Boundary gates
 
-- **Objetivo:** confirmar que `core/` nunca depende de `infra/` (Regra 1 do AGENTS.md).
-- **Ação:**
-  - `bash scripts/check-boundaries.sh` → PASS (0 violações).
-  - `bash scripts/check-boundaries.sh --self-test` → PASS (planta violação temporária e captura).
-  - `ArchUnit`: `BoundaryRulesTest` + `BoundaryRulesSelfTestTest` verdes (job Unit Tests do CI).
-  - `./mvnw spotless:check` → sem formatação pendente.
-- **Critério aceite:** todos PASS; outputs colados no DoD.
+- **Objective:** confirm that `core/` never depends on `infra/` (Rule 1 of AGENTS.md).
+- **Action:**
+  - `bash scripts/check-boundaries.sh` → PASS (0 violations).
+  - `bash scripts/check-boundaries.sh --self-test` → PASS (plants a temporary violation and catches it).
+  - `ArchUnit`: `BoundaryRulesTest` + `BoundaryRulesSelfTestTest` green (Unit Tests job of the CI).
+  - `./mvnw spotless:check` → no pending formatting.
+- **Acceptance criterion:** all PASS; outputs pasted in the DoD.
 
-## 4.3 SSRF, ConfigValidator e Security Headers
+## 4.3 SSRF, ConfigValidator and Security Headers
 
-- **Objetivo:** validar as histórias trazidas do Épico 2 com nomes/contagens reais.
-- **Ação:**
-  - `SsrfProtectionIT` — 8 testes (IPs IPv4 literais, loopback, link‑local, ULA/fd00, IPv6 literal
-    `[::1]`) + **1 novo teste desta story**: IPv4‑mapped IPv6 `https://[::ffff:169.254.169.254]/`
-    (regressão do CIDR que já existe no validator). Caso unitário correspondente no
+- **Objective:** validate the stories brought from Epic 2 with real names/counts.
+- **Action:**
+  - `SsrfProtectionIT` — 8 tests (literal IPv4 IPs, loopback, link‑local, ULA/fd00, literal IPv6
+    `[::1]`) + **1 new test of this story**: IPv4‑mapped IPv6 `https://[::ffff:169.254.169.254]/`
+    (regression of the CIDR that already exists in the validator). Corresponding unit case in
     `DefaultUrlValidatorTest`.
-  - `ProdConfigValidatorIT` — 5/5: secret ausente / curto / default → fail‑fast; forte + config
-    completa → passa; non‑prod ignora.
+  - `ProdConfigValidatorIT` — 5/5: missing / short / default secret → fail‑fast; strong secret +
+    full config → passes; non‑prod ignores.
   - `SecurityHeadersIT` — 3/3: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
     `Referrer-Policy: strict-origin`.
-  - `./mvnw test -Dtest='SsrfProtectionIT,ProdConfigValidatorIT,SecurityHeadersIT'` → os três
-    verdes; saída colada.
-- **Critério aceite:** todos verdes; saída colada; IPv6 brackets e IPv4‑mapped cobertos.
+  - `./mvnw test -Dtest='SsrfProtectionIT,ProdConfigValidatorIT,SecurityHeadersIT'` → all three
+    green; output pasted.
+- **Acceptance criterion:** all green; output pasted; IPv6 brackets and IPv4‑mapped covered.
 
-## 4.4 Métricas "frozen" e Health Checks
+## 4.4 "Frozen" Metrics and Health Checks
 
-- **Objetivo:** confirmar que as **24 séries** de negócio (docs/slos.md §2) estão congeladas e os
-  health checks tiered funcionam.
-- **Ação:**
+- **Objective:** confirm that the **24 business series** (docs/slos.md §2) are frozen and the
+  tiered health checks work.
+- **Action:**
   - `bash scripts/check-metrics-frozen.sh` (+ `--self-test`) → PASS.
-  - `promtool check rules`, `promtool test rules`, `promtool check config` → verdes
+  - `promtool check rules`, `promtool test rules`, `promtool check config` → green
     (pinned: Prometheus 3.3.0).
-  - `amtool check-config` → verde (pinned: Alertmanager 0.28.1).
-  - `./mvnw test -Dtest='ProductionLockdownIT'` → verde (7/7).
-  - `bash scripts/debug-health.sh` → saída legível com ação recomendada.
-- **Critério aceite:** todos os checks verdes; saída colada.
+  - `amtool check-config` → green (pinned: Alertmanager 0.28.1).
+  - `./mvnw test -Dtest='ProductionLockdownIT'` → green (7/7).
+  - `bash scripts/debug-health.sh` → readable output with a recommended action.
+- **Acceptance criterion:** all checks green; output pasted.
 
-## 4.5 Rastreabilidade e CI
+## 4.5 Traceability and CI
 
-- **Objetivo:** garantir Rule zero (zero‑from‑memory) e bloqueio de merge em qualquer vermelho.
-- **Ação:**
+- **Objective:** ensure Rule zero (zero‑from‑memory) and merge blocking on any red.
+- **Action:**
   - `bash scripts/check-doc-sync.sh` (+ `--self-test`) → PASS.
-  - Workflow CI **`ci.yml`** existente (5 jobs; sem duplicar como `test.yml`):
+  - Existing CI **`ci.yml`** workflow (5 jobs; without duplicating as `test.yml`):
     Unit Tests → Observability Gate (Epic 3) → Integration Tests → Security Gate → Build.
-    Roda unit, ArchUnit, boundaries, doc‑sync, promtool/amtool, `check-metrics-frozen.sh`,
+    Runs unit, ArchUnit, boundaries, doc‑sync, promtool/amtool, `check-metrics-frozen.sh`,
     `*IT`/failsafe, `check-security.sh`, OWASP, jar.
-  - Evidência de CI: `gh run list` + conclusões dos jobs do flip (run sobre a tree do flip).
-- **Critério aceite:** gates verdes; qualquer falha bloqueia merge.
+  - CI evidence: `gh run list` + job conclusions of the flip (run on the flip tree).
+- **Acceptance criterion:** green gates; any failure blocks merge.
 
-## 4.6 Integração retro‑compatível (EP1–EP3)
+## 4.6 Backward‑compatible integration (EP1–EP3)
 
-- **Objetivo:** garantir que métricas de segurança e logs já existentes continuam a funcionar.
-- **Ação:**
-  - `./mvnw verify` conjunto → verde.
-  - Série `security_ssrf_blocked_total` incrementada — coberta por
+- **Objective:** ensure that existing security metrics and logs continue to work.
+- **Action:**
+  - Combined `./mvnw verify` → green.
+  - `security_ssrf_blocked_total` series incremented — covered by
     `MetricsIT.playbackExportsEpic2BusinessSeries`.
-  - 24 séries sem colisão (docs/slos.md §2).
-- **Critério aceite:** teste verde e saída colada.
+  - 24 series without collision (docs/slos.md §2).
+- **Acceptance criterion:** green test and pasted output.
 
 ---
 
-**Checklist de conclusão do Épico 4:**
+**Epic 4 completion checklist:**
 
-- [x] `./mvnw test` → verde (271 unit + slices, sem Docker)
-- [x] `./mvnw test -Dtest='*IT'` → verde (140 IT, Testcontainers singleton)
-- [x] `./mvnw verify` → verde (JaCoCo, SpotBugs, ArchUnit, OWASP, metrics‑frozen, promtool, amtool)
+- [x] `./mvnw test` → green (271 unit + slices, no Docker)
+- [x] `./mvnw test -Dtest='*IT'` → green (140 IT, Testcontainers singleton)
+- [x] `./mvnw verify` → green (JaCoCo, SpotBugs, ArchUnit, OWASP, metrics‑frozen, promtool, amtool)
 - [x] `check-boundaries.sh` + `--self-test` + ArchUnit → PASS
-- [x] `SsrfProtectionIT` (14), `ProdConfigValidatorIT` (5), `SecurityHeadersIT` (3) → verdes
+- [x] `SsrfProtectionIT` (14), `ProdConfigValidatorIT` (5), `SecurityHeadersIT` (3) → green
 - [x] `check-doc-sync.sh` → PASS
-- [x] `ci.yml` verde (5 jobs) no push do flip
-- [x] Integração retro‑compatível com EP1–EP3 verde
+- [x] `ci.yml` green (5 jobs) in the flip push
+- [x] Backward‑compatible integration with EP1–EP3 green
 
-*Ao marcar todos os itens acima, o Épico 4 está **concluído** e o próximo épico (EP5 – Performance)
-pode iniciar.*
+*By marking all the items above, Epic 4 is **complete** and the next epic (EP5 – Performance)
+can begin.*

@@ -1,185 +1,247 @@
-# Roadmap de correção — url-shortener-service → padrão "alto nível de excelência"
+# Correction roadmap — url-shortener-service → "high-excellence bar"
 
-**Baseado na:** `AUDITORIA_URL_SHORTENER.md` (evidências do código) + decisões do dono:
-- ✅ **Estratégia de ID → migrar para base62 aleatório** (sair de contador + Hashids).
-- ✅ **Dedup de URL → NÃO** (remover o índice único de `originalUrl`).
-- 🎯 **Entregável:** plano priorizado de correção (roadmap), com ordem, esforço e critérios de aceite.
+**Based on:** `AUDITORIA_URL_SHORTENER.md` (code evidence) + owner decisions:
+- ✅ **ID strategy → migrate to random base62** (move away from counter + Hashids).
+- ✅ **URL dedup → NO** (drop the unique `originalUrl` index).
+- 🎯 **Deliverable:** prioritized correction plan (roadmap), with order, effort and acceptance criteria.
 
-> **Premissa de priorização:** primeiro o que quebra correção/segurança (P0), depois a mudança estrutural de ID/dedup (as duas decisões), depois recursos prometidos que não existem (analytics/TTL), depois integridade de arquitetura, depois operação/doc/testes.
-
----
-
-## Fase 0 — Fixes rápidos de correção/segurança (baixo risco, alto valor)
-
-### T0.1 — Métrica duplicada `urls.shortened.total` (+2/request)  ·  Esforço: **S**
-- **Problema:** `recordUrlShortened()` é chamado em `UrlShortenerService` (via `MetricsPort`) e em `UrlController` (via `MetricsService`), ambos no mesmo `Counter` Micrometer → cada encurtamento conta 2.
-- **Ação:** manter apenas **uma** chamada (recomendo remover a do `UrlShortenerService`/`MicrometerMetricsAdapter` e deixar o controller, que já mede latência). Como `MetricsPort` ainda é usada para cache hit/miss/bloom, manter a interface, só remover o método `recordUrlShortened` de lá (ou não chamar).
-- **Aceite:** teste verifica que 1 encurtamento → `urls.shortened.total` = +1.
-
-### T0.2 — Rate limit no redirect (`GET /{id}`)  ·  Esforço: **S**
-- **Problema:** throttling só existe no `POST`. O path de redirecionamento (quente e enumerável) não tem limite.
-- **Ação:** aplicar `rateLimiter.isAllowed(clientIp)` também no método `redirect`, com uma política configurável (pode ser mais alta ou separada da de create).
-- **Aceite:** ao disparar >N requisições ao mesmo `/{id}` a partir do mesmo IP, o serviço responde `429`; testes de integração cobrem o path de redirect.
-
-### T0.3 — Bloom filter: curto-circuitar de fato o acesso ao banco  ·  Esforço: **S/M**
-- **Problema:** `urlCache.get()` retorna `null` para IDs fora do bloom, mas `getOriginalUrl` consulta o Mongo mesmo assim → o claim "invalid IDs don't reach the database" é falso.
-- **Ação:** no `getOriginalUrl`, tratar o resultado do cache como "não encontrado" sem ir ao DB quando o bloom rejeitar. Duas opções:
-  - A) `UrlCachePort.get` devolver um tipo que distinga "não existe (bloom)" de "não está no cache (miss)" — aí o serviço não consulta o banco para bloom-negative (usa um `Optional`/sentinel).
-  - B) O service checa `bloomFilter.contains` via uma nova operação na porta e lança 404 direto.
-- **Aceite:** sequência `GET /id-inexistente` N vezes não gera N queries no Mongo (verificável por logs/meteria de DB).
-
-### T0.4 — Remover métricas mortas (`id.generation.duration`, `url.retrieval.duration`)  ·  Esforço: **S**
-- **Ação:** ou ligar os timers (cronometrar `generateId` e a busca) ou removê-los de `MetricsService` para não deixar métricas que nunca aparecem.
-- **Aceite:** não há métricas definidas e nunca gravadas; ou todas as métricas registradas são escritas.
+> **Prioritization premise:** first what breaks correctness/security (P0), then the structural
+> ID/dedup change (the two decisions), then promised features that do not exist (analytics/TTL),
+> then architecture integrity, then operations/doc/tests.
 
 ---
 
-## Fase 1 — Migração estrutural (as 2 decisões): base62 aleatório + sem dedup  ·  Esforço: **L**  ·  *acopladas, fazer juntas*
+## Phase 0 — Quick correctness/security fixes (low risk, high value)
 
-Cobre as decisões do dono e é a mudança que **inverte** o design atual do repo.
+### T0.1 — Duplicated metric `urls.shortened.total` (+2/request)  ·  Effort: **S**
+- **Problem:** `recordUrlShortened()` is called in `UrlShortenerService` (via `MetricsPort`) and in
+  `UrlController` (via `MetricsService`), both on the same Micrometer `Counter` → each shorten
+  counts 2.
+- **Action:** keep only **one** call (I recommend removing the one in `UrlShortenerService`/
+  `MicrometerMetricsAdapter` and keeping the controller, which already measures latency). Since
+  `MetricsPort` is still used for cache hit/miss/bloom, keep the interface, just remove the
+  `recordUrlShortened` method from it (or stop calling it).
+- **Acceptance:** a test proves 1 shorten → `urls.shortened.total` = +1.
 
-### T1.1 — Nova geração de ID: base62 aleatório (CSPRNG)  ·  Esforço: **M**
-- **Objetivo:** substituir `RangeAwareIdGenerator` (contador Redis + Hashids) por um gerador puramente aleatório.
+### T0.2 — Rate limit on redirect (`GET /{id}`)  ·  Effort: **S**
+- **Problem:** throttling only exists on `POST`. The redirect path (hot and enumerable) has no limit.
+- **Action:** apply `rateLimiter.isAllowed(clientIp)` on the `redirect` method too, with a
+  configurable policy (can be higher or separate from create).
+- **Acceptance:** firing >N requests at the same `/{id}` from the same IP makes the service respond
+  `429`; integration tests cover the redirect path.
+
+### T0.3 — Bloom filter: actually short-circuit the database access  ·  Effort: **S/M**
+- **Problem:** `urlCache.get()` returns `null` for IDs outside the bloom, but `getOriginalUrl`
+  queries Mongo anyway → the claim "invalid IDs don't reach the database" is false.
+- **Action:** in `getOriginalUrl`, treat the cache result as "not found" without hitting the DB when
+  the bloom rejects. Two options:
+  - A) `UrlCachePort.get` returns a type that distinguishes "does not exist (bloom)" from "not in
+    cache (miss)" — then the service does not query the DB on bloom-negative (use an
+    `Optional`/sentinel).
+  - B) The service checks `bloomFilter.contains` via a new port operation and returns 404 directly.
+- **Acceptance:** a sequence of `GET /missing-id` N times does not generate N Mongo queries
+  (verifiable via logs/DB metrics).
+
+### T0.4 — Remove dead metrics (`id.generation.duration`, `url.retrieval.duration`)  ·  Effort: **S**
+- **Action:** either wire the timers (time `generateId` and the lookup) or remove them from
+  `MetricsService` so no metrics that never appear are kept.
+- **Acceptance:** there are no metrics defined and never recorded; or every registered metric is
+  written.
+
+---
+
+## Phase 1 — Structural migration (the 2 decisions): random base62 + no dedup  ·  Effort: **L**  ·  *coupled, do together*
+
+Covers the owner decisions and is the change that **reverses** the repo's current design.
+
+### T1.1 — New ID generation: random base62 (CSPRNG)  ·  Effort: **M**
+- **Goal:** replace `RangeAwareIdGenerator` (Redis counter + Hashids) with a purely random generator.
 - **Design:**
-  - Alfabeto base62: `0-9 A-Z a-z`.
-  - Comprimento: **7** (configurável via `app.shortener.code-length`).
-  - Fonte aleatória **criptograficamente segura**: `java.security.SecureRandom` (não `Random`).
-  - Implementar como estratégia `RandomUrlIdStrategy` que produz o código **sem** depender de Redis.
-- **Colisão:** probabilística. Usar o `_id` único do Mongo como guarda: na persistência, se houver `DuplicateKeyException` → **retry** (gerar novo código) até N tentativas; garantir limite de retries para não loopar infinito.
-  - Ajustar o `MongoUrlRepository.save` para distinguir "colisão de código" (retry no caso de código gerado) de "alias vanity já existe" (409).
-- **Limpeza:** remover a dependência `org.hashids`, a config `app.shortener.salt`, e o `RangeAwareIdGenerator`/`IdGeneratorPort` se não forem mais usados.
-- **Aceite:** IDs são base62 de 7 chars, verificados como aleatórios; teste de colisão (repetir N vezes) passa; sem chamadas ao Redis no caminho de geração.
+  - base62 alphabet: `0-9 A-Z a-z`.
+  - Length: **7** (configurable via `app.shortener.code-length`).
+  - **Cryptographically secure** random source: `java.security.SecureRandom` (not `Random`).
+  - Implement as a `RandomUrlIdStrategy` that produces the code **without** depending on Redis.
+- **Collision:** probabilistic. Use Mongo's unique `_id` as the guard: on persistence, if a
+  `DuplicateKeyException` occurs → **retry** (generate a new code) up to N attempts; enforce a
+  retry cap so it never loops forever.
+  - Adjust `MongoUrlRepository.save` to distinguish "code collision" (retry for generated codes)
+    from "vanity alias already exists" (409).
+- **Cleanup:** remove the `org.hashids` dependency, the `app.shortener.salt` config, and
+  `RangeAwareIdGenerator`/`IdGeneratorPort` if no longer used.
+- **Acceptance:** IDs are 7-char base62, verified as random; a collision test (repeat N times)
+  passes; no Redis calls on the generation path.
 
-### T1.2 — Isolamento de namespace (código gerado × alias vanity)  ·  Esforço: **S**
-- **Problema:** código gerado e alias de usuário compartilham o mesmo `_id`/collection.
-- **Ação:**
-  - Manter o `ReservedWordsValidator` (bloqueia palavras de rota).
-  - Adicionalmente, no gerador, **checar que o código não colide com palavras reservadas** (barato) e garantir que o alias do usuário, ao ser criado, passe pela checagem `existsById`.
-  - Recomendado (design): gerar código com **exatamente 7** e exigir que aliases tenham **≠ 7** ou pertençam a conjunto separado — documentar a convenção.
-- **Aceite:** nenhum código gerado coincide com palavra reservada; teste tenta criar alias com valor de rota e é rejeitado.
+### T1.2 — Namespace isolation (generated code × vanity alias)  ·  Effort: **S**
+- **Problem:** generated codes and user aliases share the same `_id`/collection.
+- **Action:**
+  - Keep `ReservedWordsValidator` (blocks route words).
+  - Additionally, in the generator, **check that the code does not collide with reserved words**
+    (cheap) and ensure the user alias, on creation, passes the `existsById` check.
+  - Recommended (design): generate codes of **exactly 7** and require aliases to be **≠ 7** or
+    belong to a separate set — document the convention.
+- **Acceptance:** no generated code coincides with a reserved word; a test tries to create an alias
+  with a route value and it is rejected.
 
-### T1.3 — Remover dedup: tirar o índice único de `originalUrl`  ·  Esforço: **S**
-- **Problema:** `@Indexed(unique = true)` em `originalUrl` força 1 curta por URL e, no fluxo atual, uma URL duplicada vira `AliasAlreadyExistsException` (409 enganoso).
-- **Ação:**
-  - Remover o `unique` de `originalUrl` (ajustar `ShortUrlEntity` + criar uma migração para dropar o índice no Mongo).
-  - **Opcional (futuro):** se mais tarde quiser consultar por URL (analytics/dedup), adicionar um **índice não-único** e um campo `urlHash` (SHA-256) — guardar desde já o hash para não precisar migrar depois (custo zero agora).
-  - Ajustar a semântica: `409` passa a significar "alias customizado já existe", **não** "URL duplicada". URL duplicada agora é permitida e gera um link novo.
-- **Aceite:** encurtar a mesma URL duas vezes cria **2** códigos distintos, ambos redirecionando certo; não há mais único em `originalUrl`.
+### T1.3 — Remove dedup: drop the unique `originalUrl` index  ·  Effort: **S**
+- **Problem:** `@Indexed(unique = true)` on `originalUrl` forces 1 short link per URL and, in the
+  current flow, a duplicated URL becomes `AliasAlreadyExistsException` (misleading 409).
+- **Action:**
+  - Remove `unique` from `originalUrl` (adjust `ShortUrlEntity` + create a migration to drop the
+    index in Mongo).
+  - **Optional (future):** if you later want to query by URL (analytics/dedup), add a **non-unique**
+    index and a `urlHash` (SHA-256) field — store the hash from now on so you don't need to migrate
+    later (zero cost now).
+  - Adjust semantics: `409` now means "custom alias already exists", **not** "duplicated URL".
+    Duplicated URLs are now allowed and produce a new link.
+- **Acceptance:** shortening the same URL twice creates **2** distinct codes, both redirecting
+  correctly; there is no longer a unique on `originalUrl`.
 
-### T1.4 — Atualizar docs/config da migração de ID  ·  Esforço: **S**  ·  **feito (V2)**
-- Remover de `README.md`/docs referências a "Counter-Based Shuffle", "Hashids", "Zero Collision por contador", e `SHORTENER_SALT` como desenho atual.
-- Corrigir a estratégia em `MONGODB_ARCHITECTURE.md`.
-- **Aceite:** docs descrevem a estratégia travada (base62 aleatório + retry de colisão).
-
----
-
-## Fase 2 — Recursos prometidos que não existem (valor real)
-
-### T2.1 — Analytics real: persistir cliques + contador  ·  Esforço: **L**
-- **Problema:** `ClickBatchWorker` só loga; eventos são descartados; não há `click_count`.
-- **Ação:**
-  - Persistir `ClickEvent` em um **novo collection** (`click_events`) no worker (batch insert), **fora** do path de redirect.
-  - Adicionar `clickCount` a `ShortUrl` e **incrementar atomicamente** (Mongo `$inc`) no worker.
-  - Considerar **fila durável** (Redis Stream/Kafka) em vez da fila em memória (que descarta quando cheia).
-- **Aceite:** N cliques em um link → `click_events` tem N registros e `clickCount` = N; o redirect **não** bloqueia esperando a escrita.
-
-### T2.2 — Expiração (TTL) de links  ·  Esforço: **M**
-- **Ação:** adicionar `expiresAt` a `ShortUrl`; campo opcional na criação; **índice TTL** no Mongo; o `getOriginalUrl` deve validar expiração (retornar erro/link expirado, não redirecionar); job de purga opcional.
-- **Aceite:** link com `expiresAt` no passado não redireciona e responde com status adequado; teste cobre expirado.
-
----
-
-## Fase 3 — Integridade de arquitetura
-
-### T3.1 — Corrigir Dependency Inversion em `core/service/UserService`  ·  Esforço: **M**
-- **Problema:** importa `MongoUserRepository`, `JwtTokenProvider` e DTOs de infra (`AuthResponse`, `LoginRequest`, `RegisterRequest`).
-- **Ação:** fazer `UserService` depender de **portas** (`UserRepositoryPort`, uma abstração de token/JWT) e trabalhar com objetos de **domínio** (`User`, comandos); mover o mapeamento DTO→domínio para a camada de adaptador (`AuthController`). 
-- **Aceite:** a camada `core` **não** importa classes de `infra.*`; gregar `grep` por `import ca.tyny.urlshortener.infra` dentro de `core/` retorna vazio (ou apenas tipos que você decida acitar).
-
-### T3.2 — Camada `core` sem anotações Spring (ou documentar a escolha)  ·  Esforço: **S/M**
-- **Ação:** mover `@Component`/`@Service`/`@RequiredArgsConstructor` de `core` para config/registro (bean) na camada de infra, deixando `core` puro; ou, se preferir manter, **documentar explicitamente** que o core usa as anotações embora não dependa de Spring em runtime.
-- **Aceite:** ou `core` não tem imports/annotations de Spring, ou a doc declara e justifica.
-
-### T3.3 — Livrar de names inline (FQCN)  ·  Esforço: **S**
-- `UrlShortenerService` referencia `ca.tyny.urlshortener.core.validation.ReservedWordsValidator` sem `import`; idem `GlobalExceptionHandler`/`UrlController`.
-- **Aceite:** sem nomes totalmente qualificados inline (usar `import`).
+### T1.4 — Update ID-migration docs/config  ·  Effort: **S**  ·  **done (V2)**
+- Remove references to "Counter-Based Shuffle", "Hashids", "Zero Collision via counter" and
+  `SHORTENER_SALT` as the current design from `README.md`/docs.
+- Fix the strategy in `MONGODB_ARCHITECTURE.md`.
+- **Acceptance:** docs describe the locked strategy (random base62 + collision retry).
 
 ---
 
-## Fase 4 — Endurecimento de segurança
+## Phase 2 — Promised features that do not exist (real value)
 
-### T4.1 — Validação de URL e bloqueio de destino  ·  Esforço: **M**
-- Fortalecer o value object `Url`: validar host de verdade, preferir/bloquear `http://` por config, **bloquear IPs privados/metadata** (169.254.0.0/16, 127.0.0.0/8, RFC1918...) para mitigar SSRF, e integrar **blocklist/reputação** do destino (hook p/ Safe Browsing, VirusTotal, PhishTank) — pelo menos como ponto de extensão.
-- **Aceite:** URLs com host malformado/interno são rejeitadas; há hook documentado para verificar reputação.
+### T2.1 — Real analytics: persist clicks + counter  ·  Effort: **L**
+- **Problem:** `ClickBatchWorker` only logs; events are dropped; there is no `click_count`.
+- **Action:**
+  - Persist `ClickEvent` into a **new collection** (`click_events`) in the worker (batch insert),
+    **outside** the redirect path.
+  - Add `clickCount` to `ShortUrl` and **increment atomically** (Mongo `$inc`) in the worker.
+  - Consider a **durable queue** (Redis Stream/Kafka) instead of the in-memory queue (which drops
+    when full).
+- **Acceptance:** N clicks on a link → `click_events` has N records and `clickCount` = N; the
+  redirect **does not** block waiting for the write.
 
-### T4.2 — Restringir exposição de operação  ·  Esforço: **S**
-- `/actuator/**` e Swagger `permitAll` + `health.show-details: always` vazam informação.
-- **Ação:** em profile de produção, restringir actuator/health (auth ou rede interna) e reduzir detalhes; limitar exposição do Swagger.
-- **Aceite:** sem info sensível em endpoints públicos em prod.
+### T2.2 — Link expiration (TTL)  ·  Effort: **M**
+- **Action:** add `expiresAt` to `ShortUrl`; optional field on creation; **TTL index** in Mongo;
+  `getOriginalUrl` must validate expiration (return an error/expired link, not redirect); optional
+  purge job.
+- **Acceptance:** a link with `expiresAt` in the past does not redirect and responds with the proper
+  status; a test covers expired links.
 
 ---
 
-## Fase 5 — Operação, doc, padronização de qualidade
+## Phase 3 — Architecture integrity
 
-### T5.1 — Migração de schema/índices versionada  ·  Esforço: **M**
-- Trocar `auto-index-creation: true` por **framework de migração** (ex.: mongock/fluent migrations) e gerenciar os índices em passo de deploy. Necessário, em especial, para **dropar** o índice único de `originalUrl` (T1.3).
-- **Aceite:** migrações versionadas, aplicadas de forma explícita e reproduzível.
+### T3.1 — Fix Dependency Inversion in `core/service/UserService`  ·  Effort: **M**
+- **Problem:** it imports `MongoUserRepository`, `JwtTokenProvider` and infra DTOs (`AuthResponse`,
+  `LoginRequest`, `RegisterRequest`).
+- **Action:** make `UserService` depend on **ports** (`UserRepositoryPort`, a token/JWT abstraction)
+  and work with **domain** objects (`User`, commands); move the DTO→domain mapping to the adapter
+  layer (`AuthController`).
+- **Acceptance:** the `core` layer does **not** import classes from `infra.*`; a `grep` for
+  `import ca.tyny.urlshortener.infra` inside `core/` returns empty (or only types you decide to
+  allow).
 
-### T5.2 — Alinhar documentação à realidade  ·  Esforço: **S/M**  ·  **feito (V2)**
-- Remover/corrigir links para `AUDIT_FINAL_REPORT.md`, `VALIDATION_CHECKLIST.md`, `LESSONS_LEARNED.md` (inexistentes).
-- Remover referências a **Cassandra** (é MongoDB).
-- **Remover os scores auto-atribuídos** ("9.2/10", "Clean Architecture 10/10", "Production Ready") ou substituí-los por meta verificável.
-- Remover artefatos de build (`build.log`, `build_out.txt`) e adicionar a `.gitignore`.
-- Product docs descrevem o **modelo de identidade travado** (Base62, sem dedup, namespace); Hashids/unique-on-URL não são o desenho do produto.
-- **Aceite:** docs descrevem o contrato travado; gaps de código ficam na matriz de dívida (`AGENTS.md`).
-### T5.3 — Corrigir bug do build native  ·  Esforço: **S** — **DONE**
+### T3.2 — `core` layer without Spring annotations (or document the choice)  ·  Effort: **S/M**
+- **Action:** move `@Component`/`@Service`/`@RequiredArgsConstructor` out of `core` into config/bean
+  registration in the infra layer, keeping `core` pure; or, if you prefer to keep them,
+  **explicitly document** that core uses the annotations even though it does not depend on Spring at runtime.
+- **Acceptance:** either `core` has no Spring imports/annotations, or the doc declares and justifies
+  it.
+
+### T3.3 — Drop inline names (FQCN)  ·  Effort: **S**
+- `UrlShortenerService` references `ca.tyny.urlshortener.core.validation.ReservedWordsValidator`
+  without an `import`; same for `GlobalExceptionHandler`/`UrlController`.
+- **Acceptance:** no inline fully-qualified names (use `import`).
+
+---
+
+## Phase 4 — Security hardening
+
+### T4.1 — URL validation and destination blocking  ·  Effort: **M**
+- Strengthen the `Url` value object: actually validate the host, prefer/block `http://` via config,
+  **block private/metadata IPs** (169.254.0.0/16, 127.0.0.0/8, RFC1918...) to mitigate SSRF, and
+  integrate destination **blocklist/reputation** (hook for Safe Browsing, VirusTotal, PhishTank) —
+  at least as an extension point.
+- **Acceptance:** URLs with malformed/internal hosts are rejected; there is a documented hook for
+  reputation checks.
+
+### T4.2 — Restrict operational exposure  ·  Effort: **S**
+- `/actuator/**` and Swagger `permitAll` + `health.show-details: always` leak information.
+- **Action:** in production profile, restrict actuator/health (auth or internal network) and reduce
+  detail; limit Swagger exposure.
+- **Acceptance:** no sensitive info on public endpoints in prod.
+
+---
+
+## Phase 5 — Operations, docs, quality standardization
+
+### T5.1 — Versioned schema/index migration  ·  Effort: **M**
+- Replace `auto-index-creation: true` with a **migration framework** (e.g. mongock/fluent
+  migrations) and manage indexes in the deploy step. Needed especially to **drop** the unique
+  `originalUrl` index (T1.3).
+- **Acceptance:** versioned migrations, applied explicitly and reproducibly.
+
+### T5.2 — Align documentation with reality  ·  Effort: **S/M**  ·  **done (V2)**
+- Remove/fix links to `AUDIT_FINAL_REPORT.md`, `VALIDATION_CHECKLIST.md`, `LESSONS_LEARNED.md`
+  (nonexistent).
+- Remove **Cassandra** references (it is MongoDB).
+- **Remove the self-assigned scores** ("9.2/10", "Clean Architecture 10/10", "Production Ready") or
+  replace them with verifiable targets.
+- Remove build artifacts (`build.log`, `build_out.txt`) and add to `.gitignore`.
+- Product docs describe the **locked identity model** (Base62, no dedup, namespace); Hashids/
+  unique-on-URL are not the product design.
+- **Acceptance:** docs describe the locked contract; code gaps stay in the debt matrix (`AGENTS.md`).
+### T5.3 — Fix the native build bug  ·  Effort: **S** — **DONE**
 
 - `pom.xml` `native` `mainClass` fixed to `ca.tyny.urlshortener.Application`.
-- **Aceite:** `mvn clean package -Pnative` resolves the main class correctly.
+- **Acceptance:** `mvn clean package -Pnative` resolves the main class correctly.
 
-### T5.4 — Observabilidade, TLS e deploy on-prem  ·  Esforço: **M/L**
-- Adicionar **tracing (OpenTelemetry)** e alertas; definir **SLOs** e **harness de carga** (k6/JMeter) para registrar p50/p95/p99 reais.
-- Documentar **terminação TLS** (reverse proxy) e deploy em bare metal (systemd/manual); opcionalmente incluir o app no compose.
-- **Aceite:** há medilão de latência/throughput real e rota documentada de deploy+TLS.
-
----
-
-## Fase 6 — Testes e CI
-
-### T6.1 — Preencher lacunas de cobertura  ·  Esforço: **M**
-- **Read path** com stack completo de cache (L1/L2/Bloom) e o comportamento de "bloom-negative".
-- **Analytics worker** e persistência de cliques.
-- **Concorrência**: race do alias vanity e **incremento atômico** de cota.
-- **Segurança**: JWT com secret default, redirect aberto, URL inválida, SSRF/IP privado, rate limit no redirect.
-- **Colisão de código** no novo gerador base62.
-
-### T6.2 — CI com verificação real  ·  Esforço: **S/M**
-- Rodar `mvn verify` com Testcontainers em CI (validar "todos os testes passam" de fato).
+### T5.4 — Observability, TLS and on-prem deploy  ·  Effort: **M/L**
+- Add **tracing (OpenTelemetry)** and alerts; define **SLOs** and a **load harness** (k6/JMeter) to
+  record real p50/p95/p99.
+- Document **TLS termination** (reverse proxy) and bare-metal deploy (systemd/manual); optionally
+  include the app in compose.
+- **Acceptance:** there is a real latency/throughput measurement and a documented deploy+TLS route.
 
 ---
 
-## Ordem recomendada de execução
+## Phase 6 — Tests and CI
+
+### T6.1 — Fill coverage gaps  ·  Effort: **M**
+- **Read path** with the full cache stack (L1/L2/Bloom) and the "bloom-negative" behaviour.
+- **Analytics worker** and click persistence.
+- **Concurrency**: vanity-alias race and **atomic** quota increment.
+- **Security**: JWT with default secret, open redirect, invalid URL, SSRF/private IP, rate limit on
+  redirect.
+- **Code collision** in the new base62 generator.
+
+### T6.2 — CI with real verification  ·  Effort: **S/M**
+- Run `mvn verify` with Testcontainers in CI (actually validate "all tests pass").
+
+---
+
+## Recommended execution order
 
 ```
-Fase 0 (S)  →  Fase 1 (L, decisões)  →  Fase 2 (L, recursos)  →  Fase 3 (M)  →  Fase 4 (M)  →  Fase 5 (M/L)  →  Fase 6 (M)
+Phase 0 (S)  →  Phase 1 (L, decisions)  →  Phase 2 (L, features)  →  Phase 3 (M)  →  Phase 4 (M)  →  Phase 5 (M/L)  →  Phase 6 (M)
 ```
-- **Fase 0** e **Fase 1** primeiro (correção + decisões de ID/dedup) — destravam o resto.
-- **Fase 1** e **Fase 2** são as mais impactantes (mudam comportamento e adicionam valor). 
-- **Fase 5.2 (doc)** pode ser feita cedo/em paralelo para travar as alegações.
+- **Phase 0** and **Phase 1** first (correctness + ID/dedup decisions) — unlock the rest.
+- **Phase 1** and **Phase 2** are the most impactful (change behaviour and add value).
+- **Phase 5.2 (doc)** can be done early/in parallel to lock the claims.
 
-### Definição de "alto padrão" (Definition of Done do esforço)
-- [ ] Todos os itens **P0** resolvidos (correção + segurança).
-- [ ] Migração de ID concluída (base62 aleatório) e **sem dedup**.
-- [ ] Analytics **persistem** e `clickCount` é correto; **TTL/expiração** funcional.
-- [ ] `core` não depende de `infra.*` (Dependency Inversion ok) e sem nomes inline.
-- [ ] Segurança: sem redirect aberto indevido, com rate limit no redirect, URL validada, actuator restrito.
-- [ ] Migrações versionadas; docs alinhadas à realidade; build native funciona.
-- [ ] CI rodando; testes cobrindo os cenários críticos (inclusive concorrência/segurança).
-- [ ] SLOs medidos (latência p50/p95/p99) sob carga no volume real.
+### Definition of "high bar" (Definition of Done of the effort)
+- [ ] All **P0** items resolved (correctness + security).
+- [ ] ID migration complete (random base62) and **no dedup**.
+- [ ] Analytics **persist** and `clickCount` is correct; **TTL/expiration** works.
+- [ ] `core` does not depend on `infra.*` (Dependency Inversion ok) and has no inline names.
+- [ ] Security: no improper open redirect, rate limit on redirect, validated URL, restricted
+  actuator.
+- [ ] Versioned migrations; docs aligned with reality; native build works.
+- [ ] CI running; tests covering the critical scenarios (including concurrency/security).
+- [ ] SLOs measured (latency p50/p95/p99) under load at the real volume.
 
 ---
 
-## Observações
-- **Escopos Fase 0/1 são os de maior ROI** (correção + mudança de design).
-- **Não inflar para hyperscale**: o repositório já tem CDN/sharding/Kafka/Blom/Redis cluster como "features", mas para **on-prem/bare metal** isso costuma ser over-engineering — priorize apenas o que resolve o problema do seu volume real. (Reforço do item P2-9 da auditoria.)
-- Qualquer item pode ser dividido em PRs menores; o roadmap é o alvo, não o plano de commits.
+## Notes
+- **Phases 0/1 scopes are the highest ROI** (correctness + design change).
+- **Do not inflate to hyperscale**: the repo already has CDN/sharding/Kafka/Bloom/Redis cluster as
+  "features", but for **on-prem/bare metal** that is usually over-engineering — prioritize only
+  what solves your real-volume problem. (Reinforced by item P2-9 of the audit.)
+- Any item can be split into smaller PRs; the roadmap is the target, not the commit plan.

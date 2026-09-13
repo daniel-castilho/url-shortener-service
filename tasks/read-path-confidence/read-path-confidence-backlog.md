@@ -10,7 +10,7 @@
 
 ## Epic outcome
 
-The redirect path is **chatto, previsível, e medido**: a code the Bloom filter says is almost certainly
+The redirect path is **fast, predictable, and measured**: a code the Bloom filter says is almost certainly
 absent no longer triggers a MongoDB lookup (per a documented, explicit policy), the Bloom filter is
 seeded from existing codes, the redirect baseline is published (p50/p95/p99), and **k6 is a blocking CI
 gate** for the redirect path — including a workload with non-existent codes that proves the

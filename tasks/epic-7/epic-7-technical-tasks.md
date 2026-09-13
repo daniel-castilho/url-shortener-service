@@ -1,80 +1,80 @@
-# Epic 7 – Tasks Técnicas [aterrado]
+# Epic 7 – Technical Tasks [grounded]
 
-Marcos `[x]` preenchidos durante a execução; evidências coladas no `epic-7-dod.md`.
+`[x]` markers filled in during execution; evidence pasted in `epic-7-dod.md`.
 
-## 7.1 Contrato de falha + ADRs
-- [x] Criar `docs/reliability.md` com matriz componente × falha × efeito cliente × efeito dado × detecção × recuperação × RTO/RPO alvo.
-- [x] Cobrir: Mongo, Redis cache/rate-limit, Redis Stream, `ClickBatchWorker`, OTel collector, nginx, volume Mongo.
-- [x] ADR `docs/adr/0005-fail-open-vs-fail-closed.md` (status/date/context/decision/consequences + rejeitados).
-- [x] ADR `docs/adr/0006-analytics-at-least-once.md` (duplicata de click vs perda; por que não transação distribuída).
-- [x] Ligar a matriz às séries frozen relevantes (`resilience4j.*`, `analytics.queue.depth`, `http.server.requests`, `cache.*`).
-- [x] Colar `git log --oneline -- docs/adr/ docs/reliability.md` no `epic-7-dod.md`.
+## 7.1 Failure contract + ADRs
+- [x] Create `docs/reliability.md` with a component × failure × client effect × data effect × detection × recovery × target RTO/RPO matrix.
+- [x] Cover: Mongo, Redis cache/rate-limit, Redis Stream, `ClickBatchWorker`, OTel collector, nginx, Mongo volume.
+- [x] ADR `docs/adr/0005-fail-open-vs-fail-closed.md` (status/date/context/decision/consequences + rejected options).
+- [x] ADR `docs/adr/0006-analytics-at-least-once.md` (duplicate click vs loss; why not a distributed transaction).
+- [x] Link the matrix to the relevant frozen series (`resilience4j.*`, `analytics.queue.depth`, `http.server.requests`, `cache.*`).
+- [x] Paste `git log --oneline -- docs/adr/ docs/reliability.md` in `epic-7-dod.md`.
 
-## 7.2 Isolamento (CB + timeout + retry budget)
-- [ ] Inventariar adapters de saída: anotação Resilience4j, timeout, retry. Tabela no DoD.
-- [x] Confirmar valores reais em `application.yaml` (`spring.data.mongodb.*`, `spring.data.redis.timeout`, `resilience4j.circuitbreaker.instances.*`).
-- [x] Se o lookup de redirect não tiver timeout explícito no cliente Mongo/Redis, externalizar (não hardcode) e documentar o valor escolhido (alvo: Redis ≤ 500ms já configurado; Mongo socket 30s é alto para hot-path — justificar ou baixar **somente** com evidência e sem quebrar ITs).
-      **Finding — a claim "Redis ≤ 500ms já configurado" era falsa:** o starter Redisson 4.7.0 **ignora** `spring.data.redis.timeout` (o `RedissonAutoConfigurationV4.buildSingleServerConfig` mapeia apenas host/port/password/ssl/database); os defaults reais do Redisson (timeout 3s, connect 10s, 3 retries a 1.5s) faziam cada op Redis falhar em ~5–25s — 200 GETs sob outage = "hang" de horas. Corrigido: bloco `app.redis.*` (`command-timeout-ms 500`, `connect-timeout-ms 500`, `retry-attempts 1`, `retry-interval-ms 100`, env-overridable) aplicado via `RedissonAutoConfigurationCustomizer` em `RedisConfig`; Mongo 30s mantido com justificativa no ADR 0005 (CB é a proteção operacional).
-- [x] IT Mongo down / recusado no cache-miss do `GET /{id}`: status + log/métrica de CB. Nome sugerido: `RedirectMongoFailureIT`.
-- [x] IT Redis down no redirect: rate-limit fail-open + fallback Mongo. Nome sugerido: `RedirectRedisFailureIT` (estender `RedisUrlCache` tests se já cobrirem o essencial).
-- [x] **Nota técnica (singleton containers):** as ITs de falha sobem containers **dedicados à própria classe** (start/stop no ciclo de vida delas) — os singleton de `BaseIntegrationTest` são compartilhados por todas as ITs e não podem ser parados no meio da suíte.
-      `RedirectMongoFailureIT` (4/4: CB open→503, CB closed→404, half-open probe, hot code via L2 / cold→503) e `RedirectRedisFailureIT` (2/2: cache-miss→Mongo degrades, rate-limiter fail-open além do limite) — **verdes juntos** (6/6, ~40s).
-- [x] `./mvnw test -Dtest='RedirectMongoFailureIT,RedirectRedisFailureIT,RedisClickEventQueueFailOpenTest,TracingFailOpenIT'` → verde; output colado.
-- [x] Não depender de `GET /actuator/circuitbreakers` autenticado como prova primária (métrica `resilience4j.circuitbreaker.*` / log). Nota: a dívida #26 foi resolvida em `c0fbb9c` (operator BasicAuth) — o endpoint está acessível ao operator como evidência secundária opcional.
+## 7.2 Isolation (CB + timeout + retry budget)
+- [ ] Inventory the outgoing adapters: Resilience4j annotation, timeout, retry. Table in the DoD.
+- [x] Confirm the real values in `application.yaml` (`spring.data.mongodb.*`, `spring.data.redis.timeout`, `resilience4j.circuitbreaker.instances.*`).
+- [x] If the redirect lookup has no explicit timeout on the Mongo/Redis client, externalize it (no hardcoding) and document the chosen value (target: Redis ≤ 500ms already configured; Mongo socket 30s is high for the hot path — justify or lower **only** with evidence and without breaking ITs).
+      **Finding — the claim "Redis ≤ 500ms already configured" was false:** the Redisson 4.7.0 starter **ignores** `spring.data.redis.timeout` (the `RedissonAutoConfigurationV4.buildSingleServerConfig` maps only host/port/password/ssl/database); the real Redisson defaults (timeout 3s, connect 10s, 3 retries at 1.5s) made every Redis op fail in ~5–25s — 200 GETs under outage = hours-long "hang". Fixed: the `app.redis.*` block (`command-timeout-ms 500`, `connect-timeout-ms 500`, `retry-attempts 1`, `retry-interval-ms 100`, env-overridable) applied via `RedissonAutoConfigurationCustomizer` in `RedisConfig`; Mongo 30s kept with justification in ADR 0005 (the CB is the operational protection).
+- [x] IT Mongo down / refused on `GET /{id}` cache-miss: status + CB log/metric. Suggested name: `RedirectMongoFailureIT`.
+- [x] IT Redis down on the redirect: rate-limit fail-open + Mongo fallback. Suggested name: `RedirectRedisFailureIT` (extend `RedisUrlCache` tests if they already cover the essentials).
+- [x] **Technical note (singleton containers):** the failure ITs start containers **dedicated to their own class** (start/stop in their own lifecycle) — the `BaseIntegrationTest` singletons are shared by all ITs and cannot be stopped mid-suite.
+      `RedirectMongoFailureIT` (4/4: CB open→503, CB closed→404, half-open probe, hot code via L2 / cold→503) and `RedirectRedisFailureIT` (2/2: cache-miss→Mongo degrades, rate-limiter fail-open beyond the limit) — **green together** (6/6, ~40s).
+- [x] `./mvnw test -Dtest='RedirectMongoFailureIT,RedirectRedisFailureIT,RedisClickEventQueueFailOpenTest,TracingFailOpenIT'` → green; output pasted.
+- [x] Do not rely on authenticated `GET /actuator/circuitbreakers` as primary proof (`resilience4j.circuitbreaker.*` metric / log). Note: debt #26 was resolved in `c0fbb9c` (operator BasicAuth) — the endpoint is accessible to the operator as optional secondary evidence.
 
-## 7.3 Shutdown + semântica de health
-- [x] Rodar `./scripts/verify-graceful-shutdown.sh` contra uma instância local; colar stdout/stderr relevante (in-flight ok; recusa após SIGTERM).
-      Executado na infra isolada (18081/Mongo 27018/Redis 6380): in-flight completou no grace period, novas requisições recusadas pós-SIGTERM — output colado no DoD §7.3.
-- [x] Mapear o que o `HealthEndpoint` realmente agrega hoje (Mongo, Redis, disk, CB). Output de `GET /actuator/health` **em perfil de teste/dev** colado (prod esconde details).
-      Via operator (dev): components = circuitBreakers, diskSpace, livenessState, mongo, ping, readinessState, redis, ssl — colado no DoD §7.3.
-- [x] Experimento: app healthy → `docker stop` da dependência crítica → `curl` liveness vs readiness (HTTP code + body resumido).
-      Redis stop: liveness 200 / readiness DOWN; Redis start: ambos 200 — colado no DoD §7.3.
-- [x] Se liveness e readiness caem juntos: ajustar indicators (readiness inclui Mongo; liveness é processo/event loop apenas) + IT `HealthProbeSemanticsIT`.
-      Não caiam juntos — semântica já distinta por design (liveness = processo; readiness = mongo/redis/cb/disk/ping). Nenhuma correção necessária; evidência real no DoD §7.3.
-- [x] Documentar no `docs/reliability.md` o papel do nginx `max_fails=2 fail_timeout=10s`.
-      `docs/reliability.md` §3 (readiness DOWN tira a instância da rotação) + matriz §1 (nginx down).
-- [x] Colar outputs no DoD.
+## 7.3 Shutdown + health semantics
+- [x] Run `./scripts/verify-graceful-shutdown.sh` against a local instance; paste the relevant stdout/stderr (in-flight ok; refusal after SIGTERM).
+      Run on the isolated infra (18081/Mongo 27018/Redis 6380): in-flight completed within the grace period, new requests refused after SIGTERM — output pasted in DoD §7.3.
+- [x] Map what the `HealthEndpoint` actually aggregates today (Mongo, Redis, disk, CB). Output of `GET /actuator/health` in **test/dev profile** pasted (prod hides details).
+      Via operator (dev): components = circuitBreakers, diskSpace, livenessState, mongo, ping, readinessState, redis, ssl — pasted in DoD §7.3.
+- [x] Experiment: app healthy → `docker stop` the critical dependency → `curl` liveness vs readiness (HTTP code + summarized body).
+      Redis stop: liveness 200 / readiness DOWN; Redis start: both 200 — pasted in DoD §7.3.
+- [x] If liveness and readiness fall together: adjust the indicators (readiness includes Mongo; liveness is process/event-loop only) + IT `HealthProbeSemanticsIT`.
+      They do not fall together — semantics already distinct by design (liveness = process; readiness = mongo/redis/cb/disk/ping). No fix needed; real evidence in DoD §7.3.
+- [x] Document in `docs/reliability.md` the role of nginx `max_fails=2 fail_timeout=10s`.
+      `docs/reliability.md` §3 (readiness DOWN takes the instance out of rotation) + matrix §1 (nginx down).
+- [x] Paste outputs in the DoD.
 
-## 7.4 Pipeline de analytics sob falha
-- [x] Documentar stream name, group, ack, PEL em `docs/reliability.md` (valores lidos do código, não inventados).
-- [x] Estender `ClickPipelineIT` (ou irmão): publish N → interrupt worker → restart → assert coleção + `clickCount` sob contrato at-least-once.
-      **Fix real do PEL:** o worker lia apenas `>` (`ReadOffset.lastConsumed()`), que entrega só mensagens NUNCA entregues — batch não-ackado ficava órfão no PEL e NUNCA era re-entregue (redelivery e o finalize de 3 falhas eram código morto). Agora faz o padrão de crash-recovery do Redis: drena o PEL com offset `0` ANTES de ler `>` (`readGroup` compartilhado com self-heal NOGROUP). Red/green: IT novo `ClickPipelineRedeliveryIT` falha com o código antigo (`expected: 5L but was: 0L` no PEL) e passa com o fix.
-- [x] Caso poison: evento inválido não bloqueia o group; métrica/log de drop; eventos válidos seguintes persistem.
-      `poisonBatchIsFinalizedAndGroupKeepsProcessing`: batch injetado com `databaseCb` aberto → 3 tentativas consecutivas → finaliza (acked, `analytics.events.failed.total` +6) → evento válido posterior persiste.
-- [x] Reconfirmar fail-open do enqueue no redirect (`RedisClickEventQueueFailOpenTest`) — output colado.
-- [x] `./mvnw test -Dtest='ClickPipelineIT,ClickDailyRollupIT,RedisClickEventQueueFailOpenTest,RedisClickEventQueueTest'` → verde.
+## 7.4 Analytics pipeline under failure
+- [x] Document stream name, group, ack, PEL in `docs/reliability.md` (values read from the code, not invented).
+- [x] Extend `ClickPipelineIT` (or a sibling): publish N → interrupt worker → restart → assert collection + `clickCount` under the at-least-once contract.
+      **Real PEL fix:** the worker read only `>` (`ReadOffset.lastConsumed()`), which delivers only NEVER-delivered messages — an unacked batch stayed orphaned in the PEL and was NEVER redelivered (redelivery and the 3-failure finalize were dead code). It now follows the Redis crash-recovery pattern: drains the PEL with offset `0` BEFORE reading `>` (`readGroup` shared with NOGROUP self-heal). Red/green: the new `ClickPipelineRedeliveryIT` fails with the old code (`expected: 5L but was: 0L` in the PEL) and passes with the fix.
+- [x] Poison case: an invalid event does not block the group; drop metric/log; subsequent valid events persist.
+      `poisonBatchIsFinalizedAndGroupKeepsProcessing`: batch injected with `databaseCb` open → 3 consecutive attempts → finalizes (acked, `analytics.events.failed.total` +6) → the subsequent valid event persists.
+- [x] Re-confirm enqueue fail-open on the redirect (`RedisClickEventQueueFailOpenTest`) — output pasted.
+- [x] `./mvnw test -Dtest='ClickPipelineIT,ClickDailyRollupIT,RedisClickEventQueueFailOpenTest,RedisClickEventQueueTest'` → green.
 
-## 7.5 DR drill + fault injection sob carga
-- [x] Subir infra isolada (portas fora de 27017/6379/8080 — padrão Épico 5/6: 27018 / 6380 / 18080).
-- [x] Seed códigos; guardar a lista no DoD.
-- [x] `./scripts/backup-mongodb.sh` (ajustar env `MONGODB_URI` da isolada); colar path + tamanho do dump + `ls -l`.
-- [x] Simular perda: drop `short_urls` **na isolada**; restore; `curl -sI` dos códigos seed → 302; colar.
-- [x] Run `load-tests/redirect.js` (duração curta) happy path na isolada — baseline local desta sessão.
-- [x] `docker stop` Redis no meio de um run; colar summary k6 + veredito vs matriz 7.1.
-- [x] `docker start` Redis; `docker stop` Mongo; run cache-frio; colar summary + veredito.
-- [x] Atualizar `docs/release-runbook.md` com playbooks Redis-down / Mongo-down / restore (comandos reais usados).
-- [x] Artefatos k6 em `load-tests/results/` (gitignored) — no DoD entra o summary, não o binário.
+## 7.5 DR drill + fault injection under load
+- [x] Bring up isolated infra (ports outside 27017/6379/8080 — Epic 5/6 pattern: 27018 / 6380 / 18080).
+- [x] Seed codes; keep the list in the DoD.
+- [x] `./scripts/backup-mongodb.sh` (adjust the isolated instance's `MONGODB_URI` env); paste path + dump size + `ls -l`.
+- [x] Simulate the loss: drop `short_urls` **on the isolated instance**; restore; `curl -sI` of the seed codes → 302; paste.
+- [x] Run `load-tests/redirect.js` (short duration) happy path on the isolated instance — this session's local baseline.
+- [x] `docker stop` Redis mid-run; paste the k6 summary + verdict vs the 7.1 matrix.
+- [x] `docker start` Redis; `docker stop` Mongo; cold-cache run; paste summary + verdict.
+- [x] Update `docs/release-runbook.md` with the Redis-down / Mongo-down / restore playbooks (real commands used).
+- [x] k6 artifacts in `load-tests/results/` (gitignored) — the DoD gets the summary, not the binary.
 
-## 7.6 Gates finais do épico
+## 7.6 Final epic gates
 - [x] `./scripts/check-metrics-frozen.sh` (+ `--self-test`) → PASS.
 - [x] `./scripts/check-boundaries.sh` (+ `--self-test`) → PASS.
 - [x] `./scripts/check-doc-sync.sh` (+ `--self-test`) → PASS.
 - [x] `./scripts/check-security.sh` (+ `--self-test`) → PASS.
-- [x] `promtool check rules` + `promtool test rules` + `amtool check-config` → verdes.
-- [x] `./mvnw verify` conjunto → BUILD SUCCESS.
-- [x] Evidências coladas no `epic-7-dod.md`; self-audit da regra zero.
+- [x] `promtool check rules` + `promtool test rules` + `amtool check-config` → green.
+- [x] Full `./mvnw verify` → BUILD SUCCESS.
+- [x] Evidence pasted in `epic-7-dod.md`; self-audit of rule zero.
 
 ---
 
-**Checklist de conclusão do Épico 7:**
+**Epic 7 completion checklist:**
 
 - [x] `docs/reliability.md` + ADR 0005 + ADR 0006
-- [x] Inventário CB/timeout/retry + ITs de Mongo/Redis down
-- [x] Shutdown script verde + liveness ≠ readiness evidenciado (ou corrigido)
-- [x] Worker recupera PEL; poison não trava o group
-- [x] Backup/restore isolado verde + dois fault-injections com números
-- [x] Runbook de incidente atualizado
-- [x] `./mvnw verify` verde (todos os gates)
-- [x] Evidências coladas no `epic-7-dod.md`
+- [x] CB/timeout/retry inventory + Mongo/Redis down ITs
+- [x] Shutdown script green + liveness ≠ readiness evidenced (or fixed)
+- [x] Worker reclaims the PEL; poison does not stall the group
+- [x] Isolated backup/restore green + two fault-injections with numbers
+- [x] Incident runbook updated
+- [x] `./mvnw verify` green (all gates)
+- [x] Evidence pasted in `epic-7-dod.md`
 
-*Ao marcar todos os itens acima, o Épico 7 está **concluído** com modos de falha contratados e provados.*
+*When all items above are checked, Epic 7 is **complete** with failure modes contracted and proven.*
