@@ -28,25 +28,26 @@ echo "["
 first=true
 
 for FILE in "${FILES[@]}"; do
-    # Extract component name from the Javadoc: " * # Component: <Name>"
-    COMPONENT=$(grep -m1 '# Component:' "$FILE" | sed 's/.*# Component:[[:space:]]*//' | sed 's/[[:space:]]*$//')
-    # Fallback to directory name if not found
-    if [[ -z "$COMPONENT" ]]; then
-        COMPONENT=$(dirname "$FILE" | sed 's|.*/||')
-    fi
-
-    # Extract lines matching "### REQ-<ID>" pattern
-    # Pattern: ### REQ-<COMPONENT>-<NNN> followed by text until next ### or ## or EOF
-    while IFS= read -r line; do
-        # Match lines like " * ### REQ-XXX" or "### REQ-XXX" (Javadoc comment prefix handled)
-        if [[ "$line" =~ ^[[:space:]]*[*]?[[:space:]]*###[[:space:]]+(REQ-[A-Z0-9-]+) ]]; then
+    # A package-info.java may host MULTIPLE components: a "# Component:" line opens a
+    # block; every following "### REQ-*" belongs to it until the next "# Component:" line.
+    # Fallback for reqs before any "# Component:" line: the package directory name.
+    COMPONENT=""
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ "$line" =~ ^[[:space:]]*[*]?[[:space:]]*#[[:space:]]*Component:[[:space:]]*(.+)[[:space:]]*$ ]]; then
+            COMPONENT="${BASH_REMATCH[1]%%\**}"
+            COMPONENT="${COMPONENT//\*/}"
+            COMPONENT="${COMPONENT//[[:space:]]/}"
+        elif [[ "$line" =~ ^[[:space:]]*[*]?[[:space:]]*###[[:space:]]+(REQ-[A-Z0-9-]+) ]]; then
             REQ_ID="${BASH_REMATCH[1]}"
+            if [[ -z "$COMPONENT" ]]; then
+                COMPONENT=$(dirname "$FILE" | sed 's|.*/||')
+            fi
             # Get line number
             LINE_NUM=$(grep -n "### $REQ_ID" "$FILE" | head -1 | cut -d: -f1)
-            # Extract EARS text (next non-empty lines until next ### or ## or @spec-complete)
+            # Extract EARS text (next non-empty lines until next ### or ## or @spec-complete or # Component)
             EARS_TEXT=$(awk -v start="$((LINE_NUM + 1))" '
                 NR >= start {
-                    if (/^[[:space:]]*###/ || /^[[:space:]]*##/ || /@spec-complete/) exit
+                    if ($0 ~ /^[[:space:]]*[*]?[[:space:]]*(#|##|###)/ || /@spec-complete/) exit
                     if (NF > 0) {
                         gsub(/^[[:space:]]*[*]?[[:space:]]*/, "")
                         gsub(/"/, "\\\"")
