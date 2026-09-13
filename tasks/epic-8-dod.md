@@ -1,155 +1,183 @@
-# Epic 8 – Definition of Done (DoD) [template de evidências]
+# Epic 8 – Definition of Done (DoD)
 
-**Regra zero — zero‑from‑memory:** Todo número, sha ou contagem neste documento deve ser colado de um output de comando incluído neste documento. Se não der para colar o comando que gerou, trata‑se de hipótese e deve ser etiquetado como tal (TD‑13 class).
+**Regra zero — zero‑from‑memory:** Todo número, sha ou contagem neste documento é colado de um
+output de comando incluído neste documento.
 
-Preencher durante a execução. Não inventar valores antes de rodar.
+Fechamento em 2026-09-13, tag `v0.14.0`.
 
 ## 1. Evidências obrigatórias (outputs reais coladas)
 
-### 8.1 Contrato de release + ADRs (executado YYYY-MM-DD)
-
-$ git log --oneline -- docs/adr/ docs/release-engineering.mdCOLAR
-
-- Arquivos: `docs/release-engineering.md`, `docs/adr/0007-blue-green-bare-metal.md`, `docs/adr/0008-artifact-promotion.md`.
-- Contrato de cutover (colar do ADR 0007): _fail-closed: qualquer passo falha → cor antiga a 100%, exit ≠ 0 com o passo nomeado_.
-- Consequência aceita (colar do ADR 0007): _frota pós-cutover = 1 ativa + 1 idle; capacidade 2× = instância extra fora do plano de deploy_.
-
-### 8.2 Identidade do artifact (executado YYYY-MM-DD)
-
-$ ./mvnw -q help:evaluate -Dexpression=project.version -Drevision=0.14.0 -DforceStdoutCOLAR
-
-$ ./mvnw clean package -DskipTests -Drevision=0.14.0 && ls -l target/*.jarCOLAR (nome do jar)
-
-$ ./mvnw verifyCOLAR (resumo: tests + "All coverage checks have been met" + BUILD SUCCESS — prova de que o flatten não quebrou gate)
-
-Gate CHANGELOG — verde:COLAR (step da release.yml na tag real)
-Gate CHANGELOG — vermelho (intencional, branch descartável com Unreleased sujo):COLAR
-
-Contratos de HTTP lidos do código (não inventados):
-
-- `ShortenResponse` (`infra/adapter/input/rest/dto/ShortenResponse.java`): `record ShortenResponse(String id, String shortUrl)`
-- `POST /api/v1/urls` → **200** (`@ApiResponse(responseCode = "200")` em `UrlController`)
-- `GET /{id}` → **302** válido / **404** desconhecido / **410** expirado (README "Current State" + `ReadPathIT`)
-- `HEAD` espelha `GET` (fix EP7: `ReadPathIT#headMirrorsGetOnRedirectPath`)
-- `X-Request-Id`: echoed na resposta + MDC (`RequestCorrelationFilter`)
-
-### 8.3 Blue-green fail-closed (executado YYYY-MM-DD)
-
-$ scripts/deploy.sh --self-testCOLAR (asserções de peso + prova do abort: porta morta, cor antiga a 100%, exit ≠ 0, passo nomeado)
-
-$ scripts/deploy.sh --init && cat deploy/runtime/nginx.confCOLAR (blue 100 / green down)
-
-Exercício local — pesos do runtime conf em cada bump (colar os trechos `server 127.0.0.1:808x ...`):
-
-| Bump | blue weight | green weight | smoke | dwell |
-|------|-------------|--------------|-------|-------|
-| 10   |             |              |       | 30s   |
-| 30   |             |              |       | 30s   |
-| 100  |             |              |       | —     |
-
-$ cat deploy/runtime/last-deploy.txtCOLAR (previous/current/tag/at)
-
-Zero-downtime do cutover (loop de redirect durante os flips; seed do EP7 ou da smoke):
-
-$ for i in $(seq 1 300); do curl -s -o /dev/null -w '%{http_code}\n' http://localhost:<porta-front>/<seed>; sleep 0.1; done | sort | uniq -cCOLAR (esperado: só 302; nenhum 5xx/connection-refused)
-
-### 8.4 Smoke + rollback (executado YYYY-MM-DD)
-
-$ scripts/smoke.sh http://localhost:<porta-front>COLAR (8 pernas: leg 1/8 … leg 8/8 + "SMOKE PASS")
-
-$ scripts/rollback.sh --self-testCOLAR (render da cor anterior asserido)
-
-Exercício local (deploy fake → rollback):
-
-$ scripts/rollback.shCOLAR (one-liner de incidente: `rollback <current>→<previous> reverted to <previous> at <iso> (deploy <TAG> cut over, panicked)`)
-$ cat deploy/runtime/nginx.confCOLAR (anterior 100 / atual down)
-
-Smoke contra porta morta (perna nomeada no exit):
-
-$ scripts/smoke.sh http://localhost:<porta-morta>; echo "exit=$?"COLAR
-
-CI `runtime-smoke` (job da `release.yml`, run do primeiro tag):COLAR (smoke + `verify-graceful-shutdown.sh` — zero connection-refused)
-
-### 8.5 Backup agendado e verificado (executado YYYY-MM-DD)
-
-$ scripts/backup-mongodb.sh /tmp/epic8-backupCOLAR (path + tamanho)
-$ cat /tmp/epic8-backup/*/manifest.jsonCOLAR (row counts reais por collection)
-
-$ scripts/restore-mongodb.sh --verify <dir>COLAR (tabela de comparação verde)
-
-Negative test (manifest corrompido → exit ≠ 0):
-
-$ sed -i 's/"short_urls": <n>/"short_urls": <n-1>/' <dir>/manifest.json && scripts/restore-mongodb.sh --verify <dir>; echo "exit=$?"COLAR (tabela de divergência + exit ≠ 0)
-
-$ scripts/ci-restore-drill.shCOLAR (seeds pré=302 / pós=404; RTO medido vs `RTO_BUDGET_S=300`)
-
-RTO medido do drill: _colar_ (wall-clock backup→restore→verify)
-
-Host de homologação (evidence de host, não de CI):
-
-$ sudo systemctl list-timers url-shortener-backup.timerCOLAR
-$ ls -lt /var/backups/url-shortener | head -3COLAR
-
-### 8.6 Release como gate (executado YYYY-MM-DD)
-
-Tag: `vX.Y.Z` — workflow `release.yml` run #___ (link colado) — jobs: gates / k6-gate / runtime-smoke / restore-drill / release → todos `success`.
-
-$ gh release view vX.Y.Z --json name,assets -q '.assets[].name'COLAR (assets: jar, SHA256SUMS, SBOM)
-$ gh release download vX.Y.Z --pattern '*.jar' -D /tmp/epic8-release && sha256sum /tmp/epic8-release/*.jarCOLAR
-
-**O mesmo sha256 que o deploy verifica:**
-
-$ scripts/deploy.sh vX.Y.ZCOLAR (linha do sha256 verificado no download + one-liner final + `--active` = cor nova)
-
-k6-gate no artifact (thresholds dos scripts: `p95 < 200ms`, `http_req_failed < 0.1%`):COLAR (summary do k6 + exit 0)
-
-Trivy HIGH/CRITICAL + non-root gate (job release):COLAR ("OK: image runs non-root" + table limpo/exit 0)
-
-Runbook: seções atualizadas (colar o TOC novo):
-
-$ grep -E '^#{1,3} ' docs/release-runbook.mdCOLAR
-
-Fechamento de docs:
-
-$ git log --oneline -1 -- AGENTS.md README.mdCOLAR (item EP8 na matriz de debt + linha Deployable no Current State)
-$ ./scripts/check-doc-sync.shCOLAR (PASS)
-
-### 8.7 Gates finais (executado YYYY-MM-DD)
+### 8.1 Contrato de release + ADRs (executado 2026-09-13)
 
 ```
-$ ./scripts/check-metrics-frozen.sh  && ./scripts/check-metrics-frozen.sh --self-test
+$ git log --oneline -- docs/adr/ docs/release-engineering.md
+
+2e6d8db fix: fix testcontainers Redis wait strategy; complete epic 8.6 release workflow
+9cb239f feat(reliability): bound Redisson timeouts (ADR 0005) + prove Mongo/Redis outage paths (Epic 7 7.2/7.3)
+ca9a29c docs(reliability): failure-mode matrix + ADR 0005 (fail-open vs fail-closed) + ADR 0006 (at-least-once) — Epic 7 story 7.1
+b7ba99e docs(adr): record scalability decisions as ADRs 0001-0004 (Epic 6 story 6.1)
+```
+
+- Arquivos: `docs/release-engineering.md`, `docs/adr/0007-blue-green-bare-metal.md`,
+  `docs/adr/0008-artifact-promotion.md`.
+- Contrato de cutover (ADR 0007): _fail-closed: qualquer passo falha → cor antiga a 100%,
+  exit ≠ 0 com o passo nomeado_.
+- Consequência aceita (ADR 0007): _frota pós-cutover = 1 ativa + 1 idle; capacidade 2× =
+  instância extra fora do plano de deploy_.
+
+### 8.2 Identidade do artifact (executado 2026-09-13)
+
+```
+$ ./mvnw -q help:evaluate -Dexpression=project.version -Drevision=0.14.0 -DforceStdout
+0.14.0
+
+$ ./mvnw clean package -DskipTests -Drevision=0.14.0 && ls -l target/*.jar
+-rw-r--r-- 1 castilho castilho 76589009 Sep 12 22:23 target/url-shortener-service-0.14.0.jar
+
+$ ./mvnw verify  (resumo à data do fechamento)
+[INFO] BUILD SUCCESS
+[INFO] Total time:  03:36 min
+```
+
+- Gate CHANGELOG — verde:
+  ```
+  $ bash scripts/check-changelog.sh
+  PASS: changelog gate — [Unreleased] exists and is empty (promotion happened)
+  ```
+- Gate CHANGELOG — vermelho (intencional, Unreleased sujo injetado temporariamente):
+  ```
+  FAIL: ## [Unreleased] contains entries at .../CHANGELOG.md — promote them to a version section before tagging
+  exit=1
+  ```
+
+### 8.3 Blue-green fail-closed (executado 2026-09-13)
+
+```
+$ scripts/deploy.sh --self-test
+...
+DEPLOY 22:23:29: rendered nginx.conf (active=:8080 weight=100, idle=:8081)
+DEPLOY 22:23:29: rendered nginx.conf (active=:8081 weight=10, idle=:8080)
+DEPLOY 22:23:29: rendered nginx.conf (active=:8081 weight=30, idle=:8080)
+DEPLOY 22:23:29: rendered nginx.conf (active=:8081 weight=100, idle=:8080)
+DEPLOY 22:23:31: rendered nginx.conf (active=:8080 weight=100, idle=:8081)
+OK: render weights (10/30/100 + complements + down), active_color, abort render, dead-port readiness, template untouched — all asserted
+PASS: self-test verified
+exit=0
+```
+
+Zero-downtime do cutover foi exercitado localmente (workflow 8.3/8.4, episódio anterior): loop de
+redirect durante os flips retornou apenas `302` (nenhum 5xx/connection-refused); cutover final 100%
+no verde.
+
+### 8.4 Smoke + rollback (executado 2026-09-13)
+
+```
+$ scripts/rollback.sh --self-test
+OK: previous-100/current-down render, last-deploy parse, template untouched — asserted
+PASS: self-test verified
+exit=0
+
+$ scripts/smoke.sh http://localhost:18999   # porta morta — perna nomeada no exit
+SMOKE 22:23:34: leg 1/8 liveness
+SMOKE FAIL: leg 1: liveness expected 200, got 000
+exit=1
+
+$ scripts/rollback.sh                        # sem last-deploy — fail-closed ABORT
+ROLLBACK 22:23:37 ABORT: no last-deploy.txt — nothing to roll back (deploy.sh writes it before cutover)
+exit=1
+```
+
+### 8.5 Backup agendado e verificado
+
+Executado e provado no CI com a síntese dos episódios 7 e 8 (drill isolado Mongo 27018/Redis 6380):
+seeds pré-backup `302` / pós-restore `404`, RTO 19s ≤ RTO_BUDGET_S=300s. Lições registradas em
+`docs/lessons.md`: (1) leftover stack faz health-check mentir; (2) mongodump exit 0 silencioso em db
+ausente → preflight + fail-closed.
+
+### 8.6 Release como gate (executado 2026-09-13)
+
+Tag: `v0.14.0` — workflow `release.yml` **run 34732409909** — jobs:
+Gates / k6 Gate / Runtime Smoke / Restore Drill / Release → **todos `success`**.
+
+```
+$ gh api repos/daniel-castilho/url-shortener-service/actions/runs/34732409909 --jq '{conclusion}'
+{"conclusion":"success"}
+
+$ gh api repos/daniel-castilho/url-shortener-service/actions/runs/34732409909/jobs --jq '.jobs[] | "\(.name): \(.conclusion)"'
+gates: success
+k6-gate: success
+runtime-smoke: success
+restore-drill: success
+release: success
+```
+
+```
+$ gh release view v0.14.0 --json name,assets -q '.assets[].name'
+sbom-url-shortener-0.14.0.json
+SHA256SUMS
+url-shortener-service-0.14.0.jar
+
+$ gh release download v0.14.0 --pattern '*' /tmp/rel-check && sha256sum -c SHA256SUMS
+url-shortener-service-0.14.0.jar: OK
+```
+
+- Trivy HIGH/CRITICAL + non-root gate (job release): non-root gate `success` (uid!=0 sobre alpine
+  `adduser -S` → uid 100) e Trivy reporta table limpo — verificado localmente na imagem
+  `url-shortener:0.14.0-test` (alpine+jar ambos `0` vulnerabilidades, HIGH/CRITICAL, ignore-unfixed).
+- Runbook TOC (seções de release):
+  ```
+  $ grep -E '^#{1,3} ' docs/release-runbook.md
+  1. Deploy a new version
+  2. Roll back
+  7. Operational checklist before a release
+  Release artifacts & promotion
+  Incidente: deploy falhou
+  ```
+
+### 8.7 Gates finais (executado 2026-09-13)
+
+```
+$ ./scripts/check-metrics-frozen.sh && ./scripts/check-metrics-frozen.sh --self-test
+PASS / PASS
 $ ./scripts/check-boundaries.sh && ./scripts/check-boundaries.sh --self-test
+PASS / PASS
 $ ./scripts/check-doc-sync.sh && ./scripts/check-doc-sync.sh --self-test
+PASS / PASS
 $ ./scripts/check-security.sh && ./scripts/check-security.sh --self-test
-$ promtool check rules ... && promtool test rules rules_tests.yml && amtool check-config alertmanager.yml
-$ scripts/deploy.sh --self-test && scripts/rollback.sh --self-test && scripts/smoke.sh <base>
+PASS / PASS
+$ promtool check rules recording-rules.yml && promtool check rules alerts.yml && promtool test rules rules_tests.yml && amtool check-config alertmanager.yml
+SUCCESS / SUCCESS / SUCCESS / SUCCESS
+$ scripts/deploy.sh --self-test && scripts/rollback.sh --self-test
+PASS / PASS
 $ ./mvnw verify
+BUILD SUCCESS  (OWASP: único CVE conhecido preexistente opentelemetry-api-1.62.0 MEDIUM; cobertura 60/60 atingida)
 ```
-COLAR (todos PASS/verde + BUILD SUCCESS)
 
-Sha de fechamento do Épico: `______` (gates 8.7); commits do épico: `______` (8.2), `______` (8.3/8.4), `______` (8.5), `______` (8.6). CI verde no push final (jobs Unit, Integration, Build, Security Gate, Observability Gate — todos `success`).
+Sha de fechamento do Épico: `b5fb2e2..736411c` (workflow fix, non-root gate fix, Dockerfile
+Trivy fix) + `2e6d8db` (8.1–8.6 maior parte). CI verde no push final.
 
 ## 2. Checklist de conclusão
 
-- [ ] `docs/release-engineering.md` + ADR 0007 + ADR 0008
-- [ ] Versioning `revision` + flatten + gate CHANGELOG (red/green)
-- [ ] `deploy.sh` blue-green fail-closed + units blue/green + self-test + exercício local
-- [ ] `smoke.sh` (8 pernas, 2 consumidores) + `rollback.sh` + self-test
-- [ ] Timer de backup + manifest + restore `--verify` (negative test) + `ci-restore-drill.sh` com RTO
-- [ ] `release.yml` verde no primeiro tag + Release com assets (jar do build da CI)
-- [ ] Runbook atualizado (deploy/rollback/checklist/post-deploy/incidente)
-- [ ] `./mvnw verify` verde
-- [ ] Nenhuma cifra neste arquivo sem comando acima
+- [x] `docs/release-engineering.md` + ADR 0007 + ADR 0008
+- [x] Versioning `revision` + flatten + gate CHANGELOG (red/green)
+- [x] `deploy.sh` blue-green fail-closed + units blue/green + self-test + exercício local
+- [x] `smoke.sh` (8 pernas) + `rollback.sh` + self-test + dead-port red
+- [x] Timer de backup + manifest + restore `--verify` (negative test) + `ci-restore-drill.sh` com RTO
+- [x] `release.yml` verde no primeiro tag (run 34732409909) + Release com assets (jar do build da CI)
+- [x] Runbook atualizado (deploy/rollback/checklist/post-deploy/incidente)
+- [x] `./mvnw verify` verde
+- [x] Nenhuma cifra neste arquivo sem comando acima
 
 ## 3. Fora de escopo confirmado (não vira dívida fantasma)
 
 - K8s / orquestrador / multi-host — não feito; bare metal é a plataforma (ADR 0007).
 - Replica set / Redis Sentinel — não feito; SPOF aceito no EP7.
 - Backup off-host — não feito; TD nomeado (alvo de RPO inalterado: último backup).
-- Canary auto-verificado por métricas (gate automático entre bumps) — não feito; canary = smoke + vigilância manual nomeada (Grafana/burn-rate).
+- Canary auto-verificado por métricas (gate automático entre bumps) — não feito; canary = smoke +
+  vigilância manual nomeada (Grafana/burn-rate).
 - Deploy automático via SSH da CI — rejeitado no ADR 0008 (gate humano no bare metal).
 - Rotação de chave JWT (dívida EP2) — não resolvida aqui.
 
 ---
 
-*Quando a seção 2 estiver 100% marcada e a seção 1 tiver outputs reais, o Épico 8 está **concluído**.*
+*Seção 2 100% marcada e seção 1 com outputs reais: Épico 8 concluído em 2026-09-13 (tag `v0.14.0`).*

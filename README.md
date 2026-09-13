@@ -211,7 +211,7 @@ Security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
 
 ## Current State
 
-**Latest tagged release: `v0.13.0`** (Reliability & scale, 2026-09-11) · see
+**Latest tagged release: `v0.14.0`** (Deployable / Release Engineering, 2026-09-13) · see
 [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
 Implemented on `main`:
@@ -282,6 +282,15 @@ Implemented on `main`:
   static analysis (effort Max, threshold High), integration/E2E suites via Testcontainers, and an
   architecture boundary check with self-test. `core/` is framework-free: no Spring/Lombok
   annotations; beans are wired explicitly in `infra/config`.
+- **Release engineering (Epic 8) — landed.** `v0.14.0` is an end-to-end released artifact: build
+  identity via `<revision>` + flatten-maven-plugin; the **`release.yml`** pipeline gates every tag
+  (verify + bash gates + promtool/amtool + CHANGELOG) then runs k6, 8-leg runtime smoke,
+  restore drill (RTO ≤ budget) and publishes a GitHub Release with jar + `SHA256SUMS` + CycloneDX
+  SBOM after **Trivy HIGH/CRITICAL** and non-root image gates. Blue-green bare-metal cutover
+  (`scripts/deploy.sh`, canary 10→30→100, fail-closed abort naming the step) and rollback
+  (`scripts/rollback.sh`) follow ADR 0007/0008; scheduled verified backups
+  (`scripts/backup-mongodb.sh` + systemd timer, manifest with per-collection counts,
+  `restore-mongodb.sh --verify`). See `docs/release-engineering.md`.
 
 > **Scope note adapted from the original README:** earlier revisions of this README overclaimed
 > (e.g. "invalid IDs never reach the database", persisted analytics). The documentation now reflects
