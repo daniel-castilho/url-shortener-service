@@ -35,6 +35,17 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
   one new test class added where none observed the behavior (`ClickEventsRetentionPurgeTest`,
   4 cases). Gate: 20/20 across four components, 100%.
 
+- **Persistence living spec complete (epic 9 story 9.4)** — the Persistence Business Component is
+  the fifth spec-complete component (spec in `infra/adapter/output/persistence/package-info.java`):
+  8 EARS requirements (REQ-PERSIST-001..008) covering ordered/idempotent recorded migrations,
+  fail-fast on checksum drift/duplicate version/throwing migration, **expand-only migrations**
+  (the release rule promoted to EARS — forward-looking discipline enforced at review, the first
+  component to exercise the 90% threshold as designed: 27/28 = 96% PASS with REQ-PERSIST-003
+  above-threshold-missing), atomic `$inc` click counters, storage-level email uniqueness,
+  owner-scoped cursor pagination, archive soft-delete and identity-stable updates. 27 existing
+  tests annotated; `UserEntityTest` (structural POJO test) registered in the living-spec debt
+  registry. Gate: 27/28 across five components, 96% PASS.
+
 - **Living specifications (spec-driven development, Phase 0+1)** — EARS requirements now live in
   `package-info.java` living specs per Business Component (pilot: RateLimiting, 5 requirements:
   429+headers on limit excess, SHORTEN/REDIRECT scope isolation, trusted-proxy CIDR for

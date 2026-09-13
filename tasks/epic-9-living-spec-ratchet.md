@@ -155,7 +155,24 @@ rollup, GeoIP, UA parser, analytics read IT). New test only per D4: `ClickEvents
 
 ### 9.4 — Persistence
 
-_(pending)_
+```
+$ bash scripts/check-living-spec.sh        (after S4 merge)
+  OK      REQ-PERSIST-001..008 (Persistence) — traced (7 lines)
+  MISSING REQ-PERSIST-003 (Persistence)
+Coverage: 27 / 28 requirements traced (96%)
+PASS: living specification gate.
+```
+
+Spec in `infra/adapter/output/persistence/package-info.java`: REQ-PERSIST-001 (ordered,
+recorded, idempotent migrations), 002 (fail-fast on checksum drift / duplicate version /
+throwing migration), **003 (expand-only migrations — the runbook §7 release rule promoted to
+EARS; forward-looking discipline, enforced at review + checklist, not testable retroactively —
+first component to exercise the 90% threshold as designed)**, 004 (atomic `$inc`, no-op on
+missing), 005 (storage-level email uniqueness), 006 (owner-scoped cursor pagination, malformed
+cursor rejection), 007 (archive soft-delete), 008 (update keeps identity, persists supplied
+fields). 27 existing tests annotated (migrator 6, SchemaMigrationIT 2, MongoUrlRepositoryIT 13,
+MongoUserRepositoryIT 6). No new tests needed. `UserEntityTest` (structural POJO test) registered
+in the debt registry per decision 4. `@spec-complete true`.
 
 ### 9.5 — UrlShortener + debt 32(b) closure
 

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import ca.tyny.urlshortener.config.BaseIntegrationTest;
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import ca.tyny.urlshortener.core.model.QuotaUsage;
 import ca.tyny.urlshortener.core.model.SubscriptionPlan;
 import ca.tyny.urlshortener.core.model.SubscriptionStatus;
@@ -28,6 +29,7 @@ class MongoUserRepositoryIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Should save and find user by ID")
+  @TracesRequirement("REQ-PERSIST-005")
   void shouldSaveAndFindById() {
     // Given
     User user = User.createFreeUser("user123", "test@example.com", "Test User", "hashedPassword");
@@ -48,6 +50,7 @@ class MongoUserRepositoryIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Should find user by Email")
+  @TracesRequirement("REQ-PERSIST-005")
   void shouldFindByEmail() {
     // Given
     User user = User.createFreeUser("user456", "email@example.com", "Email User", "hashedPassword");
@@ -64,6 +67,7 @@ class MongoUserRepositoryIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Should return empty when user not found")
+  @TracesRequirement("REQ-PERSIST-005")
   void shouldReturnEmptyWhenNotFound() {
     // When
     Optional<User> resultById = mongoUserRepository.findById("nonexistent");
@@ -76,6 +80,7 @@ class MongoUserRepositoryIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Should persist complex fields correctly")
+  @TracesRequirement("REQ-PERSIST-005")
   void shouldPersistComplexFields() {
     // Given
     QuotaUsage quota = new QuotaUsage();
@@ -118,6 +123,7 @@ class MongoUserRepositoryIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Should update existing user")
+  @TracesRequirement("REQ-PERSIST-005")
   void shouldUpdateExistingUser() {
     // Given
     User user = User.createFreeUser("updateUser", "update@example.com", "Original Name", "hash");
@@ -150,6 +156,7 @@ class MongoUserRepositoryIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Should enforce storage-level email uniqueness via unique index")
+  @TracesRequirement("REQ-PERSIST-005")
   void shouldEnforceEmailUniquenessAtStorageLevel() {
     // Ensure migrations have run (in case DB was dropped by another test)
     migrator.migrate();
