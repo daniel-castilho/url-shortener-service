@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import ca.tyny.urlshortener.infra.adapter.output.persistence.entity.ClickEventDocument;
 import java.time.Instant;
 import java.util.HashMap;
@@ -18,6 +19,7 @@ class ClickBatchWorkerMappingTest {
 
   @Test
   @DisplayName("Should map stream payload to document with parsed instant")
+  @TracesRequirement("REQ-ANALYTICS-002")
   void shouldMapPayloadToDocument() {
     Map<Object, Object> value = new HashMap<>();
     value.put("code", "abc123");
@@ -41,6 +43,7 @@ class ClickBatchWorkerMappingTest {
 
   @Test
   @DisplayName("Should fall back to consumedAt on missing or malformed timestamp")
+  @TracesRequirement("REQ-ANALYTICS-002")
   void shouldFallbackTimestamp() {
     Map<Object, Object> malformed = new HashMap<>();
     malformed.put("code", "abc123");
@@ -55,6 +58,7 @@ class ClickBatchWorkerMappingTest {
 
   @Test
   @DisplayName("Should tolerate null fields in payload")
+  @TracesRequirement("REQ-ANALYTICS-002")
   void shouldTolerateNullFields() {
     Map<Object, Object> sparse = new HashMap<>();
     sparse.put("code", "abc123");
@@ -68,6 +72,7 @@ class ClickBatchWorkerMappingTest {
 
   @Test
   @DisplayName("Enrichment derives device from the User-Agent and country via GeoIP; best-effort")
+  @TracesRequirement("REQ-ANALYTICS-002")
   void enrichDerivesDeviceAndCountry() {
     GeoIpCountryResolver geo = mock(GeoIpCountryResolver.class);
     when(geo.countryForIp("198.51.100.9")).thenReturn("DE");
@@ -90,6 +95,7 @@ class ClickBatchWorkerMappingTest {
 
   @Test
   @DisplayName("Enrichment keeps captured values and never throws for failing geo lookups")
+  @TracesRequirement("REQ-ANALYTICS-002")
   void enrichKeepsValuesAndIsSafe() {
     GeoIpCountryResolver geo = mock(GeoIpCountryResolver.class);
     ClickEventDocument doc =

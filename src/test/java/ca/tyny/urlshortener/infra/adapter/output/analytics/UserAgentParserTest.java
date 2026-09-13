@@ -2,6 +2,7 @@ package ca.tyny.urlshortener.infra.adapter.output.analytics;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -9,6 +10,7 @@ class UserAgentParserTest {
 
   @Test
   @DisplayName("Classifies common mobile User-Agents as mobile")
+  @TracesRequirement("REQ-ANALYTICS-002")
   void classifiesMobile() {
     assertThat(
             UserAgentParser.device(
@@ -26,6 +28,7 @@ class UserAgentParserTest {
 
   @Test
   @DisplayName("Classifies tablets separately")
+  @TracesRequirement("REQ-ANALYTICS-002")
   void classifiesTablet() {
     assertThat(
             UserAgentParser.device(
@@ -41,6 +44,7 @@ class UserAgentParserTest {
 
   @Test
   @DisplayName("Classifies crawlers as bot")
+  @TracesRequirement("REQ-ANALYTICS-002")
   void classifiesBot() {
     assertThat(UserAgentParser.device("Googlebot/2.1 (+http://www.google.com/bot.html)"))
         .isEqualTo("bot");
@@ -52,6 +56,7 @@ class UserAgentParserTest {
 
   @Test
   @DisplayName("Falls back to desktop and tolerates blanks")
+  @TracesRequirement("REQ-ANALYTICS-002")
   void classifiesDesktopAndBlanks() {
     assertThat(
             UserAgentParser.device(

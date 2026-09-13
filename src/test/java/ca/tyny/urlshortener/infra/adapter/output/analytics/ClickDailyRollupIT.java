@@ -3,6 +3,7 @@ package ca.tyny.urlshortener.infra.adapter.output.analytics;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import ca.tyny.urlshortener.config.BaseIntegrationTest;
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import ca.tyny.urlshortener.infra.adapter.output.persistence.config.MongoCollections;
 import ca.tyny.urlshortener.infra.adapter.output.persistence.entity.ClickDailyDocument;
 import ca.tyny.urlshortener.infra.adapter.output.persistence.entity.ClickEventDocument;
@@ -26,6 +27,7 @@ class ClickDailyRollupIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Aggregates the previous UTC day into click_daily with breakdown")
+  @TracesRequirement("REQ-ANALYTICS-004")
   void aggregatesYesterday() {
     LocalDate yesterday = LocalDate.now(ZoneOffset.UTC).minusDays(1);
     Instant start = yesterday.atStartOfDay(ZoneOffset.UTC).toInstant();
@@ -71,6 +73,7 @@ class ClickDailyRollupIT extends BaseIntegrationTest {
 
   @Test
   @DisplayName("Re-running the rollup for the same day is idempotent")
+  @TracesRequirement("REQ-ANALYTICS-004")
   void rerunIsIdempotent() {
     LocalDate yesterday = LocalDate.now(ZoneOffset.UTC).minusDays(1);
     Instant start = yesterday.atStartOfDay(ZoneOffset.UTC).toInstant();

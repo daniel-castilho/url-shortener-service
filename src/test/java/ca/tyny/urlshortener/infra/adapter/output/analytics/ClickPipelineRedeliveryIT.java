@@ -2,6 +2,7 @@ package ca.tyny.urlshortener.infra.adapter.output.analytics;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import ca.tyny.urlshortener.core.model.ClickEvent;
 import ca.tyny.urlshortener.core.model.ShortUrl;
 import ca.tyny.urlshortener.core.ports.outgoing.AnalyticsPort;
@@ -119,6 +120,7 @@ class ClickPipelineRedeliveryIT {
   @Test
   @DisplayName(
       "Failed batch is reclaimed from the PEL and persisted after recovery (at-least-once)")
+  @TracesRequirement("REQ-ANALYTICS-003")
   void failedBatchIsReclaimedAfterRecovery() {
     String code = "pel001";
     urlRepository.save(new ShortUrl(code, "https://example.com/al", LocalDateTime.now()));
@@ -156,6 +158,7 @@ class ClickPipelineRedeliveryIT {
 
   @Test
   @DisplayName("Poison batch is finalized after 3 consecutive failures; subsequent events persist")
+  @TracesRequirement("REQ-ANALYTICS-003")
   void poisonBatchIsFinalizedAndGroupKeepsProcessing() {
     String poisonCode = "pel002";
     String freshCode = "pel003";
