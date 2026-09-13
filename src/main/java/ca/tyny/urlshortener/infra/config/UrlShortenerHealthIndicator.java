@@ -75,8 +75,11 @@ public class UrlShortenerHealthIndicator implements HealthIndicator {
   }
 
   private boolean checkRedis() {
-    try {
-      return "PONG".equals(redisTemplate.getConnectionFactory().getConnection().ping());
+    // try-with-resources: the borrowed connection must be returned on every probe, or each
+    // health call leaks one RedisConnection and exhausts the pool under continuous probing.
+    try (org.springframework.data.redis.connection.RedisConnection connection =
+        redisTemplate.getConnectionFactory().getConnection()) {
+      return "PONG".equals(connection.ping());
     } catch (Exception e) {
       return false;
     }
