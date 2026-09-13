@@ -74,6 +74,16 @@ public class RedisUrlCache implements UrlCachePort {
     }
   }
 
+  /**
+   * Cache key prefix, shape-versioned (REQ-CACHE-001): {@code url:v1:<id>}. The {@code v1} segment
+   * versions the serialized {@link CachedUrlValue} shape ({@code u}/{@code e}/{@code d} JSON
+   * fields). Whenever {@link #encode(CachedUrlValue)} changes the serialized shape, bump the
+   * version in this prefix: new readers simply miss on stale {@code url:v<n-1>:} entries and
+   * rebuild from the source, instead of decoding old-shape values with a new decoder until the old
+   * TTLs expire.
+   */
+  private static final String KEY_PREFIX = "url:v1:";
+
   @Override
   public CacheLookup lookup(String id) {
     // 1. Check Local Cache (Hot Keys)
@@ -96,7 +106,7 @@ public class RedisUrlCache implements UrlCachePort {
     // 3. Check Redis
     String redisValue;
     try {
-      redisValue = redisTemplate.opsForValue().get("url:" + id);
+      redisValue = redisTemplate.opsForValue().get(KEY_PREFIX + id);
     } catch (DataAccessException e) {
       // ADR 0005: L2 is degrade (skip, fall through) — an outage is a cache miss,
       // proceeds to MongoDB. Higher latency, zero client-visible failure.
@@ -138,7 +148,7 @@ public class RedisUrlCache implements UrlCachePort {
 
     // Add to Redis with TTL capped at the link expiry and jittered otherwise
     try {
-      redisTemplate.opsForValue().set("url:" + id, encode(value), ttl);
+      redisTemplate.opsForValue().set(KEY_PREFIX + id, encode(value), ttl);
     } catch (DataAccessException e) {
       // ADR 0005: L2 is degrade (skip) — a Redis outage must not fail the caller.
       log.warn("Redis L2 put failed for id={}; continuing without it", id, e);
@@ -220,7 +230,7 @@ public class RedisUrlCache implements UrlCachePort {
   public void evict(String id) {
     // Delete from Redis (best-effort per ADR 0005 degrade policy)
     try {
-      redisTemplate.delete("url:" + id);
+      redisTemplate.delete(KEY_PREFIX + id);
     } catch (DataAccessException e) {
       log.warn("Redis L2 evict failed for id={}; continuing with L1 invalidation", id, e);
     }

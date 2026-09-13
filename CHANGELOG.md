@@ -25,6 +25,15 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ### Fixed
 
+- **Cache keys are shape-versioned (debt from the deployment-hygiene audit)** — `RedisUrlCache`
+  read/wrote `url:<id>` with no shape version: a changed `encode(value)` shape would break new
+  readers over stale entries until their TTLs expired. Keys are now `url:v1:<id>` (get/put/evict
+  + `KEY_PREFIX` constant); a shape change bumps the version and new readers simply miss on
+  stale entries and rebuild from the source. Declared as living-spec requirement REQ-CACHE-001
+  (Cache component, `@spec-complete false` until story 9.1b); two regression tests prove the
+  old unversioned key is never read and rebuilds land under the versioned key. Retires the
+  `RedisUrlCacheTest` entry from the living-spec debt registry.
+
 - **`rate.limit.exceeded.total` meter never incremented (debt 32a)** — the counter was registered
   and frozen but had no production caller, so the `RateLimitExcessiveTrafficRejected` alert could
   never fire. The `UrlController.tooManyRequests` helper (the single 429 egress) now records it —

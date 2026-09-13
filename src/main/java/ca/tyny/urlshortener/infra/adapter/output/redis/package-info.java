@@ -47,5 +47,32 @@
  * - Fail-open policy: ADR 0005 (requirement REQ-RATE-004); buckets are not enforced during Redis outage.
  *
  * @spec-complete true
+ *
+ * # Component: Cache
+ *
+ * ## Purpose
+ * Read-through L1 (Caffeine) + L2 (Redis) cache for short-code lookups on the redirect hot path,
+ * guarded by a Bloom filter against cache penetration. Implements
+ * {@link ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort} with a shape-versioned key
+ * prefix so serialized-shape changes never serve stale old-shape entries.
+ *
+ * ## Requirements (EARS)
+ *
+ * ### REQ-CACHE-001
+ * **When** the serialized shape of a cached URL value changes,
+ * **the Business Component shall** include a shape version in the cache key prefix
+ * ({@code url:v<n>:<id>}) and bump that version with every shape change, so entries written
+ * under a previous shape are never read by new readers (they miss and rebuild from the source).
+ *
+ * ## Ports (Contracts)
+ * - Outbound: {@link ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort}
+ *
+ * ## Local Decisions (ADR inline)
+ * - Key shape: {@code url:v1:<id>} (was {@code url:<id>}); version bump is the migration —
+ *   stale entries expire by TTL, no scan/delete needed.
+ * - Serialization: JSON with compact field names ({@code u} = original URL, {@code e} = expiry
+ *   epoch second, {@code d} = bound domain).
+ *
+ * @spec-complete false
  */
 package ca.tyny.urlshortener.infra.adapter.output.redis;

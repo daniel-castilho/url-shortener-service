@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import ca.tyny.urlshortener.core.model.CacheLookup;
 import ca.tyny.urlshortener.core.model.CachedUrlValue;
 import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
@@ -90,7 +91,7 @@ class RedisUrlCacheTest {
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
-    when(valueOperations.get("url:" + TEST_ID)).thenReturn(encoded);
+    when(valueOperations.get("url:v1:" + TEST_ID)).thenReturn(encoded);
 
     // When
     CacheLookup result = cache.lookup(TEST_ID);
@@ -101,7 +102,7 @@ class RedisUrlCacheTest {
     assertThat(result.value().expiresAt()).isNull();
     assertThat(result.absence()).isEqualTo(CacheLookup.Absence.NONE);
     verify(bloomFilter).contains(TEST_ID);
-    verify(valueOperations).get("url:" + TEST_ID);
+    verify(valueOperations).get("url:v1:" + TEST_ID);
   }
 
   @Test
@@ -116,7 +117,7 @@ class RedisUrlCacheTest {
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
-    when(valueOperations.get("url:" + TEST_ID)).thenReturn(encoded);
+    when(valueOperations.get("url:v1:" + TEST_ID)).thenReturn(encoded);
 
     // When
     CacheLookup result = cache.lookup(TEST_ID);
@@ -137,7 +138,7 @@ class RedisUrlCacheTest {
     // Then
     verify(bloomFilter).add(TEST_ID);
     verify(valueOperations)
-        .set(eq("url:" + TEST_ID), argThat(s -> s.contains(TEST_URL)), any(Duration.class));
+        .set(eq("url:v1:" + TEST_ID), argThat(s -> s.contains(TEST_URL)), any(Duration.class));
 
     // Verify local cache was populated (subsequent get should hit local cache)
     when(bloomFilter.contains(TEST_ID)).thenReturn(true);
@@ -157,7 +158,7 @@ class RedisUrlCacheTest {
     // the bare argThat lambda ambiguous against the Duration overload.
     verify(valueOperations)
         .set(
-            eq("url:" + TEST_ID),
+            eq("url:v1:" + TEST_ID),
             anyString(),
             org.mockito.ArgumentMatchers.<java.time.Duration>argThat(
                 duration ->
@@ -178,7 +179,7 @@ class RedisUrlCacheTest {
     // Then
     verify(valueOperations)
         .set(
-            eq("url:" + TEST_ID),
+            eq("url:v1:" + TEST_ID),
             anyString(),
             org.mockito.ArgumentMatchers.<java.time.Duration>argThat(
                 duration -> duration.toSeconds() >= 28 && duration.toSeconds() <= 30));
@@ -192,6 +193,42 @@ class RedisUrlCacheTest {
 
     // Then
     verify(bloomFilter, never()).add(TEST_ID);
+    verify(valueOperations, never()).set(eq("url:v1:" + TEST_ID), anyString(), any(Duration.class));
+  }
+
+  @Test
+  @DisplayName("Old unversioned url:<id> entries are never read after the key-shape bump")
+  @TracesRequirement("REQ-CACHE-001")
+  void oldShapeEntriesAreNeverRead() {
+    // Given: a stale entry written by the previous key shape (url:<id>, no version)
+    when(bloomFilter.contains(TEST_ID)).thenReturn(true);
+    when(valueOperations.get("url:" + TEST_ID)).thenReturn("{\"u\":\"" + TEST_URL + "\"}");
+    when(valueOperations.get("url:v1:" + TEST_ID)).thenReturn(null);
+
+    // When
+    CacheLookup result = cache.lookup(TEST_ID);
+
+    // Then: the old key is never touched; the versioned key misses -> source rebuild
+    verify(valueOperations, never()).get("url:" + TEST_ID);
+    verify(valueOperations).get("url:v1:" + TEST_ID);
+    assertThat(result.isHit()).isFalse();
+    assertThat(result.absence()).isEqualTo(CacheLookup.Absence.MISS);
+  }
+
+  @Test
+  @DisplayName("A versioned-key miss rebuilds the entry under the versioned key")
+  @TracesRequirement("REQ-CACHE-001")
+  void newKeyMissRebuildsUnderVersionedKey() {
+    // Given: bloom says the id exists, but the versioned key has no entry (post-bump state)
+    when(bloomFilter.contains(TEST_ID)).thenReturn(true);
+    when(valueOperations.get("url:v1:" + TEST_ID)).thenReturn(null);
+
+    // When: the source layer re-populates the cache
+    cache.put(TEST_ID, new CachedUrlValue(TEST_URL, null));
+
+    // Then: the rebuild lands under the versioned key (never the legacy shape)
+    verify(valueOperations)
+        .set(eq("url:v1:" + TEST_ID), argThat(s -> s.contains(TEST_URL)), any(Duration.class));
     verify(valueOperations, never()).set(eq("url:" + TEST_ID), anyString(), any(Duration.class));
   }
 }
