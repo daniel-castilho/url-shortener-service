@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import ca.tyny.urlshortener.config.WithMockSecurity;
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import ca.tyny.urlshortener.core.ports.outgoing.AnalyticsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.RateLimiterPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
@@ -60,6 +61,7 @@ class UrlControllerRateLimitingTest {
   }
 
   @Test
+  @TracesRequirement("REQ-RATE-001")
   void whenLimitExceeded_thenReturns429() throws Exception {
     // First request allowed
     when(rateLimiter.tryAcquire(org.mockito.ArgumentMatchers.any(), anyString()))
@@ -97,6 +99,7 @@ class UrlControllerRateLimitingTest {
   }
 
   @Test
+  @TracesRequirement("REQ-RATE-001")
   void whenRedirectLimitExceeded_thenReturns429BeforeLookup() throws Exception {
     when(rateLimiter.tryAcquire(
             ca.tyny.urlshortener.core.ports.outgoing.RateLimitScope.REDIRECT, "127.0.0.1"))

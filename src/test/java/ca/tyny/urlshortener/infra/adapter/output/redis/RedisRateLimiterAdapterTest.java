@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import ca.tyny.urlshortener.core.model.RateLimitVerdict;
 import ca.tyny.urlshortener.core.ports.outgoing.RateLimitScope;
 import ca.tyny.urlshortener.infra.config.properties.RateLimiterProperties;
@@ -46,6 +47,7 @@ class RedisRateLimiterAdapterTest {
 
   @Test
   @DisplayName("Allows while tokens remain")
+  @TracesRequirement("REQ-RATE-001")
   void allowsWithinLimit() {
     reply(List.of(1L, 59L, 0L));
 
@@ -57,6 +59,7 @@ class RedisRateLimiterAdapterTest {
 
   @Test
   @DisplayName("Blocks with reset seconds when the bucket is empty")
+  @TracesRequirement("REQ-RATE-001")
   void blocksWhenEmpty() {
     reply(List.of(0L, 0L, 7L));
 
@@ -68,6 +71,7 @@ class RedisRateLimiterAdapterTest {
 
   @Test
   @DisplayName("Fails open on null or malformed replies")
+  @TracesRequirement("REQ-RATE-004")
   void failsOpenOnBadReply() {
     when(template.execute(any(RedisScript.class), anyList(), any(Object[].class)))
         .thenReturn(null)
@@ -79,6 +83,7 @@ class RedisRateLimiterAdapterTest {
 
   @Test
   @DisplayName("Fail-open fallback method returns allow with max remaining")
+  @TracesRequirement("REQ-RATE-004")
   void fallbackMethodAllows() {
     assertThat(
             adapter
@@ -93,6 +98,7 @@ class RedisRateLimiterAdapterTest {
 
   @Test
   @DisplayName("Disabled limiter never touches Redis")
+  @TracesRequirement("REQ-RATE-005")
   void disabledBypassesRedis() {
     adapter =
         new RedisRateLimiterAdapter(
@@ -114,6 +120,7 @@ class RedisRateLimiterAdapterTest {
 
   @Test
   @DisplayName("Bucket keys are structurally distinct per scope")
+  @TracesRequirement("REQ-RATE-002")
   void keysAreScoped() {
     assertThat(RedisRateLimiterAdapter.bucketKey(RateLimitScope.REDIRECT, "1.2.3.4"))
         .isEqualTo("rl:redirect:1.2.3.4");

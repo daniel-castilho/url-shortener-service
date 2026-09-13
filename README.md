@@ -278,10 +278,13 @@ Implemented on `main`:
   tested). See `docs/data-model-decisions.md` → *Links as Resource*.
 - **API docs** — springdoc OpenAPI / Swagger UI, bean validation and structured error responses via a
   global exception handler.
-- **Quality gates** — `./mvnw verify` enforces JaCoCo coverage (LINE ≥ 60%, BRANCH ≥ 60%), SpotBugs
-  static analysis (effort Max, threshold High), integration/E2E suites via Testcontainers, and an
-  architecture boundary check with self-test. `core/` is framework-free: no Spring/Lombok
-  annotations; beans are wired explicitly in `infra/config`.
+ - **Quality gates** — `./mvnw verify` enforces JaCoCo coverage (LINE ≥ 60%, BRANCH ≥ 60%), SpotBugs
+   static analysis (effort Max, threshold High), integration/E2E suites via Testcontainers, and an
+   architecture boundary check with self-test. `core/` is framework-free: no Spring/Lombok
+   annotations; beans are wired explicitly in `infra/config`. **Living specifications:** each
+   Business Component declares its EARS requirements in `package-info.java` (pilot: RateLimiting,
+   `@spec-complete`); tests link to requirements via `@TracesRequirement` and
+   `scripts/check-living-spec.sh` (+ self-test) enforces ≥ 90% traceability in CI.
 - **Release engineering (Epic 8) — landed.** `v0.14.0` is an end-to-end released artifact: build
   identity via `<revision>` + flatten-maven-plugin; the **`release.yml`** pipeline gates every tag
   (verify + bash gates + promtool/amtool + CHANGELOG) then runs k6, 8-leg runtime smoke,

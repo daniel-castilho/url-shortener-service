@@ -101,6 +101,7 @@ Sources of truth: `README.md`, `pom.xml`, `src/main/resources/application.yaml`,
 | **Coverage gate** | `./mvnw verify` (JaCoCo runs at `verify`; LINE ≥ 60%, BRANCH ≥ 60%) | Root |
 | **Static analysis gate** | `./mvnw verify` (SpotBugs runs at `verify`; effort Max, threshold High) | Root |
 | **Architecture boundary check** | `bash scripts/check-boundaries.sh` (+ `--self-test`) | Root |
+| **Living-spec traceability check** | `bash scripts/check-living-spec.sh` (+ `--self-test`) | Root |
 
 ---
 
@@ -196,6 +197,27 @@ src/main/java/com/example/urlshortener/
   destinations, HTTP-destination rejection, rate-limit on the redirect path, open-redirect.
 - **Concurrency tests:** vanity-alias race → exactly one winner; atomic `$inc` quota/click under
   concurrent requests.
+- **Living specifications:** each Business Component owns a `package-info.java` in its main package
+  declaring its **EARS requirements** (`### REQ-<COMP>-<NNN>`, `**When** ... **the Business
+  Component shall** ...`), its ports and its local ADR-style decisions. Tests are linked to
+  requirements **only** via `@TracesRequirement("REQ-...")` (`core/annotation`) — the single
+  source of truth for traceability; `@DisplayName` conventions are cosmetic and never read by the
+  gate. A component joins the hard gate by setting `@spec-complete true` (ratchet: gate one
+  component at a time; `RateLimiting` is first). Gate: `bash scripts/check-living-spec.sh`
+  (+ `--self-test`), wired into CI — it enforces (a) ≥ 90% of the declared requirements of
+  spec-complete components are traced (the threshold is contract — refine EARS granularity, never
+  the threshold), (b) no dangling `@TracesRequirement` pointing at a requirement nobody declared,
+  and (c) every test class inside a gated component's package with no traces at all is listed in
+  the registry below.
+
+### Living-Spec Debt Registry (machine-readable — `check-living-spec.sh` reads this)
+
+Untraced test classes inside gated component packages. Fields: `class — reason (owner, deadline)`.
+Items expire at the next epic; do not add new ones without a reason that survives review.
+
+- `ca.tyny.urlshortener.infra.adapter.output.redis.RedisUrlCacheTest` — covers the cache adapter
+  (`UrlCachePort`), not the RateLimiting component; becomes traceable when UrlShortener/Cache gets
+  its own living spec (owner: daniel-castilho, deadline: next epic).
 
 ---
 
@@ -512,6 +534,22 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     (only info-level SC2012 hints remain). `./mvnw verify` green (271 unit + 165 IT) + OWASP known
     CVE only `opentelemetry-api` MEDIUM (pre-existing). Gates 8.7 all PASS (+ self-tests),
     promtool/amtool/circle green. Evidence in `tasks/epic-8-dod.md`. — `resolved`
+
+32. **Living Specifications (spec-driven development adoption, Phase 0+1)** — EARS requirements
+    now live in `package-info.java` living specs (pilot: RateLimiting, 5 requirements REQ-RATE-001..005
+    covering block/429+headers, scope isolation, trusted-proxy CIDR, fail-open, disabled-bypass),
+    `@TracesRequirement` (`core/annotation`) is the single traceability source (test-name
+    conventions and `@DisplayName` are cosmetic), and `scripts/check-living-spec.sh` (+ `--self-test`)
+    is a hard CI gate for `@spec-complete` components (≥ 90% traced, no dangling refs, untraced test
+    classes must sit in the debt registry). Supporting tooling: `scripts/extract-requirements.sh`
+    (JSON export), `scripts/generate-package-info.sh` (template). Known gaps tracked here: (a)
+    `recordRateLimitExceeded()` has no production caller, so the 429 counter metric stays 0 —
+    the `RateLimitExcessiveTrafficRejected` alert is structurally correct but inert until a caller
+    is wired (flagged during the alerts work); (b) only RateLimiting is spec-complete — UrlShortener,
+    Auth, Analytics, Persistence and Cache components have no living specs yet (ratchet, next
+    epics); (c) Spotless excludes `package-info.java` from google-java-format because the formatter
+    reflows the EARS/`###` markdown structure that the gate regexes parse — revisit when the gate
+    parses the AST instead of text. — `in-progress`
 
 ## 🔍 Operational Discipline & Debugging Guidelines
 
