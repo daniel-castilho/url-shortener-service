@@ -487,6 +487,32 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
      green (prom 2.53 / alertmanager 0.27 containers). `./mvnw verify` green (271 unit + 165 IT).
      Closing commit: 59bdc70 (7.5) + evidence in `tasks/epic-7/epic-7-dod.md`. — `resolved`
 
+31. **Epic 8 (Deployable / Release Engineering) — release pipeline, blue-green, verified backups** —
+    completed 2026-09-13. (a) Release contract + ADRs (`docs/release-engineering.md`, ADR
+    0007 blue-green bare-metal fail-closed, ADR 0008 artifact promotion = jar from GitHub Release +
+    sha256 verified; no SSH deploy from CI). (b) Artifact identity: `<revision>` +
+    flatten-maven-plugin + `.flattened-pom.xml` gitignored + Dockerfile `ARG VERSION`/OCI labels +
+    multi-arch (`--platform`); `scripts/check-changelog.sh` gate (red/green proven). (c) Blue-green:
+    `scripts/deploy.sh` (canary 10→30→100, 30s dwell, abort names the step, self-test) + systemd
+    `url-shortener-{blue,green}.service`; local cutover exercised (redirect loop only 302 through
+    the bumps). (d) `scripts/smoke.sh` (8 legs) + `scripts/rollback.sh` (+ self-tests) + dead-port
+    red proof. (e) Scheduled verified backups: `backup-mongodb.sh` (manifest with per-collection
+    counts) + `restore-mongodb.sh --verify` (negative test) + systemd timer +
+    `ci-restore-drill.sh` (RTO 19s ≤ budget 300s; lessons: leftover stack makes health-check lie;
+    mongodump exits 0 silently on missing db → preflight + fail-closed). (f) **`release.yml` green
+    end-to-end on tag `v0.14.0`** (run 34732409909, all 5 jobs success): Gates → k6-gate →
+    runtime-smoke → restore-drill → Release (non-root image gate `uid!=0`, **Trivy HIGH/CRITICAL
+    gate fixed by `apk upgrade --no-cache` in the runtime stage** closing openssl/libexpat CVEs
+    — verified locally 0 vulns), CycloneDX SBOM. GitHub Release v0.14.0 with
+    `url-shortener-service-0.14.0.jar` + `SHA256SUMS` + `sbom-url-shortener-0.14.0.json` (sha256
+    verified against downloaded assets). Root-cause fixes in the workflow: step missing `run:` key
+    (parse error → empty jobs), dangling artifact download, `action-gh-release@v1` node16 → pinned
+    `@v3.0.3` (node24), non-root gate hardcoded `uid=1000` → alpine `adduser -S` yields **100**.
+    `actionlint` (docker image `rhysd/actionlint`) now validates every workflow before push
+    (only info-level SC2012 hints remain). `./mvnw verify` green (271 unit + 165 IT) + OWASP known
+    CVE only `opentelemetry-api` MEDIUM (pre-existing). Gates 8.7 all PASS (+ self-tests),
+    promtool/amtool/circle green. Evidence in `tasks/epic-8-dod.md`. — `resolved`
+
 ## 🔍 Operational Discipline & Debugging Guidelines
 
 - **Investigate before trial-and-error:** when a compile or test fails, read the full stack trace and

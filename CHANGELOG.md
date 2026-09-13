@@ -7,6 +7,43 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-13
+
+### Added
+
+- **Epic 8 (Deployable / Release Engineering)** — the product is now a first-class **released
+  artifact**. Release identity is carried end-to-end (`<revision>` + flatten-maven-plugin at build,
+  `org.opencontainers.image.version` label at runtime); `scripts/check-changelog.sh` gates a tag
+  against a clean `[Unreleased]` block, and the annotated tag `v0.14.0` was pushed through a real
+  **`release.yml`** pipeline: Gates (boundary/doc-sync/security/metrics-frozen gates, promtool/amtool,
+  `./mvnw verify`) → k6 Gate (mixed load on a live instance) → Runtime Smoke (8-leg smoke +
+  graceful-shutdown) → Restore Drill (RTO ≤ `RTO_BUDGET_S`) → Release (Docker image non-root gate,
+  **Trivy HIGH/CRITICAL gate**, CycloneDX SBOM, GitHub Release with jar + `SHA256SUMS` + SBOM).
+- **Blue-green bare-metal deploy (ADR 0007)** — `scripts/deploy.sh` stages the idle color, renders
+  canary weights 10→30→100 with 30s dwell, aborts fail-closed to the old color naming the offending
+  step; `scripts/rollback.sh` reverts from `deploy/runtime/last-deploy.txt`; systemd units
+  `url-shortener-blue.service` / `url-shortener-green.service`. Both ship `--self-test` modes.
+- **Artifact promotion contract (ADR 0008)** — the jar is downloaded **from the GitHub Release** and
+  its SHA-256 is verified against `SHA256SUMS` before staging; no SSH deploy from CI (human gate on
+  bare metal).
+- **8-leg runtime smoke** — `scripts/smoke.sh` exercises liveness/readiness/health, shorten+redirect,
+  auth, vanity alias, quota, and the redirect path against a running instance; used by deploy, rollback
+  and CI `runtime-smoke`.
+- **Scheduled, verified backups** — `scripts/backup-mongodb.sh` produces a manifest with per-collection
+  counts, `scripts/restore-mongodb.sh --verify` compares counts after restore (negative test included),
+  systemd `url-shortener-backup.{service,timer}` runs it daily, and `scripts/ci-restore-drill.sh`
+  proves wall-clock RTO in CI.
+- **Security hardening of the release base image** — the runtime stage now runs `apk upgrade --no-cache`
+  so base-OS CVEs (openssl/libexpat) reported by the release Trivy gate are closed; the release image
+  is verified to run as a **non-root** user (`uid != 0`).
+
+### Changed
+
+- **Versioning** — `pom.xml` now uses `<revision>` + `flatten-maven-plugin` (`.flattened-pom.xml`
+  gitignored); the jar name carries the semantic version (e.g. `url-shortener-service-0.14.0.jar`).
+- **Docker image** — multi-arch build support (`linux/amd64`, `linux/arm64`) and OCI labels
+  (`org.opencontainers.image.*`); `VERSION` is injectable via `--build-arg`.
+
 ## [0.13.0] - 2026-09-11
 
 ### Added
