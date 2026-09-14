@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import ca.tyny.urlshortener.core.command.UpdateLinkCommand;
 import ca.tyny.urlshortener.core.exception.DomainNotVerifiedException;
 import ca.tyny.urlshortener.core.exception.ForbiddenException;
@@ -120,6 +121,7 @@ class LinkUseCasesTest {
 
   @Test
   @DisplayName("ListUserLinksUseCase - returns paginated results")
+  @TracesRequirement("REQ-SHORT-005")
   void listUserLinksReturnsPaginatedResults() {
     ShortUrl link = createShortUrl();
     var pageResult = PageResult.of(List.of(link), null);
@@ -136,6 +138,7 @@ class LinkUseCasesTest {
 
   @Test
   @DisplayName("GetLinkUseCase - returns link when owner")
+  @TracesRequirement("REQ-SHORT-005")
   void getLinkReturnsLinkWhenOwner() {
     ShortUrl link = createShortUrl();
 
@@ -148,6 +151,7 @@ class LinkUseCasesTest {
 
   @Test
   @DisplayName("GetLinkUseCase - throws 404 when not found")
+  @TracesRequirement("REQ-SHORT-005")
   void getLinkThrows404WhenNotFound() {
     when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.empty());
 
@@ -157,6 +161,7 @@ class LinkUseCasesTest {
 
   @Test
   @DisplayName("GetLinkUseCase - throws 403 when non-owner")
+  @TracesRequirement("REQ-SHORT-005")
   void getLinkThrows403WhenNonOwner() {
     ShortUrl link = createShortUrl();
     when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.of(link));
@@ -167,6 +172,7 @@ class LinkUseCasesTest {
 
   @Test
   @DisplayName("UpdateLinkUseCase - updates destination without changing code")
+  @TracesRequirement("REQ-SHORT-005")
   void updateLinkChangesDestinationNotCode() {
     ShortUrl link = createShortUrl();
     when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.of(link));
@@ -192,6 +198,7 @@ class LinkUseCasesTest {
 
   @Test
   @DisplayName("UpdateLinkUseCase - throws 403 for non-owner")
+  @TracesRequirement("REQ-SHORT-005")
   void updateLinkThrows403ForNonOwner() {
     when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.of(createShortUrl()));
 
@@ -206,6 +213,7 @@ class LinkUseCasesTest {
 
   @Test
   @DisplayName("UpdateLinkUseCase - sets a custom domain on a link")
+  @TracesRequirement("REQ-SHORT-005")
   void updateLinkSetsDomain() {
     when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.of(createShortUrl()));
     when(customDomainRepository.findByHost("links.example.com"))
@@ -232,6 +240,7 @@ class LinkUseCasesTest {
 
   @Test
   @DisplayName("UpdateLinkUseCase - clears the domain binding with an explicit null")
+  @TracesRequirement("REQ-SHORT-005")
   void updateLinkClearsDomain() {
     ShortUrl bound = createShortUrl().withDomain("links.example.com");
     when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.of(bound));
@@ -248,6 +257,7 @@ class LinkUseCasesTest {
 
   @Test
   @DisplayName("UpdateLinkUseCase - rejects a domain owned by someone else with 403")
+  @TracesRequirement("REQ-SHORT-005")
   void updateLinkRejectsForeignDomain() {
     when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.of(createShortUrl()));
     when(customDomainRepository.findByHost("links.example.com"))
@@ -273,6 +283,7 @@ class LinkUseCasesTest {
 
   @Test
   @DisplayName("UpdateLinkUseCase - rejects a not-yet-verified domain with 400")
+  @TracesRequirement("REQ-SHORT-005")
   void updateLinkRejectsUnverifiedDomain() {
     when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.of(createShortUrl()));
     when(customDomainRepository.findByHost("links.example.com"))
@@ -298,6 +309,7 @@ class LinkUseCasesTest {
 
   @Test
   @DisplayName("UpdateLinkUseCase - keeps the existing domain when not supplied")
+  @TracesRequirement("REQ-SHORT-005")
   void updateLinkKeepsDomainWhenNotSupplied() {
     ShortUrl bound = createShortUrl().withDomain("links.example.com");
     when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.of(bound));
@@ -313,6 +325,7 @@ class LinkUseCasesTest {
 
   @Test
   @DisplayName("UpdateLinkUseCase - throws 404 when not found")
+  @TracesRequirement("REQ-SHORT-005")
   void updateLinkThrows404WhenNotFound() {
     when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.empty());
 
@@ -327,6 +340,7 @@ class LinkUseCasesTest {
 
   @Test
   @DisplayName("UpdateLinkUseCase - throws on archived link")
+  @TracesRequirement("REQ-SHORT-005")
   void updateLinkThrowsOnArchived() {
     when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.of(createArchivedShortUrl()));
 
@@ -343,6 +357,7 @@ class LinkUseCasesTest {
 
   @Test
   @DisplayName("ArchiveLinkUseCase - archives link")
+  @TracesRequirement("REQ-SHORT-005")
   void archiveLinkArchivesLink() {
     when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.of(createShortUrl()));
 
@@ -353,6 +368,7 @@ class LinkUseCasesTest {
 
   @Test
   @DisplayName("ArchiveLinkUseCase - idempotent on already archived")
+  @TracesRequirement("REQ-SHORT-005")
   void archiveLinkIdempotent() {
     when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.of(createArchivedShortUrl()));
 
@@ -363,6 +379,7 @@ class LinkUseCasesTest {
 
   @Test
   @DisplayName("ArchiveLinkUseCase - throws 403 for non-owner")
+  @TracesRequirement("REQ-SHORT-005")
   void archiveLinkThrows403ForNonOwner() {
     when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.of(createShortUrl()));
 
@@ -372,6 +389,7 @@ class LinkUseCasesTest {
 
   @Test
   @DisplayName("ArchiveLinkUseCase - throws 404 when not found")
+  @TracesRequirement("REQ-SHORT-005")
   void archiveLinkThrows404WhenNotFound() {
     when(linkQueryPort.findById(LINK_ID)).thenReturn(Optional.empty());
 

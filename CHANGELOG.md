@@ -46,6 +46,18 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
   tests annotated; `UserEntityTest` (structural POJO test) registered in the living-spec debt
   registry. Gate: 27/28 across five components, 96% PASS.
 
+- **UrlShortener living spec complete (epic 9 story 9.5) — the ratchet is closed** — the
+  UrlShortener Business Component is the sixth and last spec-complete component (spec in
+  `core/service/package-info.java`): 7 EARS requirements (REQ-SHORT-001..007) covering random
+  Base62 generation with bounded collision retry, vanity-alias validation (format/reserved
+  words/quota/plan) with atomic persistence, destination validation with domain ownership,
+  cache-aside redirect resolution with eager expiry and host-bound domain serving, owner-scoped
+  link management, custom-domain claim lifecycle and Host-header normalization. 69 existing
+  tests annotated (including cross-component traces of `GetClickAnalyticsUseCaseTest` to
+  REQ-ANALYTICS-004). **All six Business Components are now spec-complete: 35 requirements
+  declared, 34 traced (97%), gate PASS** — debt 32(b) resolved; the living-spec debt registry
+  carries one structural-POJO entry (`UserEntityTest`, expires next epic).
+
 - **Living specifications (spec-driven development, Phase 0+1)** — EARS requirements now live in
   `package-info.java` living specs per Business Component (pilot: RateLimiting, 5 requirements:
   429+headers on limit excess, SHORTEN/REDIRECT scope isolation, trusted-proxy CIDR for
