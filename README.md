@@ -64,6 +64,10 @@ technologies used by the `infra` layer.
   `409 Conflict` means only “custom alias already exists”. See `docs/data-model-decisions.md`.
 - **Resilience:** Resilience4j circuit breakers for the rate limiter / ID generator and the database.
 - **Security:** Spring Security + **jjwt** 0.12 (HS256, access + refresh tokens), **BCrypt** hashing.
+  Stateless bearer auth stays first-class (mobile/CLI); **additively** (ADR 0010) login/register/
+  refresh also set an **HttpOnly cookie pair** for the same-origin SPA (`access_token` `Path=/`
+  replay, `refresh_token` limited to `Path=/api/v1/auth/refresh`; `Secure; SameSite=Lax`), with
+  `GET /api/v1/auth/me` and `POST /api/v1/auth/logout` for the SPA lifecycle.
 - **API docs:** springdoc-openapi (Swagger UI) + **Actuator** (`health`, `metrics`, `prometheus`,
   `circuitbreakers`).
 
@@ -181,9 +185,11 @@ With the application running, open the API docs:
 
 | Domain | Method | Endpoint | Description |
 | :--- | :--- | :--- | :--- |
-| **Auth** | `POST` | `/api/v1/auth/register` | Register a new user (name, e-mail, password ≥ 6 chars) and return an access + refresh token. Fails `400` if the e-mail is already in use. |
-| | `POST` | `/api/v1/auth/login` | Authenticate and return an access + refresh token. |
-| | `POST` | `/api/v1/auth/refresh` | Exchange a valid refresh token for a new access token. |
+| **Auth** | `POST` | `/api/v1/auth/register` | Register a new user (name, e-mail, password ≥ 6 chars) and return an access + refresh token + an **HttpOnly cookie pair** (`access_token`, `refresh_token`). Fails `400` if the e-mail is already in use. |
+| | `POST` | `/api/v1/auth/login` | Authenticate and return an access + refresh token + the **HttpOnly cookie pair** (`access_token` `Path=/`; `refresh_token` `Path=/api/v1/auth/refresh`; both `Secure; SameSite=Lax`; Max-Age = JWT TTLs). |
+| | `POST` | `/api/v1/auth/refresh` | Exchange a valid refresh token (JSON body **or** the `refresh_token` cookie) for a new access token; re-sets the cookie pair. `401` if neither is provided. |
+| | `GET` | `/api/v1/auth/me` | Return the authenticated caller's `{userId, email, name}` — works with a `Bearer` header **or** the `access_token` cookie. `401` when anonymous. |
+| | `POST` | `/api/v1/auth/logout` | Clear both auth cookies (idempotent, `204` even for anonymous callers). |
 | **URLs** | `POST` | `/api/v1/urls` | Shorten a URL. Anonymous allowed; `customAlias` (vanity) requires authentication; optional `ttlSeconds` (bounded by `app.shortener.max-ttl-seconds`, default 1 year, `null` = never expires). `429` on rate limit. |
 | | `GET` | `/api/v1/urls` | List the **caller's** links (archived included), newest first, cursor-paginated (`?limit=&cursor=`; `limit` capped at 100, malformed cursor → `400`). Requires authentication. |
 | | `GET` | `/api/v1/urls/{id}` | Get one link's details (owner only; `403` for non-owner, `404` unknown). |
@@ -256,7 +262,9 @@ Implemented on `main`:
   `scripts/backup-mongodb.sh`/`restore-mongodb.sh`, fault injections) is documented with runbooks in
   `docs/release-runbook.md` §5b.
 - **Auth & users** — stateless JWT (HS256, access + refresh), BCrypt password hashing, `FREE` plan by
-  default.
+  default. Bearer tokens are the documented API contract; cookie-based transport (HttpOnly dual-write,
+  ADR 0010) is an **additive** convenience for same-origin SPAs — bearer and cookie are the same JWT
+  bytes, and Bearer wins when both reach a request.
 - **Observability (four pillars)** — Micrometer metrics + Prometheus endpoint with latency
   percentiles and the `id.generation.duration` / `url.retrieval.duration` timers; OpenTelemetry
   tracing via Spring Boot auto-instrumentation (`micrometer-tracing-bridge-otel`) exported through
