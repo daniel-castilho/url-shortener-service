@@ -9,6 +9,20 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ### Added
 
+- **Auth rate limiting (REQ-AUTH-010, REQ-RATE-006)** — `POST /api/v1/auth/login` and
+  `POST /api/v1/auth/refresh` are now rate-limited **per IP** through a new `AUTH` scope in the
+  shared Redis token bucket (default `rate-limiter.auth-limit=10` / `auth-window=PT1M`; env
+  `RATE_LIMITER_AUTH_LIMIT`/`RATE_LIMITER_AUTH_WINDOW`). Same fail-open policy, headers
+  (`Retry-After`, `RateLimit-*`) and single-429-egress meter (``rate.limit.exceeded.total``) as
+  the shorten/redirect paths; the check runs before the use case, so brute-force on login and
+  token-harvesting on refresh never reach credential validation. The AUTH bucket is structurally
+  independent (exhausting it never blocks SHORTEN/REDIRECT or vice-versa). Register, logout and
+  /me are intentionally not limited (email-uniqueness/quota and idempotency already bound abuse).
+  Tests: `AuthControllerTest` +2 (429 on login/refresh, use case never invoked), new `AuthRateLimitIT`
+  (4, real Redis: login-after-capacity → 429, refresh 429, register unlimited, scope isolation).
+  Living spec now 41/42 requirements traced (98%); Auth 10/10 and RateLimiting 6/6 (100%).
+  Follow-up from ADR 0010 commit — rate limiting on auth endpoints is now closed.
+
 - **Cookie-based auth for the same-origin SPA (additive; ADR 0010)** — login, register and refresh
   now also set an **HttpOnly cookie pair** (`access_token` `Path=/`, `refresh_token`
   `Path=/api/v1/auth/refresh`; both `Secure; SameSite=Lax`; Max-Age mirrors the JWT TTLs: 86400 s /

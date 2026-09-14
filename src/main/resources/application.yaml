@@ -132,6 +132,8 @@ rate-limiter:
   window: PT1M        # SHORTEN scope: full refill time (ISO-8601 Duration)
   redirect-limit: 120 # REDIRECT scope: bucket capacity for GET /{id} (anti-enumeration)
   redirect-window: PT1M
+  auth-limit: 10      # AUTH scope: bucket capacity for /api/v1/auth/login + /refresh (per IP)
+  auth-window: PT1M   # AUTH scope: full refill time
   client-ip-header: X-Forwarded-For  # Trusted only from trusted-proxy-cidrs peers
   trusted-proxy-cidrs:              # Peers allowed to set the client-ip-header
     - 127.0.0.0/8

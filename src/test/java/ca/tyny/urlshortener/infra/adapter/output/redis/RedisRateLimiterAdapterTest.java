@@ -36,6 +36,8 @@ class RedisRateLimiterAdapterTest {
                 Duration.ofMinutes(1),
                 120,
                 Duration.ofMinutes(1),
+                10,
+                Duration.ofMinutes(1),
                 "X-Forwarded-For",
                 List.of("127.0.0.0/8")));
   }
@@ -108,6 +110,8 @@ class RedisRateLimiterAdapterTest {
                 60,
                 Duration.ofMinutes(1),
                 120,
+                Duration.ofMinutes(1),
+                10,
                 Duration.ofMinutes(1),
                 "X-Forwarded-For",
                 List.of()));

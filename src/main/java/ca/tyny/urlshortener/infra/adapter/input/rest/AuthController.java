@@ -1,5 +1,9 @@
 package ca.tyny.urlshortener.infra.adapter.input.rest;
 
+import ca.tyny.urlshortener.core.model.RateLimitVerdict;
+import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
+import ca.tyny.urlshortener.core.ports.outgoing.RateLimitScope;
+import ca.tyny.urlshortener.core.ports.outgoing.RateLimiterPort;
 import ca.tyny.urlshortener.core.service.UserService;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.AuthResponse;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.LoginRequest;
@@ -8,10 +12,12 @@ import ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.RefreshTokenReques
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.RegisterRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -32,6 +38,10 @@ public class AuthController {
   private static final String REFRESH_COOKIE = "refresh_token";
   private static final String REFRESH_COOKIE_PATH = "/api/v1/auth/refresh";
   private final UserService userService;
+  private final RateLimiterPort rateLimiter;
+  private final MetricsPort metricsPort;
+  private final HttpServletRequest request;
+  private final ClientAddressResolver clientAddressResolver;
 
   @Value("${app.jwt.expiration-ms:86400000}")
   private long jwtExpirationMs;
@@ -39,8 +49,17 @@ public class AuthController {
   @Value("${app.jwt.refresh-expiration-ms:604800000}")
   private long jwtRefreshExpirationMs;
 
-  public AuthController(UserService userService) {
+  public AuthController(
+      UserService userService,
+      RateLimiterPort rateLimiter,
+      MetricsPort metricsPort,
+      HttpServletRequest request,
+      ClientAddressResolver clientAddressResolver) {
     this.userService = userService;
+    this.rateLimiter = rateLimiter;
+    this.metricsPort = metricsPort;
+    this.request = request;
+    this.clientAddressResolver = clientAddressResolver;
   }
 
   @PostMapping("/register")
@@ -71,6 +90,10 @@ public class AuthController {
               + "SameSite=Lax, HttpOnly. Cache-Control: no-store.")
   public ResponseEntity<AuthResponse> login(
       @Valid @RequestBody LoginRequest request, HttpServletResponse response) {
+    RateLimitVerdict verdict = rateLimiter.tryAcquire(RateLimitScope.AUTH, resolveClientIp());
+    if (!verdict.allowed()) {
+      return tooManyRequests(verdict);
+    }
     UserService.AuthResult result = userService.login(request.getEmail(), request.getPassword());
     setAuthCookies(response, result.token(), result.refreshToken());
     return ResponseEntity.ok()
@@ -92,6 +115,10 @@ public class AuthController {
       @RequestBody(required = false) RefreshTokenRequest request,
       @CookieValue(name = REFRESH_COOKIE, required = false) String refreshCookie,
       HttpServletResponse response) {
+    RateLimitVerdict verdict = rateLimiter.tryAcquire(RateLimitScope.AUTH, resolveClientIp());
+    if (!verdict.allowed()) {
+      return tooManyRequests(verdict);
+    }
     String refreshToken = null;
     if (request != null && StringUtils.hasText(request.getRefreshToken())) {
       refreshToken = request.getRefreshToken();
@@ -178,6 +205,25 @@ public class AuthController {
             .maxAge(0)
             .build()
             .toString());
+  }
+
+  private String resolveClientIp() {
+    return clientAddressResolver.resolve(request);
+  }
+
+  /**
+   * 429 with standard throttling headers (Retry-After + RateLimit-*). Single 429 egress: records
+   * the frozen meter {@code rate.limit.exceeded.total} (numerator of the {@code
+   * RateLimitExcessiveTrafficRejected} alert) exactly once per rejected request.
+   */
+  private <T> ResponseEntity<T> tooManyRequests(RateLimitVerdict verdict) {
+    metricsPort.recordRateLimitExceeded();
+    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+        .header("Retry-After", Long.toString(verdict.resetSeconds()))
+        .header("RateLimit-Limit", "*")
+        .header("RateLimit-Remaining", "0")
+        .header("RateLimit-Reset", Long.toString(verdict.resetSeconds()))
+        .build();
   }
 
   private AuthResponse toAuthResponse(UserService.AuthResult result) {

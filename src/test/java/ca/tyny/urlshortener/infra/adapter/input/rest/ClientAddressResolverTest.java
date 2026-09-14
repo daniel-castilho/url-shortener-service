@@ -19,6 +19,8 @@ class ClientAddressResolverTest {
             java.time.Duration.ofMinutes(1),
             120,
             java.time.Duration.ofMinutes(1),
+            10,
+            java.time.Duration.ofMinutes(1),
             "X-Forwarded-For",
             cidrs));
   }

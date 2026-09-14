@@ -98,9 +98,18 @@ public class RedisRateLimiterAdapter implements RateLimiterPort {
     if (!properties.enabled()) {
       return RateLimitVerdict.allow(Long.MAX_VALUE);
     }
-    long limit = scope == RateLimitScope.REDIRECT ? properties.redirectLimit() : properties.limit();
+    long limit =
+        switch (scope) {
+          case REDIRECT -> properties.redirectLimit();
+          case AUTH -> properties.authLimit();
+          default -> properties.limit();
+        };
     var window =
-        scope == RateLimitScope.REDIRECT ? properties.redirectWindow() : properties.window();
+        switch (scope) {
+          case REDIRECT -> properties.redirectWindow();
+          case AUTH -> properties.authWindow();
+          default -> properties.window();
+        };
     double refillPerSecond = limit / Math.max(1d, window.toMillis() / 1000d);
 
     List<?> reply =

@@ -59,11 +59,19 @@
  * cookie with it and re-set the {@code refresh_token} cookie with the same value (sliding
  * Max-Age); a request with neither a body token nor the cookie is rejected with HTTP 401.
  *
+ * ### REQ-AUTH-010
+ * **When** the calling IP exceeds the configured AUTH rate limit ({@code rate-limiter.auth-limit}
+ * / {@code rate-limiter.auth-window}) on {@code POST /api/v1/auth/login} or {@code POST
+ * /api/v1/auth/refresh},
+ * **the Business Component shall** reject the request with HTTP 429 and the standard throttling
+ * headers  ({@code Retry-After}, {@code RateLimit-*}) before the use case runs.
+ *
  * ## Ports (Contracts)
  * - Outbound: {@link ca.tyny.urlshortener.core.ports.outgoing.TokenPort},
  *   {@link ca.tyny.urlshortener.core.ports.outgoing.PasswordEncoderPort},
  *   {@link ca.tyny.urlshortener.core.ports.outgoing.AuthenticationPort},
- *   {@link ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort}
+ *   {@link ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort},
+ *   {@link ca.tyny.urlshortener.core.ports.outgoing.RateLimiterPort} (AUTH scope)
  * - Inbound (REST): `POST /api/v1/auth/register|login|refresh|logout` and
  *   `GET /api/v1/auth/me` (AuthController)
  *
@@ -76,6 +84,10 @@
  * - Cookie transport is additive (ADR 0010): same JWTs in HttpOnly cookies; Bearer stays the
  *   first-class interface permanently; SameSite=Lax is the CSRF control (csrf.disable() with
  *   zero CORS in src/main).
+ * - Login and refresh are rate-limited per IP via the shared `AUTH` scope (10/min default) —
+ *   brute-force on login and token harvesting on refresh are bounded before the use case runs;
+ *   register/logout/me are not limited (email uniqueness/quota and idempotency already bound
+ *   abuse on those paths).
  *
  * @spec-complete true
  */
