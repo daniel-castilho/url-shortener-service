@@ -339,6 +339,7 @@ failures" are non-issues: that collection was never dropped, so existing `_id`s 
 
 - [ ] `./mvnw clean package` succeeds (and `./mvnw verify` + `*IT` green when tests changed).
 - [ ] `bash scripts/check-boundaries.sh` passes (architecture boundaries intact).
+- [ ] `bash scripts/check-living-spec.sh` passes (requirement traceability intact).
 - [ ] `APP_JWT_SECRET` is set to a strong random value (≥32 chars); the default is not used.
 - [ ] `MONGODB_URI` / `REDIS_HOST` / `REDIS_PORT` point at the real services.
 - [ ] `rate-limiter.trusted-proxy-cidrs` matches the reverse proxy network CIDR.
@@ -351,17 +352,32 @@ failures" are non-issues: that collection was never dropped, so existing `_id`s 
 - [ ] Tag is annotated (`git tag -a vX.Y.Z -m "..."`); `## [Unreleased]` in `CHANGELOG.md` is **empty** at the tag commit (promoted in the same commit).
 - [ ] Schema migrations since the tag recorded in `last-deploy.txt` are **expand-only** (no destructive drops/renames) — the migrator is fail-fast, but a destructive migration would break the old color still serving during the cutover.
 - [ ] MongoDB backup is recent (< 26h); restore drill (`scripts/ci-restore-drill.sh`) passed in the release pipeline.
-- [ ] Health probe returns UP after deploy; a smoke shorten + redirect works.
-- [ ] Previous artifact retained for rollback.
-- [ ] Secrets never appear in logs or Git.
 
-- [ ] Secrets never appear in logs or Git.
-- [ ] Tag is annotated (`git tag -a vX.Y.Z -m "..."`); `## [Unreleased]` in `CHANGELOG.md` is **empty** at the tag commit (promoted in the same commit).
-- [ ] Schema migrations since the tag recorded in `last-deploy.txt` are **expand-only** (no destructive drops/renames) — the migrator is fail-fast, but a destructive migration would break the old color still serving during the cutover.
-- [ ] MongoDB backup is recent (< 26h); restore drill (`scripts/ci-restore-drill.sh`) passed in the release pipeline.
-- [ ] Health probe returns UP after deploy; a smoke shorten + redirect works.
-- [ ] Previous artifact retained for rollback.
-- [ ] Secrets never appear in logs or Git.
+### 7a. Rollback triggers (no discussion)
+
+Roll back immediately when any trigger fires — do not debug first; roll back, then debug
+(ADR 0007: the old color is intact by construction):
+
+- **Smoke probe fails at any canary stage** — automatic: `scripts/deploy.sh` aborts to the old
+  color at 100% and exits non-zero naming the failed step. If the abort fired, the rollback is
+  already done; file the incident.
+- **5xx ratio > 1% of requests for 2 minutes** after reaching the 100% bump.
+- **p95 latency > 2× the published baseline** (docs/load-test-baseline.md) for 5 minutes.
+
+### 7b. Rollback rehearsal (monthly)
+
+An untested rollback is a hope. Once a month, on the lowest-risk prod-like host available (the
+UAT compose stack when up, else staging):
+
+1. Deploy the newest tag **behind** the active one (the idle color), without weight flip.
+2. Run `scripts/rollback.sh` back to the active one.
+3. Run `scripts/smoke.sh` — all legs green.
+4. Record the duration in the table below (the record is the deliverable — same pattern as
+   `ci-restore-drill.sh`).
+
+| Date | Host | Tag in/out | Duration | Operator |
+|------|------|------------|----------|----------|
+| _(first entry pending)_ | | | | |
 
 ---
 
