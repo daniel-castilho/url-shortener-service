@@ -75,8 +75,12 @@ public class SecurityConfig {
             auth ->
                 auth
                     // Public Endpoints (order matters: a matcher decides the FIRST rule that fits)
+                    // /api/v1/auth/me MUST be matched BEFORE the auth/** permitAll below or it
+                    // inherits permitAll (matcher ordering trap, ADR 0010).
+                    .requestMatchers(HttpMethod.GET, "/api/v1/auth/me")
+                    .authenticated() // Get current user identity (Bearer or cookie)
                     .requestMatchers("/api/v1/auth/**")
-                    .permitAll() // Login & Register
+                    .permitAll() // Login, Register, Refresh (POST /logout is idempotent-anonymous)
 
                     // The bare /actuator index is guarded BEFORE the GET /{id} (redirect)
                     // permitAll below, which otherwise matches any single-segment path such

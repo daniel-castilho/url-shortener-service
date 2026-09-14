@@ -2,6 +2,7 @@ package ca.tyny.urlshortener.infra.security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -21,6 +22,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
   private final JwtTokenProvider tokenProvider;
   private final UserDetailsService userDetailsService;
+
+  private static final String ACCESS_COOKIE = "access_token";
 
   @Override
   protected void doFilterInternal(
@@ -47,10 +50,24 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     filterChain.doFilter(request, response);
   }
 
+  /**
+   * Extracts the JWT from the request: the Authorization Bearer header first (byte-identical to the
+   * pre-cookie behavior); when absent, the {@code access_token} HttpOnly cookie. When both are
+   * present the Bearer header wins (documented + tested). Returns {@code null} when neither is
+   * available, letting the chain 401 as today.
+   */
   private String getJwtFromRequest(HttpServletRequest request) {
     String bearerToken = request.getHeader("Authorization");
     if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
       return bearerToken.substring(7);
+    }
+
+    if (request.getCookies() != null) {
+      for (Cookie cookie : request.getCookies()) {
+        if (ACCESS_COOKIE.equals(cookie.getName())) {
+          return cookie.getValue();
+        }
+      }
     }
     return null;
   }

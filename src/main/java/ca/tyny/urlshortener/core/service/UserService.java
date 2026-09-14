@@ -75,6 +75,21 @@ public class UserService {
     return new AuthResult(newToken, refreshToken, user.id(), user.email(), user.name());
   }
 
+  /**
+   * Returns the identity of the user authenticated via the validated JWT principal (email).
+   *
+   * <p>Reuses the {@code findByEmail} lookup already used by {@link #refreshToken(String)}. The
+   * tokens in the result are {@code null} — the caller (REST adapter) exposes only the identity
+   * trio {@code userId}/{@code email}/{@code name}.
+   */
+  public AuthResult me(String email) {
+    User user =
+        userRepository
+            .findByEmail(email)
+            .orElseThrow(() -> new IllegalArgumentException("User not found"));
+    return new AuthResult(null, null, user.id(), user.email(), user.name());
+  }
+
   /** Domain result object for authentication operations. */
   public record AuthResult(
       String token, String refreshToken, String userId, String email, String name) {}

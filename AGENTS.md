@@ -559,6 +559,17 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     google-java-format by design; the gate's `--self-test` is the format-contract test; revisit
     trigger = two or more extractor false positives/negatives in practice.** — `resolved`
 
+33. **Living-spec drift after ADR 0010 cookie auth** — the Auth component grew from 4 to **9 EARS
+    requirements** (REQ-AUTH-005..009) to cover the additive HttpOnly-cookie transport: cookie-only
+    authentication via the JWT filter fallback, Bearer-wins precedence, `GET /api/v1/auth/me`
+    identity (+401 anonymous), `POST /api/v1/auth/logout` clearing both cookies (+204 idempotent),
+    and refresh-via-cookie (new access JWT re-set; refresh cookie value unchanged per D5; 401 when
+    neither body nor cookie). Gate totals are now **39/40 across six components (98%)** —
+    REQ-PERSIST-003 remains the single above-threshold missing requirement. Tests: `AuthControllerTest`
+    (WebMvc slice, 9) + new `AuthCookieIT` (Testcontainers end-to-end, 15 — root package
+    `ca.tyny.urlshortener`, subject-named per convention). No new meters (metrics-frozen gate must
+    stay green). — `resolved`
+
 ## 🔍 Operational Discipline & Debugging Guidelines
 
 - **Investigate before trial-and-error:** when a compile or test fails, read the full stack trace and

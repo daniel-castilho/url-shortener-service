@@ -9,7 +9,25 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ### Added
 
-- **Cache living spec complete (epic 9 story 9.1)** — the Cache Business Component is the second
+- **Cookie-based auth for the same-origin SPA (additive; ADR 0010)** — login, register and refresh
+  now also set an **HttpOnly cookie pair** (`access_token` `Path=/`, `refresh_token`
+  `Path=/api/v1/auth/refresh`; both `Secure; SameSite=Lax`; Max-Age mirrors the JWT TTLs: 86400 s /
+  604800 s) alongside the unchanged JSON bodies (`token`, `refreshToken`, `userId`, `email`,
+  `name`) — the dual-write is **permanent, not transitional**. The JWT filter authenticates from
+  the `access_token` cookie as a fallback (Bearer header still wins when both are present).
+  **New `GET /api/v1/auth/me`** returns `{userId, email, name}` for any authenticated principal
+  (bearer or cookie) and `401` when anonymous; **new `POST /api/v1/auth/logout`** is `204`,
+  clears both cookies (Max-Age=0, exact paths) and is idempotent for anonymous callers. All four
+  auth responses carry `Cache-Control: no-store`. CSRF control is `SameSite=Lax` with the existing
+  `csrf.disable()` kept (ADR 0010 records the revisit trigger: cross-origin-with-credentials →
+  double-submit token). Auth living spec extended to **9 EARS requirements** (REQ-AUTH-005..009:
+  cookie-only authenticates, Bearer wins, /me identity + 401 anonymous, logout clears both + 204
+  idempotent, refresh-via-cookie rotates access + keeps refresh value + 401-without-both) — Auth
+  target traced at **100% (9/9)**. Tests: `AuthControllerTest` (9, WebMvc slice incl. cookie
+  attribute/max-age/clear assertions) and new `AuthCookieIT` (15, Testcontainers end-to-end incl.
+  red-cookieless redirect regression, operator-BasicAuth coexistence, dual-write body checks).
+  Follow-up flagged in the commit: rate limiting on the auth endpoints (refresh especially) remains
+  out of scope.
   spec-complete component (`@spec-complete true` in the redis `package-info.java`, sharing the
   file with RateLimiting via the multi-component block format): 5 EARS requirements
   (REQ-CACHE-001..005) covering shape-versioned keys, bloom-negative penetration guard,
