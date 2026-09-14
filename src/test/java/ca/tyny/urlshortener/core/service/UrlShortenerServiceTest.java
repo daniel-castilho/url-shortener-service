@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import ca.tyny.urlshortener.core.exception.CodeGenerationException;
 import ca.tyny.urlshortener.core.exception.DomainNotVerifiedException;
 import ca.tyny.urlshortener.core.exception.ForbiddenException;
@@ -93,6 +94,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Should shorten URL using Base62 code generator")
+  @TracesRequirement("REQ-SHORT-001")
   void shouldShortenUrl() {
     // When
     ShortUrl result = service.shorten(TEST_URL);
@@ -108,6 +110,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Should pass custom alias and user ID to Generator")
+  @TracesRequirement("REQ-SHORT-001")
   void shouldPassParamsToGenerator() {
     // Given
     String customAlias = "my-alias";
@@ -126,6 +129,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Should retry on collision and succeed")
+  @TracesRequirement("REQ-SHORT-001")
   void shouldRetryOnCollision() {
     // Given: first save throws (collision), second succeeds
     doThrow(new ShortCodeCollisionException("abc123"))
@@ -144,6 +148,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Should throw CodeGenerationException when retries exhausted")
+  @TracesRequirement("REQ-SHORT-001")
   void shouldThrowOnRetryExhaustion() {
     // Given: every save throws collision
     doThrow(new ShortCodeCollisionException("abc123"))
@@ -161,6 +166,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Should get original URL from cache (Cache Hit)")
+  @TracesRequirement("REQ-SHORT-004")
   void shouldGetOriginalUrlFromCache() {
     // Given
     when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.hit(new CachedUrlValue(TEST_URL, null)));
@@ -176,6 +182,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Should get original URL from DB and populate cache (Cache Miss)")
+  @TracesRequirement("REQ-SHORT-004")
   void shouldGetOriginalUrlFromDbAndPopulateCache() {
     // Given
     when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.miss());
@@ -194,6 +201,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Should throw UrlExpiredException and not populate cache when short URL is expired")
+  @TracesRequirement("REQ-SHORT-004")
   void shouldThrowUrlExpiredWhenShortUrlExpired() {
     // Given
     when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.miss());
@@ -215,6 +223,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Should serve a short URL that has not expired")
+  @TracesRequirement("REQ-SHORT-004")
   void shouldServeNonExpiredShortUrl() {
     // Given
     when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.miss());
@@ -234,6 +243,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Should record id generation duration metric on shorten")
+  @TracesRequirement("REQ-SHORT-001")
   void shouldRecordIdGenerationMetric() {
     service.shorten(TEST_URL);
 
@@ -242,6 +252,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Should record url retrieval duration metric on cache hit")
+  @TracesRequirement("REQ-SHORT-004")
   void shouldRecordUrlRetrievalMetricOnHit() {
     when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.hit(new CachedUrlValue(TEST_URL, null)));
 
@@ -252,6 +263,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Should serve a cached value that has not expired")
+  @TracesRequirement("REQ-SHORT-004")
   void shouldServeNonExpiredCachedValue() {
     // Given
     when(urlCache.lookup(TEST_ID))
@@ -267,6 +279,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Should throw UrlExpiredException for an expired cached value")
+  @TracesRequirement("REQ-SHORT-004")
   void shouldThrowUrlExpiredForExpiredCachedValue() {
     // Given
     when(urlCache.lookup(TEST_ID))
@@ -283,6 +296,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Should record url retrieval duration metric on cache miss")
+  @TracesRequirement("REQ-SHORT-004")
   void shouldRecordUrlRetrievalMetricOnMiss() {
     when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.miss());
     ShortUrl shortUrl = new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now());
@@ -295,6 +309,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Should propagate expiry onto an auto-generated short URL")
+  @TracesRequirement("REQ-SHORT-001")
   void shouldPropagateExpiresAtOnAutoCode() {
     java.time.Instant expiry = java.time.Instant.now().plusSeconds(3600);
 
@@ -309,6 +324,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Should propagate expiry onto a vanity alias short URL")
+  @TracesRequirement("REQ-SHORT-002")
   void shouldPropagateExpiresAtOnVanityAlias() {
     java.time.Instant expiry = java.time.Instant.now().plusSeconds(3600);
     String customAlias = "my-alias";
@@ -323,6 +339,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Should leave expiresAt null when no TTL is provided")
+  @TracesRequirement("REQ-SHORT-001")
   void shouldLeaveExpiresAtNullByDefault() {
     ShortUrl result = service.shorten(TEST_URL);
 
@@ -333,6 +350,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Default host rejects a custom-domain-bound link")
+  @TracesRequirement("REQ-SHORT-004")
   void defaultHostRejectsBoundLink() {
     when(urlCache.lookup(TEST_ID))
         .thenReturn(CacheLookup.hit(new CachedUrlValue(TEST_URL, null, "links.example.com")));
@@ -344,6 +362,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Custom host serves a link bound to it")
+  @TracesRequirement("REQ-SHORT-004")
   void customHostServesBoundLink() {
     when(customDomainRegistry.isActiveHost("links.example.com")).thenReturn(true);
     when(urlCache.lookup(TEST_ID))
@@ -357,6 +376,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Custom host rejects a link bound to a different host")
+  @TracesRequirement("REQ-SHORT-004")
   void customHostRejectsDifferentDomain() {
     when(customDomainRegistry.isActiveHost("links.example.com")).thenReturn(true);
     when(urlCache.lookup(TEST_ID))
@@ -368,6 +388,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Custom host without a binding resolves nothing")
+  @TracesRequirement("REQ-SHORT-004")
   void customHostWithoutBindingIsNotFound() {
     when(customDomainRegistry.isActiveHost("links.example.com")).thenReturn(true);
     when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.hit(new CachedUrlValue(TEST_URL, null)));
@@ -378,6 +399,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Unknown host is rejected before any lookup")
+  @TracesRequirement("REQ-SHORT-004")
   void unknownHostIsRejected() {
     assertThatThrownBy(() -> service.getOriginalUrl("unrelated.example.net", TEST_ID))
         .isInstanceOf(UrlNotFoundException.class);
@@ -386,6 +408,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Null host is treated as the default host")
+  @TracesRequirement("REQ-SHORT-007")
   void nullHostFallsBackToDefault() {
     when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.hit(new CachedUrlValue(TEST_URL, null)));
 
@@ -394,6 +417,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Host header with port is normalized to host only")
+  @TracesRequirement("REQ-SHORT-007")
   void hostHeaderWithPortIsNormalized() {
     when(urlCache.lookup(TEST_ID)).thenReturn(CacheLookup.hit(new CachedUrlValue(TEST_URL, null)));
 
@@ -402,6 +426,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Shorten binds a link to the caller's own active verified domain")
+  @TracesRequirement("REQ-SHORT-003")
   void shortenBindsToOwnedActiveDomain() {
     String userId = "user123";
     when(customDomainRepository.findByHost("links.example.com"))
@@ -422,6 +447,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Shorten with a custom alias binds the vanity link to the domain too")
+  @TracesRequirement("REQ-SHORT-002")
   void shortenWithAliasBindsDomain() {
     String userId = "user123";
     when(urlIdGenerator.generateId("my-alias", userId)).thenReturn("my-alias");
@@ -444,6 +470,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Shorten rejects a domain owned by another user with 403")
+  @TracesRequirement("REQ-SHORT-003")
   void shortenRejectsDomainOwnedByAnotherUser() {
     when(customDomainRepository.findByHost("links.example.com"))
         .thenReturn(
@@ -463,6 +490,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Shorten rejects an unclaimed domain with 400")
+  @TracesRequirement("REQ-SHORT-003")
   void shortenRejectsUnclaimedDomain() {
     when(customDomainRepository.findByHost("unclaimed.example.com")).thenReturn(Optional.empty());
 
@@ -475,6 +503,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Shorten rejects a not-yet-verified domain with 400")
+  @TracesRequirement("REQ-SHORT-003")
   void shortenRejectsUnverifiedDomain() {
     String userId = "user123";
     when(customDomainRepository.findByHost("links.example.com"))
@@ -495,6 +524,7 @@ class UrlShortenerServiceTest {
 
   @Test
   @DisplayName("Shorten requires authentication to bind a custom domain")
+  @TracesRequirement("REQ-SHORT-003")
   void shortenRequiresAuthForDomain() {
     assertThatThrownBy(
             () -> service.shorten(TEST_URL, null, null, (Long) null, "links.example.com"))

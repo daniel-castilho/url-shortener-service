@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import ca.tyny.urlshortener.core.exception.ForbiddenException;
 import ca.tyny.urlshortener.core.exception.UrlNotFoundException;
 import ca.tyny.urlshortener.core.model.AnalyticsUnit;
@@ -35,6 +36,7 @@ class GetClickAnalyticsUseCaseTest {
 
   @Test
   @DisplayName("Throws 404 when link not found")
+  @TracesRequirement("REQ-ANALYTICS-004")
   void throws404WhenNotFound() {
     when(getLinkUseCase.get("user1", "abc123")).thenThrow(new UrlNotFoundException("abc123"));
     useCase = new GetClickAnalyticsUseCaseImpl(getLinkUseCase, clickAnalyticsPort);
@@ -45,6 +47,7 @@ class GetClickAnalyticsUseCaseTest {
 
   @Test
   @DisplayName("Throws 403 when user is not the owner")
+  @TracesRequirement("REQ-ANALYTICS-004")
   void throws403WhenNotOwner() {
     when(getLinkUseCase.get("user1", "abc123")).thenThrow(new ForbiddenException("not owner"));
     useCase = new GetClickAnalyticsUseCaseImpl(getLinkUseCase, clickAnalyticsPort);
@@ -55,6 +58,7 @@ class GetClickAnalyticsUseCaseTest {
 
   @Test
   @DisplayName("Returns daily series from port and sums total")
+  @TracesRequirement("REQ-ANALYTICS-004")
   void returnsDailySeries() {
     when(getLinkUseCase.get(anyString(), anyString())).thenReturn(null);
     List<ClicksSeries.Bucket> daily =
@@ -78,6 +82,7 @@ class GetClickAnalyticsUseCaseTest {
 
   @Test
   @DisplayName("Returns hourly series from port when unit=HOUR")
+  @TracesRequirement("REQ-ANALYTICS-004")
   void returnsHourlySeries() {
     when(getLinkUseCase.get(anyString(), anyString())).thenReturn(null);
     List<ClicksSeries.Bucket> hourly = List.of(new ClicksSeries.Bucket(Instant.now(), 2L));
@@ -93,6 +98,7 @@ class GetClickAnalyticsUseCaseTest {
 
   @Test
   @DisplayName("Includes unique counts for day unit")
+  @TracesRequirement("REQ-ANALYTICS-004")
   void includesUniqueCountsForDay() {
     when(getLinkUseCase.get(anyString(), anyString())).thenReturn(null);
     List<ClicksSeries.Bucket> daily =
@@ -114,6 +120,7 @@ class GetClickAnalyticsUseCaseTest {
 
   @Test
   @DisplayName("Unique counts are null for hour unit")
+  @TracesRequirement("REQ-ANALYTICS-004")
   void uniqueCountsNullForHour() {
     when(getLinkUseCase.get(anyString(), anyString())).thenReturn(null);
     List<ClicksSeries.Bucket> hourly = List.of(new ClicksSeries.Bucket(Instant.now(), 2L));
@@ -128,6 +135,7 @@ class GetClickAnalyticsUseCaseTest {
 
   @Test
   @DisplayName("Throws when hourly range exceeds 30 days")
+  @TracesRequirement("REQ-ANALYTICS-004")
   void rejectsWideHourlyRange() {
     when(getLinkUseCase.get(anyString(), anyString())).thenReturn(null);
     useCase = new GetClickAnalyticsUseCaseImpl(getLinkUseCase, clickAnalyticsPort);
@@ -142,6 +150,7 @@ class GetClickAnalyticsUseCaseTest {
 
   @Test
   @DisplayName("Throws when from is after to")
+  @TracesRequirement("REQ-ANALYTICS-004")
   void rejectsInvalidRange() {
     when(getLinkUseCase.get(anyString(), anyString())).thenReturn(null);
     useCase = new GetClickAnalyticsUseCaseImpl(getLinkUseCase, clickAnalyticsPort);

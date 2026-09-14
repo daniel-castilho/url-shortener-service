@@ -176,7 +176,31 @@ in the debt registry per decision 4. `@spec-complete true`.
 
 ### 9.5 — UrlShortener + debt 32(b) closure
 
-_(pending)_
+```
+$ bash scripts/check-living-spec.sh        (after S5 merge)
+  OK      REQ-SHORT-001..007 (UrlShortener) — traced (7 lines)
+Coverage: 34 / 35 requirements traced (97%)
+PASS: living specification gate.
+
+$ ./mvnw test -Dtest='UrlShortenerServiceTest,LinkUseCasesTest,CustomDomainServiceTest,QuotaServiceTest,GetClickAnalyticsUseCaseTest,UserServiceTest'
+Tests run: 75, Failures: 0, Errors: 0, Skipped: 0
+```
+
+Spec in `core/service/package-info.java`: REQ-SHORT-001 (random Base62 + bounded collision
+retry), 002 (vanity alias: format/reserved/quota/plan validation, atomic persist), 003
+(destination validation incl. domain ownership/verification), 004 (cache-aside resolve, eager
+expiry 410, host-bound domain serving), 005 (owner-scoped link management, supplied-field
+update, idempotent archive), 006 (custom-domain claim lifecycle), 007 (Host normalization,
+IPv6/port). 69 existing tests annotated across UrlShortenerServiceTest (29),
+LinkUseCasesTest (17), CustomDomainServiceTest (10), QuotaServiceTest (5) +
+GetClickAnalyticsUseCaseTest (8 → cross-traced to REQ-ANALYTICS-004, already declared).
+No new tests needed.
+
+**Epic closed 2026-09-13:** six components spec-complete (RateLimiting 5, Cache 5, Auth 4,
+Analytics 6, Persistence 8, UrlShortener 7 = 35 declared, 34 traced = 97%; the single
+above-threshold-missing is REQ-PERSIST-003 expand-only, enforced at review + release checklist).
+Debt 32 flips to `resolved`; living-spec debt registry carries exactly one structural-POJO entry
+(`UserEntityTest`, expires next epic).
 
 ---
 

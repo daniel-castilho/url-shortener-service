@@ -203,7 +203,7 @@ src/main/java/com/example/urlshortener/
   requirements **only** via `@TracesRequirement("REQ-...")` (`core/annotation`) — the single
   source of truth for traceability; `@DisplayName` conventions are cosmetic and never read by the
   gate. A component joins the hard gate by setting `@spec-complete true` (ratchet: gate one
-  component at a time; `RateLimiting` is first). Gate: `bash scripts/check-living-spec.sh`
+  component at a time). Gate: `bash scripts/check-living-spec.sh`
   (+ `--self-test`), wired into CI — it enforces (a) ≥ 90% of the declared requirements of
   spec-complete components are traced (the threshold is contract — refine EARS granularity, never
   the threshold), (b) no dangling `@TracesRequirement` pointing at a requirement nobody declared,
@@ -538,25 +538,26 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     CVE only `opentelemetry-api` MEDIUM (pre-existing). Gates 8.7 all PASS (+ self-tests),
     promtool/amtool/circle green. Evidence in `tasks/epic-8-dod.md`. — `resolved`
 
-32. **Living Specifications (spec-driven development adoption, Phase 0+1)** — EARS requirements
-    now live in `package-info.java` living specs (pilot: RateLimiting, 5 requirements REQ-RATE-001..005
-    covering block/429+headers, scope isolation, trusted-proxy CIDR, fail-open, disabled-bypass),
-    `@TracesRequirement` (`core/annotation`) is the single traceability source (test-name
-    conventions and `@DisplayName` are cosmetic), and `scripts/check-living-spec.sh` (+ `--self-test`)
-    is a hard CI gate for `@spec-complete` components (≥ 90% traced, no dangling refs, untraced test
-    classes must sit in the debt registry). Supporting tooling: `scripts/extract-requirements.sh`
-    (JSON export), `scripts/generate-package-info.sh` (template). Known gaps tracked here: (a)
-    ~~`recordRateLimitExceeded()` has no production caller~~ **resolved 2026-09-13: wired at the
-    single 429 egress (`UrlController.tooManyRequests`) — every rejected request increments
-    `rate.limit.exceeded.total` exactly once; live-proven via `/actuator/prometheus` with
-    `RATE_LIMITER_LIMIT=1` (two requests → 200 then 429 → counter > 0)**; (b) only RateLimiting is
-    spec-complete — UrlShortener, Auth, Analytics, Persistence and Cache components have no living
-    specs yet (ratchet, next epics); (c) ~~Spotless excludes `package-info.java` from google-java-format
-    because the formatter reflows the EARS/`###` markdown structure that the gate regexes parse~~
-    **resolved 2026-09-13: recorded as ADR 0009 — the Javadoc structure inside a living-spec
-    `package-info.java` is a machine-read contract, exempt from google-java-format by design; the
-    gate's `--self-test` is the format-contract test; revisit trigger = two or more extractor false
-    positives/negatives in practice.** — `in-progress`
+32. **Living Specifications (spec-driven development adoption, Phase 0+1 + Epic 9 ratchet)** —
+    EARS requirements live in `package-info.java` living specs; `@TracesRequirement`
+    (`core/annotation`) is the single traceability source (test-name conventions and
+    `@DisplayName` are cosmetic), and `scripts/check-living-spec.sh` (+ `--self-test`) is a hard
+    CI gate for `@spec-complete` components (≥ 90% traced, no dangling refs, untraced test classes
+    must sit in the debt registry), also enforced at tag time in `release.yml`. Supporting tooling:
+    `scripts/extract-requirements.sh` (JSON export), `scripts/generate-package-info.sh`
+    (template). **Epic 9 (2026-09-13) walked the ratchet across all five remaining components —
+    Cache (5 reqs, incl. the shape-versioned `url:v1:` key fix), Auth (4), Analytics (6, incl.
+    the blue/green payload-compat rule as EARS), Persistence (8, incl. expand-only migrations;
+    first component to exercise the 90% threshold as designed: 27/28 = 96% with REQ-PERSIST-003
+    enforced at review instead) and UrlShortener (7)** — gate totals 34/35 across six components
+    (97%): (a)~~`recordRateLimitExceeded()` had no production caller~~ **resolved 2026-09-13:
+    wired at the single 429 egress (`UrlController.tooManyRequests`); live-proven via
+    `/actuator/prometheus` with `RATE_LIMITER_LIMIT=1`**; (b) ~~only RateLimiting was
+    spec-complete~~ **resolved 2026-09-13 (Epic 9): all six components spec-complete**; (c)
+    ~~Spotless excludes `package-info.java`~~ **resolved 2026-09-13: ADR 0009 — the Javadoc
+    structure inside a living-spec `package-info.java` is a machine-read contract, exempt from
+    google-java-format by design; the gate's `--self-test` is the format-contract test; revisit
+    trigger = two or more extractor false positives/negatives in practice.** — `resolved`
 
 ## 🔍 Operational Discipline & Debugging Guidelines
 

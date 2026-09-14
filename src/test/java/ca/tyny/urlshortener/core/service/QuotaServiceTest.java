@@ -3,6 +3,7 @@ package ca.tyny.urlshortener.core.service;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.verify;
 
+import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import ca.tyny.urlshortener.core.exception.QuotaExceededException;
 import ca.tyny.urlshortener.core.model.QuotaUsage;
 import ca.tyny.urlshortener.core.model.SubscriptionPlan;
@@ -52,12 +53,14 @@ class QuotaServiceTest {
 
   @Test
   @DisplayName("Should allow alias creation within quota")
+  @TracesRequirement("REQ-SHORT-002")
   void shouldAllowAliasWithinQuota() {
     assertDoesNotThrow(() -> quotaService.checkVanityUrlQuota(freeUser, "valid-alias"));
   }
 
   @Test
   @DisplayName("Should throw exception when monthly limit exceeded")
+  @TracesRequirement("REQ-SHORT-002")
   void shouldThrowWhenLimitExceeded() {
     // Given free plan limit is 3
     freeUser.quotaUsage().setVanityUrlsCreatedTotal(3);
@@ -70,6 +73,7 @@ class QuotaServiceTest {
 
   @Test
   @DisplayName("Should throw exception when alias is too short")
+  @TracesRequirement("REQ-SHORT-002")
   void shouldThrowWhenAliasTooShort() {
     // Free plan min length is 8
     String shortAlias = "short";
@@ -80,6 +84,7 @@ class QuotaServiceTest {
 
   @Test
   @DisplayName("Should allow shorter alias for premium plan")
+  @TracesRequirement("REQ-SHORT-002")
   void shouldAllowShorterAliasForPremium() {
     // Silver plan min length is 5
     String alias = "abcde";
@@ -89,6 +94,7 @@ class QuotaServiceTest {
 
   @Test
   @DisplayName("Should delegate increment to atomic repository update")
+  @TracesRequirement("REQ-SHORT-002")
   void shouldIncrementUsage() {
     quotaService.incrementVanityUrlUsage(freeUser);
 
