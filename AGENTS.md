@@ -570,6 +570,19 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     `ca.tyny.urlshortener`, subject-named per convention). No new meters (metrics-frozen gate must
     stay green). — `resolved`
 
+34. **Auth rate limiting (ADR 0010 follow-up)** — `POST /api/v1/auth/login` and
+    `POST /api/v1/auth/refresh` are now rate-limited per IP through a new **`AUTH` scope**
+    (REQ-AUTH-010, REQ-RATE-006) — default `rate-limiter.auth-limit=10` / `auth-window=PT1M`,
+    env `RATE_LIMITER_AUTH_LIMIT` / `RATE_LIMITER_AUTH_WINDOW`, independent bucket (no
+    cross-exhaustion with SHORTEN/REDIRECT), same fail-open policy + single-429-egress meter as
+    the existing paths; the check precedes the use case so brute-force/token-harvesting never
+    reach credential validation. Register/logout/me deliberately unthrottled (uniqueness/quota and
+    idempotency already bound abuse). Auth now 10/10 traced (100%); RateLimiting 6/6 (100%); gate
+    totals **41/42 across six components (98%)**. Tests: `AuthControllerTest` +2 (429 on
+    login/refresh with use case never invoked) + new `AuthRateLimitIT` (4, real Redis: login 429
+    after capacity, refresh 429, register unlimited, scope isolation). No new meters — the frozen
+    `rate.limit.exceeded.total` (single 429 egress) covers auth rejections. — `resolved`
+
 ## 🔍 Operational Discipline & Debugging Guidelines
 
 - **Investigate before trial-and-error:** when a compile or test fails, read the full stack trace and

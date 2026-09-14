@@ -1,6 +1,9 @@
 package ca.tyny.urlshortener.infra.adapter.input.rest;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -12,11 +15,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import ca.tyny.urlshortener.config.WithMockSecurity;
 import ca.tyny.urlshortener.core.annotation.TracesRequirement;
+import ca.tyny.urlshortener.core.model.RateLimitVerdict;
+import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
+import ca.tyny.urlshortener.core.ports.outgoing.RateLimitScope;
+import ca.tyny.urlshortener.core.ports.outgoing.RateLimiterPort;
 import ca.tyny.urlshortener.core.service.UserService;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.LoginRequest;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.RefreshTokenRequest;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.RegisterRequest;
 import jakarta.servlet.http.Cookie;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +49,19 @@ class AuthControllerTest {
   @MockitoBean private ca.tyny.urlshortener.infra.security.JwtTokenProvider jwtTokenProvider;
 
   @MockitoBean private UserService userService;
+
+  @MockitoBean private RateLimiterPort rateLimiter;
+
+  @MockitoBean private MetricsPort metricsPort;
+
+  @MockitoBean private ClientAddressResolver clientAddressResolver;
+
+  @BeforeEach
+  void setUp() {
+    when(clientAddressResolver.resolve(any())).thenReturn("127.0.0.1");
+    when(rateLimiter.tryAcquire(RateLimitScope.AUTH, "127.0.0.1"))
+        .thenReturn(RateLimitVerdict.allow(10));
+  }
 
   @Test
   @TracesRequirement("REQ-AUTH-001")
@@ -216,5 +237,55 @@ class AuthControllerTest {
         .andExpect(jsonPath("$.email").value("test@example.com"))
         .andExpect(jsonPath("$.name").value("Test User"))
         .andExpect(header().string("Cache-Control", "no-store"));
+  }
+
+  @Test
+  @TracesRequirement("REQ-AUTH-010")
+  @DisplayName("Should reject login with 429 + throttling headers when AUTH rate limit exceeded")
+  void shouldRejectLoginWhenRateLimited() throws Exception {
+    // Given
+    LoginRequest request = new LoginRequest("test@example.com", "password123");
+    when(rateLimiter.tryAcquire(RateLimitScope.AUTH, "127.0.0.1"))
+        .thenReturn(RateLimitVerdict.block(42));
+
+    // When/Then - the use case must never run for a throttled caller
+    mockMvc
+        .perform(
+            post("/api/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isTooManyRequests())
+        .andExpect(header().string("Retry-After", "42"))
+        .andExpect(header().string("RateLimit-Limit", "*"))
+        .andExpect(header().string("RateLimit-Remaining", "0"))
+        .andExpect(header().string("RateLimit-Reset", "42"));
+
+    verify(metricsPort).recordRateLimitExceeded();
+    verify(userService, never()).login(any(), any());
+  }
+
+  @Test
+  @TracesRequirement("REQ-AUTH-010")
+  @DisplayName("Should reject refresh with 429 when AUTH rate limit exceeded")
+  void shouldRejectRefreshWhenRateLimited() throws Exception {
+    // Given
+    RefreshTokenRequest request = new RefreshTokenRequest("valid-refresh-token");
+    when(rateLimiter.tryAcquire(RateLimitScope.AUTH, "127.0.0.1"))
+        .thenReturn(RateLimitVerdict.block(7));
+
+    // When/Then
+    mockMvc
+        .perform(
+            post("/api/v1/auth/refresh")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isTooManyRequests())
+        .andExpect(header().string("Retry-After", "7"))
+        .andExpect(header().string("RateLimit-Limit", "*"))
+        .andExpect(header().string("RateLimit-Remaining", "0"))
+        .andExpect(header().string("RateLimit-Reset", "7"));
+
+    verify(metricsPort).recordRateLimitExceeded();
+    verify(userService, never()).refreshToken(any());
   }
 }

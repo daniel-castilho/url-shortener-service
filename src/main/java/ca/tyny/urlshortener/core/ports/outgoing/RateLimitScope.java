@@ -8,5 +8,7 @@ public enum RateLimitScope {
   /** POST /api/v1/urls — shortening requests. */
   SHORTEN,
   /** GET /{id} — the hot redirect path (anti-enumeration control). */
-  REDIRECT
+  REDIRECT,
+  /** POST /api/v1/auth/login and /api/v1/auth/refresh — anti brute-force / token harvesting. */
+  AUTH
 }

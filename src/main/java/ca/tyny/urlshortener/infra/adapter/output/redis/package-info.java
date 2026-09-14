@@ -35,13 +35,22 @@
  * **When** rate limiting is disabled by configuration,
  * **the Business Component shall** allow every request without contacting Redis.
  *
+ * ### REQ-RATE-006
+ * **When** a call requests the {@code AUTH} scope,
+ * **the Business Component shall** use its own independent token bucket — configurable via
+ * {@code rate-limiter.auth-limit} / {@code rate-limiter.auth-window} (default 10/min per IP) —
+ * so that exhaustion of the AUTH scope never affects {@code SHORTEN} or {@code REDIRECT} or
+ * vice-versa.
+ *
  * ## Ports (Contracts)
  * - Outbound: {@link ca.tyny.urlshortener.core.ports.outgoing.RateLimiterPort}
  *
  * ## Local Decisions (ADR inline)
  * - Algorithm: Redis token bucket implemented via atomic Lua script (single round-trip, no race).
- * - Storage: Redis sorted set (score = timestamp) with TTL = window + buffer; keys prefixed {@code rl:}.
- * - Scopes: {@code SHORTEN} (default 60/min) and {@code REDIRECT} (default 120/min) are independent keys.
+ * - Storage: Redis hash ({@code tokens}, {@code ts}) with TTL = max(60s, 2 × full-refill period);
+ *   keys prefixed {@code rl:}.
+ * - Scopes: {@code SHORTEN} (default 60/min), {@code REDIRECT} (default 120/min) and {@code AUTH}
+ *   (default 10/min, protects login/refresh) are independent keys.
  * - Trusted proxies: Configured via {@code rate-limiter.trusted-proxy-cidrs} (default {@code 127.0.0.0/8, ::1/128});
  *   empty list = no trusted proxies (strict peer IP only).
  * - Fail-open policy: ADR 0005 (requirement REQ-RATE-004); buckets are not enforced during Redis outage.
