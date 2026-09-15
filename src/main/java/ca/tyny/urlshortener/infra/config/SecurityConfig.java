@@ -105,6 +105,12 @@ public class SecurityConfig {
                     .requestMatchers("/api/v1/domains/**")
                     .authenticated()
 
+                    // Product Administration — authenticated; ADMIN role enforced at the
+                    // application layer (use-case implementations in core/service); no
+                    // @spec-complete, new non-gated package (D3).
+                    .requestMatchers("/api/v1/admin/**")
+                    .authenticated()
+
                     // Actuator - tiered access (debt 26: ROLE_OPERATOR is the infrastructure
                     // operator over BasicAuth, env-injected via OPERATOR_USERNAME/PASSWORD;
                     // ADMIN (JWT) retains everything; METRICS_VIEWER keeps metrics/Prometheus)

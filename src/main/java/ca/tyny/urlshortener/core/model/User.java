@@ -12,6 +12,7 @@ public record User(
     String id,
     String email,
     String name,
+    boolean blocked,
     String passwordHash,
     SubscriptionPlan plan,
     SubscriptionStatus status,
@@ -23,7 +24,7 @@ public record User(
     LocalDateTime createdAt,
     LocalDateTime updatedAt) {
 
-  /** Factory method to create a new FREE user */
+  /** Factory method to create a new FREE user (never blocked) */
   public static User createFreeUser(String id, String email, String name, String passwordHash) {
     QuotaUsage quota = new QuotaUsage();
 
@@ -31,6 +32,7 @@ public record User(
         id,
         email,
         name,
+        false,
         passwordHash,
         SubscriptionPlan.FREE,
         SubscriptionStatus.ACTIVE,

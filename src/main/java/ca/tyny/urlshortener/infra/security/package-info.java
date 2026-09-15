@@ -66,25 +66,43 @@
  * **the Business Component shall** reject the request with HTTP 429 and the standard throttling
  * headers  ({@code Retry-After}, {@code RateLimit-*}) before the use case runs.
  *
+ * ### REQ-AUTH-011
+ * **When** a user belongs to the configured admin email list ({@code app.admin-emails} /
+ * {@code APP_ADMIN_EMAILS}),
+ * **the Business Component shall** issue an access token carrying the {@code role} claim
+ * {@code ADMIN} and resolve the identity role as {@code ADMIN}; a user outside the list resolves
+ * to {@code USER}, and a token issued without the claim is authenticated with the authority
+ * {@code ROLE_USER}.
+ *
+ * ### REQ-AUTH-012
+ * **When** an authenticated client calls {@code GET /api/v1/auth/me} or the authentication
+ * endpoints succeed ({@code POST /api/v1/auth/register|login|refresh}),
+ * **the Business Component shall** return the resolved role ({@code ADMIN} or {@code USER}) in the
+ * response body ({@code MeResponse.role} / {@code AuthResponse.role}).
+ *
  * ## Ports (Contracts)
  * - Outbound: {@link ca.tyny.urlshortener.core.ports.outgoing.TokenPort},
  *   {@link ca.tyny.urlshortener.core.ports.outgoing.PasswordEncoderPort},
  *   {@link ca.tyny.urlshortener.core.ports.outgoing.AuthenticationPort},
  *   {@link ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort},
- *   {@link ca.tyny.urlshortener.core.ports.outgoing.RateLimiterPort} (AUTH scope)
+ *   {@link ca.tyny.urlshortener.core.ports.outgoing.RateLimiterPort} (AUTH scope),
+ *   {@link ca.tyny.urlshortener.core.ports.outgoing.AdminEmailPort}
  * - Inbound (REST): `POST /api/v1/auth/register|login|refresh|logout` and
  *   `GET /api/v1/auth/me` (AuthController)
  *
  * ## Local Decisions (ADR inline)
  * - JWT access + refresh tokens via `JwtTokenProvider`; the default/weak secret is warned on
  *   (Rule 6 — secrets never logged).
+ * - The ADMIN role is bootstrapped from the environment (ADR 0011): `app.admin-emails` list, never
+ *   a DB role field; the role claim lives only in the access token, and a token without the claim
+ *   (legacy) is authenticated as `ROLE_USER` by the JWT filter.
  * - Passwords hashed through `PasswordEncoderPort` (BCrypt adapter) — never stored or logged raw.
  * - Registration input validated at the DTO boundary (bean validation) so malformed requests
  *   never reach the use case.
  * - Cookie transport is additive (ADR 0010): same JWTs in HttpOnly cookies; Bearer stays the
  *   first-class interface permanently; SameSite=Lax is the CSRF control (csrf.disable() with
  *   zero CORS in src/main).
- * - Login and refresh are rate-limited per IP via the shared `AUTH` scope (10/min default) —
+ * - Login and refresh are rate-limited per IP via the shared {@code AUTH} scope (10/min default) —
  *   brute-force on login and token harvesting on refresh are bounded before the use case runs;
  *   register/logout/me are not limited (email uniqueness/quota and idempotency already bound
  *   abuse on those paths).

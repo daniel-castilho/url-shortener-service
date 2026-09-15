@@ -6,8 +6,11 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -34,11 +37,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
       if (StringUtils.hasText(jwt) && tokenProvider.validateToken(jwt)) {
         String email = tokenProvider.getUsernameFromToken(jwt);
+        String role = tokenProvider.getRoleFromToken(jwt);
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(email);
+        GrantedAuthority authority = new SimpleGrantedAuthority(resolveAuthority(role));
         UsernamePasswordAuthenticationToken authentication =
-            new UsernamePasswordAuthenticationToken(
-                userDetails, null, userDetails.getAuthorities());
+            new UsernamePasswordAuthenticationToken(userDetails, null, List.of(authority));
         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
@@ -70,5 +74,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
       }
     }
     return null;
+  }
+
+  private String resolveAuthority(String role) {
+    if ("ADMIN".equals(role)) {
+      return "ROLE_ADMIN";
+    }
+    return "ROLE_USER";
   }
 }

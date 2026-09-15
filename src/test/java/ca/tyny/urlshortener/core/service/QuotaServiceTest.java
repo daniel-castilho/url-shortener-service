@@ -39,6 +39,7 @@ class QuotaServiceTest {
             "user2",
             "silver@example.com",
             "Silver User",
+            false,
             "hash",
             SubscriptionPlan.SILVER,
             ca.tyny.urlshortener.core.model.SubscriptionStatus.ACTIVE,

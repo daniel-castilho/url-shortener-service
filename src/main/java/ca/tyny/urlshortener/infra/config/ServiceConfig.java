@@ -12,6 +12,12 @@ import ca.tyny.urlshortener.core.ports.incoming.GetClickAnalyticsUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.GetLinkUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.ListUserLinksUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.UpdateLinkUseCase;
+import ca.tyny.urlshortener.core.ports.incoming.admin.AdminBlockUserUseCase;
+import ca.tyny.urlshortener.core.ports.incoming.admin.AdminForceArchiveLinkUseCase;
+import ca.tyny.urlshortener.core.ports.incoming.admin.AdminListUserUrlsUseCase;
+import ca.tyny.urlshortener.core.ports.incoming.admin.AdminListUsersUseCase;
+import ca.tyny.urlshortener.core.ports.incoming.admin.AdminLookupUrlUseCase;
+import ca.tyny.urlshortener.core.ports.incoming.admin.AdminUnblockUserUseCase;
 import ca.tyny.urlshortener.core.ports.outgoing.AuthenticationPort;
 import ca.tyny.urlshortener.core.ports.outgoing.ClickAnalyticsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.CustomDomainRegistryPort;
@@ -26,6 +32,12 @@ import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.VerificationTokenPort;
+import ca.tyny.urlshortener.core.service.AdminBlockUserUseCaseImpl;
+import ca.tyny.urlshortener.core.service.AdminForceArchiveLinkUseCaseImpl;
+import ca.tyny.urlshortener.core.service.AdminListUserUrlsUseCaseImpl;
+import ca.tyny.urlshortener.core.service.AdminListUsersUseCaseImpl;
+import ca.tyny.urlshortener.core.service.AdminLookupUrlUseCaseImpl;
+import ca.tyny.urlshortener.core.service.AdminUnblockUserUseCaseImpl;
 import ca.tyny.urlshortener.core.service.ArchiveLinkUseCaseImpl;
 import ca.tyny.urlshortener.core.service.CustomDomainService;
 import ca.tyny.urlshortener.core.service.GetClickAnalyticsUseCaseImpl;
@@ -40,6 +52,7 @@ import ca.tyny.urlshortener.core.validation.UrlValidator;
 import ca.tyny.urlshortener.infra.adapter.input.rest.mapper.LinkMapper;
 import ca.tyny.urlshortener.infra.adapter.output.analytics.GeoIpCountryResolver;
 import ca.tyny.urlshortener.infra.adapter.output.validation.DefaultUrlValidator;
+import ca.tyny.urlshortener.infra.config.properties.AdminProperties;
 import ca.tyny.urlshortener.infra.config.properties.AnalyticsProperties;
 import ca.tyny.urlshortener.infra.config.properties.DomainProperties;
 import ca.tyny.urlshortener.infra.config.properties.ShortenerProperties;
@@ -59,7 +72,8 @@ import org.springframework.core.annotation.Order;
   ca.tyny.urlshortener.infra.config.properties.ShortenerProperties.class,
   ca.tyny.urlshortener.infra.config.properties.DomainProperties.class,
   ca.tyny.urlshortener.infra.config.properties.AnalyticsProperties.class,
-  ca.tyny.urlshortener.infra.config.properties.UrlCacheProperties.class
+  ca.tyny.urlshortener.infra.config.properties.UrlCacheProperties.class,
+  ca.tyny.urlshortener.infra.config.properties.AdminProperties.class
 })
 public class ServiceConfig {
 
@@ -113,9 +127,15 @@ public class ServiceConfig {
       PasswordEncoderPort passwordEncoder,
       TokenPort tokenPort,
       AuthenticationPort authenticationPort,
-      IdGeneratorPort idGeneratorPort) {
+      IdGeneratorPort idGeneratorPort,
+      AdminProperties adminEmailPort) {
     return new UserService(
-        userRepository, passwordEncoder, tokenPort, authenticationPort, idGeneratorPort);
+        userRepository,
+        passwordEncoder,
+        tokenPort,
+        authenticationPort,
+        idGeneratorPort,
+        adminEmailPort);
   }
 
   @Bean
@@ -192,6 +212,40 @@ public class ServiceConfig {
   public ArchiveLinkUseCase archiveLinkUseCase(
       LinkQueryPort linkQueryPort, LinkMutationPort linkMutationPort, UrlCachePort urlCachePort) {
     return new ArchiveLinkUseCaseImpl(linkQueryPort, linkMutationPort, urlCachePort);
+  }
+
+  @Bean
+  public AdminListUsersUseCase adminListUsersUseCase(
+      UserRepositoryPort userRepository, AdminProperties adminEmailPort) {
+    return new AdminListUsersUseCaseImpl(userRepository, adminEmailPort);
+  }
+
+  @Bean
+  public AdminBlockUserUseCase adminBlockUserUseCase(UserRepositoryPort userRepository) {
+    return new AdminBlockUserUseCaseImpl(userRepository);
+  }
+
+  @Bean
+  public AdminUnblockUserUseCase adminUnblockUserUseCase(UserRepositoryPort userRepository) {
+    return new AdminUnblockUserUseCaseImpl(userRepository);
+  }
+
+  @Bean
+  public AdminListUserUrlsUseCase adminListUserUrlsUseCase(
+      UserRepositoryPort userRepository, LinkQueryPort linkQueryPort) {
+    return new AdminListUserUrlsUseCaseImpl(userRepository, linkQueryPort);
+  }
+
+  @Bean
+  public AdminLookupUrlUseCase adminLookupUrlUseCase(
+      LinkQueryPort linkQueryPort, UserRepositoryPort userRepository) {
+    return new AdminLookupUrlUseCaseImpl(linkQueryPort, userRepository);
+  }
+
+  @Bean
+  public AdminForceArchiveLinkUseCase adminForceArchiveLinkUseCase(
+      LinkQueryPort linkQueryPort, LinkMutationPort linkMutationPort, UrlCachePort urlCachePort) {
+    return new AdminForceArchiveLinkUseCaseImpl(linkQueryPort, linkMutationPort, urlCachePort);
   }
 
   @Bean
