@@ -12,6 +12,9 @@ import ca.tyny.urlshortener.core.ports.incoming.GetClickAnalyticsUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.GetLinkUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.ListUserLinksUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.UpdateLinkUseCase;
+import ca.tyny.urlshortener.core.ports.incoming.admin.AdminBlockUserUseCase;
+import ca.tyny.urlshortener.core.ports.incoming.admin.AdminListUsersUseCase;
+import ca.tyny.urlshortener.core.ports.incoming.admin.AdminUnblockUserUseCase;
 import ca.tyny.urlshortener.core.ports.outgoing.AuthenticationPort;
 import ca.tyny.urlshortener.core.ports.outgoing.ClickAnalyticsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.CustomDomainRegistryPort;
@@ -26,6 +29,9 @@ import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.VerificationTokenPort;
+import ca.tyny.urlshortener.core.service.AdminBlockUserUseCaseImpl;
+import ca.tyny.urlshortener.core.service.AdminListUsersUseCaseImpl;
+import ca.tyny.urlshortener.core.service.AdminUnblockUserUseCaseImpl;
 import ca.tyny.urlshortener.core.service.ArchiveLinkUseCaseImpl;
 import ca.tyny.urlshortener.core.service.CustomDomainService;
 import ca.tyny.urlshortener.core.service.GetClickAnalyticsUseCaseImpl;
@@ -200,6 +206,22 @@ public class ServiceConfig {
   public ArchiveLinkUseCase archiveLinkUseCase(
       LinkQueryPort linkQueryPort, LinkMutationPort linkMutationPort, UrlCachePort urlCachePort) {
     return new ArchiveLinkUseCaseImpl(linkQueryPort, linkMutationPort, urlCachePort);
+  }
+
+  @Bean
+  public AdminListUsersUseCase adminListUsersUseCase(
+      UserRepositoryPort userRepository, AdminProperties adminEmailPort) {
+    return new AdminListUsersUseCaseImpl(userRepository, adminEmailPort);
+  }
+
+  @Bean
+  public AdminBlockUserUseCase adminBlockUserUseCase(UserRepositoryPort userRepository) {
+    return new AdminBlockUserUseCaseImpl(userRepository);
+  }
+
+  @Bean
+  public AdminUnblockUserUseCase adminUnblockUserUseCase(UserRepositoryPort userRepository) {
+    return new AdminUnblockUserUseCaseImpl(userRepository);
   }
 
   @Bean

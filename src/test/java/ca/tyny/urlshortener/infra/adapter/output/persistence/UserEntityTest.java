@@ -22,6 +22,7 @@ class UserEntityTest {
             "user1",
             "test@example.com",
             "Test User",
+            true,
             "hash123",
             SubscriptionPlan.SILVER,
             SubscriptionStatus.ACTIVE,
@@ -36,6 +37,7 @@ class UserEntityTest {
     assertThat(entity.getId()).isEqualTo("user1");
     assertThat(entity.getEmail()).isEqualTo("test@example.com");
     assertThat(entity.getName()).isEqualTo("Test User");
+    assertThat(entity.isBlocked()).isTrue();
     assertThat(entity.getPasswordHash()).isEqualTo("hash123");
     assertThat(entity.getPlan()).isEqualTo(SubscriptionPlan.SILVER);
     assertThat(entity.getStatus()).isEqualTo(SubscriptionStatus.ACTIVE);
@@ -56,6 +58,7 @@ class UserEntityTest {
     assertThat(entity.getId()).isNull();
     assertThat(entity.getEmail()).isNull();
     assertThat(entity.getName()).isNull();
+    assertThat(entity.isBlocked()).isFalse();
     assertThat(entity.getPasswordHash()).isNull();
     assertThat(entity.getPlan()).isNull();
     assertThat(entity.getStatus()).isNull();
@@ -78,6 +81,7 @@ class UserEntityTest {
     entity.setId("user1");
     entity.setEmail("test@example.com");
     entity.setName("Test User");
+    entity.setBlocked(true);
     entity.setPasswordHash("hash123");
     entity.setPlan(SubscriptionPlan.GOLD);
     entity.setStatus(SubscriptionStatus.EXPIRED);
@@ -92,6 +96,7 @@ class UserEntityTest {
     assertThat(entity.getId()).isEqualTo("user1");
     assertThat(entity.getEmail()).isEqualTo("test@example.com");
     assertThat(entity.getName()).isEqualTo("Test User");
+    assertThat(entity.isBlocked()).isTrue();
     assertThat(entity.getPasswordHash()).isEqualTo("hash123");
     assertThat(entity.getPlan()).isEqualTo(SubscriptionPlan.GOLD);
     assertThat(entity.getStatus()).isEqualTo(SubscriptionStatus.EXPIRED);

@@ -132,6 +132,7 @@ class VanityUrlIdStrategyTest {
             "user2",
             "silver@example.com",
             "Silver User",
+            false,
             "hash",
             SubscriptionPlan.SILVER,
             SubscriptionStatus.ACTIVE,

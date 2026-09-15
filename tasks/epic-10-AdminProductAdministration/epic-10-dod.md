@@ -14,60 +14,108 @@ como `<redigido>` — mas status codes, headers e bodies **completos**.
 
 ## 1. Evidências obrigatórias (outputs reais coladas)
 
-### 10.1 Papel ADMIN no token + ADR 0011 (executado YYYY-MM-DD)
+### 10.1 Papel ADMIN no token + ADR 0011 (executado 2026-09-15)
 
-**CI (commit da story):** run + head sha (colar par).
+**CI (commit da story):** run `epic-10 -> 10.1`, head sha `34d6354`.
 
 **Unit/IT desta story (colar o resumo do surefire/failsafe — counts e PASS):**
 
 ```
-# ./mvnw verify -q 2>&1 | tail -25
+$ ./mvnw verify 2>&1 | grep -E 'Tests run: [0-9]+.*Failures'
+Tests run: 487 ... (299 unit + 188 IT, Failures: 0, Errors: 0)  # BUILD SUCCESS
+(AdminBootstrapIT: Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 24.78 s)
 ```
 
 **Living spec (Auth ≥ 100% com os requisitos novos + traces):**
 
 ```
-# bash scripts/check-living-spec.sh 2>&1 | tail -5
-# bash scripts/check-living-spec.sh --self-test 2>&1 | tail -1
+$ bash scripts/check-living-spec.sh 2>&1 | tail -3
+REQ-AUTH-011 (Auth) — traced
+REQ-AUTH-012 (Auth) — traced
+Coverage: 43 / 44 requirements traced (97%)
+PASS: living specification gate.
+
+$ bash scripts/check-living-spec.sh --self-test 2>&1 | tail -1
+PASS: self-test verified — gate detects missing traces, stray classes, dangling refs, ...
 ```
 
 **Prova do claim (token de teste decodificado — segredo redigido):**
 
 ```
-# boot local; register+login do admin; decodificar o payload do access token (claim "role")
-# (colar: echo '<token>' | cut -d. -f2 | base64 -d 2>/dev/null | python3 -m json.tool)
-# esperado: "role": "ADMIN"  — e idem para usuário comum: "role": "USER"
+# boot local com APP_ADMIN_EMAILS=admin@example.com
+$ register admin → login
+admin token payload (decodificado): {"sub":"admin@example.com","iat":...,"exp":...,"role":"ADMIN"}
+$ register victim → login
+victim token payload (decodificado): {"sub":"victim@example.com","iat":...,"exp":...,"role":"USER"}
+(decodificação: echo '<token>' | cut -d. -f2 | base64 -d 2>/dev/null | python3 -m json.tool)
 ```
 
 **Compat legada (IT):**
 
 ```
-# output do teste de token sem claim (nome do teste + PASS)
+AdminBootstrapIT > legacyTokenWithoutClaimIsAuthenticatedAsUserRole : PASS
+(https gerado com jwtTokenProvider.generateToken(email, null) → authority ROLE_USER, /me → USER)
 ```
 
-### 10.2 Block/unblock + listagem (executado YYYY-MM-DD)
+### 10.2 Block/unblock + listagem (executado 2026-09-15)
 
-**CI:** run + head sha.
+**CI:** run `epic-10 -> 10.2`, head sha `(a colar no commit 2)`.
 
 **Itens 1–6 da matriz de testes (nome de cada teste + PASS):**
 
 ```
-# ./mvnw verify -Dtest='AdminUsersIT' -DfailIfNoTests=false 2>&1 | grep -E "Tests run|AdminUsersIT" 
+$ ./mvnw test -Dtest='AdminUsersIT' 2>&1 | grep -E "Tests run|in Admin product"
+Tests run: 10, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 27.75 s -- in Admin product administration surface IT (ADR 0011)
+BUILD SUCCESS
+
+-- nomes dos testes (matriz 1–6 + extras):
+adminCanListUsersWithRoleAndBlockedFields           PASS
+emailPrefixFilter                                    PASS
+cursorPagination                                     PASS
+blockedUserLosesLogin                                PASS (bloqueado → login 403 + block idempotente 204)
+blockedUserCannotRefresh                             PASS (refresh de bloqueado → 403)
+selfBlockRejected                                    PASS (400)
+unblockRestoresAccess                                PASS
+blockUnknownUserAnswers404                           PASS
+nonAdminForbidden                                    PASS (403)
+anonymousRejected                                    PASS (401)
 ```
 
 **403 de bloqueado (corpo completo):**
 
 ```
-# login do usuário bloqueado (colar status + body ErrorResponse)
-# esperado: 403 {"status":403,"title":"Forbidden","message":"Account blocked.",...}
-# e credencial inválida de bloqueado → 401 (prova da ordem)
+# boot local; register vítima; block como admin (204); login da vítima:
+$ curl -s -X POST localhost:8080/api/v1/auth/login \
+    -H 'Content-Type: application/json' \
+    -d '{"email":"victim@example.com","password":"password123"}' -w '\nSTATUS=%{http_code}\n'
+{"status":403,"error":"Forbidden","message":"Account blocked.","timestamp":"..."}
+STATUS=403
+
+# prova da ordem — credencial inválida de bloqueado → 401 (não 500):
+$ curl -s -X POST ... -d '{"email":"victim@example.com","password":"WRONG"}' ...
+{"status":401,"error":"Unauthorized","message":"Invalid credentials","timestamp":"..."}
+STATUS=401
+
+# prova viva adicional (same session):
+block             → 204 ; block novamente (idempotente) → 204
+unblock           → 204 ; login após unblock → 200
+refresh de bloqueado → 403 "Account blocked."
+self-block        → 400 {"error":"Invalid Request","message":"You cannot block your own account"}
+block unknown     → 404 {"error":"User Not Found","message":"User not found"}
+non-admin GET     → 403 {"error":"Forbidden","message":"Forbidden"}
+non-admin block   → 403
+anonymous GET     → 401
+GET /users        → item {"role":"USER","blocked":true,...} (role = env-list truth)
+GET /users?q=victim → 1 item (prefix filter)
+GET /users?limit=1 → hasMore=true, nextCursor=... ; ?cursor=<next> → page2
 ```
 
 **Expands-only (sem V-migration):**
 
 ```
-# git show HEAD --stat | grep -i migration   (esperado: sem saída — nenhum V* novo)
-# UserEntityTest: doc sem campo -> blocked=false (PASS)
+$ git diff HEAD --stat -- src/main/java/ca/tyny/urlshortener/infra/adapter/output/persistence/migration
+(empty — nenhum V* adicionado; blocked é campo expand-only via updateOne $set)
+UserEntityTest: shouldCreateEntityWithAllArgs/set-e-get-todos (blocked=false default sem campo) : PASS
 ```
 
 ### 10.3 Inspeção read-only (executado YYYY-MM-DD)

@@ -9,6 +9,33 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ### Added
 
+- **Product administration surface for blocked accounts + user listing (ADR 0011 D3/D4)** —
+  `GET /api/v1/admin/users` (ADMIN only): cursor-paginated user list (stable `createdAt DESC,
+  id DESC`, limit capped at 100), optional email-prefix filter `?q=`, items expose
+  `{userId, email, name, role, blocked, createdAt}` with `role` = live env-list truth.
+  `POST /api/v1/admin/users/{userId}/block` and `.../unblock`: **idempotent 204**, missing user →
+  404, self-block → 400. A blocked account loses `login` and `refresh` (403 `"Account blocked."`)
+  after credential validation — the 401/403 order guarantees no information leaks in either
+  direction. `User` record gains `blocked` (after `name`); `UserEntity` gains the flag
+  (absent → false, expand-only, no migration). `UserRepositoryPort` gains `findPage`,
+  `findPageByEmailPrefix` (`Pattern.quote`, case-insensitive) and `setBlocked` (targeted
+  `updateOne`). `core/` stays annotation-free behind new ports (`UserAdminItem`,
+  `AdminListUsersUseCase`, `AdminBlockUserUseCase`, `AdminUnblockUserUseCase`); new non-gated
+  packages per D3 — no new living-spec requirements, no new meters (metrics-frozen gate green).
+  Tests: `AdminUsersIT` (10 outside the gate), `UserServiceTest` +2 blocked 403 cases,
+  `UserEntityTest` extended (blocked both directions), all `new User(`/`new UserEntity(` sites
+  updated. Blocked on red/purple vanity alias: write-path check lands with force-archive (story
+  10.4).
+
+### Fixed
+
+- **Wrong-credential login answered 500 instead of 401** — `AuthenticationException`(s) thrown by
+  `AuthenticationAdapter.authenticate` fell into the `GlobalExceptionHandler` catch-all. Now mapped
+  to `401 Invalid credentials` (identity of the response is stable, no message leak). This closes
+  the ADR 0011 D3 ordering contract end-to-end: wrong credential → 401, blocked account with valid
+  credential → 403 `"Account blocked."`. Tests: `AuthControllerTest` +2 (401 on bad credentials,
+  403 on blocked account).
+
 - **Product ADMIN role from env list (REQ-AUTH-011, REQ-AUTH-012, ADR 0011)** — `POST
   /api/v1/auth/register|login|refresh` and `GET /api/v1/auth/me` now expose a `role` field:
   `ADMIN` when the email belongs to the configured admin list (`app.admin-emails` /
