@@ -6,15 +6,18 @@ public class AuthResponse {
   private String refreshToken;
   private String userId;
   private String email;
+  private String role;
   private String name;
 
   public AuthResponse() {}
 
-  public AuthResponse(String token, String refreshToken, String userId, String email, String name) {
+  public AuthResponse(
+      String token, String refreshToken, String userId, String email, String role, String name) {
     this.token = token;
     this.refreshToken = refreshToken;
     this.userId = userId;
     this.email = email;
+    this.role = role;
     this.name = name;
   }
 
@@ -54,6 +57,14 @@ public class AuthResponse {
     this.email = email;
   }
 
+  public String getRole() {
+    return role;
+  }
+
+  public void setRole(String role) {
+    this.role = role;
+  }
+
   public String getName() {
     return name;
   }
@@ -67,6 +78,7 @@ public class AuthResponse {
     private String refreshToken;
     private String userId;
     private String email;
+    private String role;
     private String name;
 
     public AuthResponseBuilder token(String token) {
@@ -89,13 +101,18 @@ public class AuthResponse {
       return this;
     }
 
+    public AuthResponseBuilder role(String role) {
+      this.role = role;
+      return this;
+    }
+
     public AuthResponseBuilder name(String name) {
       this.name = name;
       return this;
     }
 
     public AuthResponse build() {
-      return new AuthResponse(token, refreshToken, userId, email, name);
+      return new AuthResponse(token, refreshToken, userId, email, role, name);
     }
   }
 }

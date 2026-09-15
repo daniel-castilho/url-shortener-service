@@ -73,18 +73,40 @@ public class JwtTokenProvider {
     return Keys.hmacShaKeyFor(jwtSecret.getBytes(StandardCharsets.UTF_8));
   }
 
+  public static final String ROLE_CLAIM = "role";
+
   public String generateToken(Authentication authentication) {
     UserDetails userPrincipal = (UserDetails) authentication.getPrincipal();
     return generateToken(userPrincipal.getUsername());
   }
 
+  /**
+   * Generates an access token without a role claim (legacy tokens) — the filter maps absence to
+   * ROLE_USER.
+   */
   public String generateToken(String email) {
-    return Jwts.builder()
-        .subject(email)
-        .issuedAt(new Date())
-        .expiration(new Date((new Date()).getTime() + jwtExpirationMs))
-        .signWith(getSigningKey(), Jwts.SIG.HS256)
-        .compact();
+    return generateToken(email, null);
+  }
+
+  /**
+   * Generates an access token for the given email carrying the {@code role} claim (ADR 0011 D1).
+   * The claim lives only in the access token, never in the refresh token.
+   *
+   * @param email the subject
+   * @param role the role claim value ({@code "ADMIN"} or {@code "USER"}); {@code null} emits no
+   *     claim
+   */
+  public String generateToken(String email, String role) {
+    io.jsonwebtoken.JwtBuilder builder =
+        Jwts.builder()
+            .subject(email)
+            .issuedAt(new Date())
+            .expiration(new Date((new Date()).getTime() + jwtExpirationMs))
+            .signWith(getSigningKey(), Jwts.SIG.HS256);
+    if (role != null) {
+      builder = builder.claim(ROLE_CLAIM, role);
+    }
+    return builder.compact();
   }
 
   public String generateRefreshToken(String email) {
@@ -98,6 +120,14 @@ public class JwtTokenProvider {
 
   public String getUsernameFromToken(String token) {
     return extractClaim(token, Claims::getSubject);
+  }
+
+  /**
+   * Reads the {@code role} claim from a token; returns {@code null} when the claim is absent
+   * (legacy token — the filter maps absence to ROLE_USER).
+   */
+  public String getRoleFromToken(String token) {
+    return extractClaim(token, claims -> claims.get(ROLE_CLAIM, String.class));
   }
 
   public boolean validateToken(String token) {
