@@ -19,6 +19,7 @@ public class UserEntity {
   private String email;
 
   private String name;
+  private boolean blocked;
   private String passwordHash;
 
   @Indexed private SubscriptionPlan plan;
@@ -45,6 +46,7 @@ public class UserEntity {
       String id,
       String email,
       String name,
+      boolean blocked,
       String passwordHash,
       SubscriptionPlan plan,
       SubscriptionStatus status,
@@ -58,6 +60,7 @@ public class UserEntity {
     this.id = id;
     this.email = email;
     this.name = name;
+    this.blocked = blocked;
     this.passwordHash = passwordHash;
     this.plan = plan;
     this.status = status;
@@ -94,6 +97,14 @@ public class UserEntity {
 
   public void setName(String name) {
     this.name = name;
+  }
+
+  public boolean isBlocked() {
+    return blocked;
+  }
+
+  public void setBlocked(boolean blocked) {
+    this.blocked = blocked;
   }
 
   public String getPasswordHash() {

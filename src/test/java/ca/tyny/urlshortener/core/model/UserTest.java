@@ -19,6 +19,7 @@ class UserTest {
     assertThat(user.id()).isEqualTo("user123");
     assertThat(user.email()).isEqualTo("test@example.com");
     assertThat(user.name()).isEqualTo("Test User");
+    assertThat(user.blocked()).isFalse();
     assertThat(user.passwordHash()).isEqualTo("hashedPassword");
     assertThat(user.plan()).isEqualTo(SubscriptionPlan.FREE);
     assertThat(user.status()).isEqualTo(SubscriptionStatus.ACTIVE);
@@ -39,6 +40,7 @@ class UserTest {
             "user1",
             "test@example.com",
             "Test",
+            false,
             "hash",
             SubscriptionPlan.GOLD,
             SubscriptionStatus.ACTIVE,
@@ -56,6 +58,7 @@ class UserTest {
             "user2",
             "test@example.com",
             "Test",
+            false,
             "hash",
             SubscriptionPlan.SILVER,
             SubscriptionStatus.TRIAL,
@@ -73,6 +76,7 @@ class UserTest {
             "user3",
             "test@example.com",
             "Test",
+            false,
             "hash",
             SubscriptionPlan.FREE,
             SubscriptionStatus.CANCELED,
@@ -100,6 +104,7 @@ class UserTest {
             "u2",
             "silver@test.com",
             "Silver",
+            false,
             "hash",
             SubscriptionPlan.SILVER,
             SubscriptionStatus.ACTIVE,
@@ -115,6 +120,7 @@ class UserTest {
             "u3",
             "gold@test.com",
             "Gold",
+            false,
             "hash",
             SubscriptionPlan.GOLD,
             SubscriptionStatus.ACTIVE,
@@ -143,6 +149,7 @@ class UserTest {
             "u1",
             "test@example.com",
             "Test",
+            false,
             "hash",
             SubscriptionPlan.FREE,
             SubscriptionStatus.ACTIVE,
@@ -162,6 +169,7 @@ class UserTest {
             "u2",
             "test2@example.com",
             "Test2",
+            false,
             "hash",
             SubscriptionPlan.FREE,
             SubscriptionStatus.ACTIVE,
@@ -181,6 +189,7 @@ class UserTest {
             "u3",
             "silver@example.com",
             "Silver",
+            false,
             "hash",
             SubscriptionPlan.SILVER,
             SubscriptionStatus.ACTIVE,
@@ -198,6 +207,7 @@ class UserTest {
             "u4",
             "diamond@example.com",
             "Diamond",
+            false,
             "hash",
             SubscriptionPlan.DIAMOND,
             SubscriptionStatus.ACTIVE,
@@ -228,6 +238,7 @@ class UserTest {
             "user1",
             "test@example.com",
             "Test",
+            false,
             "hash",
             SubscriptionPlan.GOLD,
             SubscriptionStatus.ACTIVE,
@@ -253,6 +264,7 @@ class UserTest {
             "user1",
             "paid@example.com",
             "Paid User",
+            false,
             "hash",
             SubscriptionPlan.GOLD,
             SubscriptionStatus.ACTIVE,

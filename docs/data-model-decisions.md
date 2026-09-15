@@ -209,6 +209,18 @@ sync whenever the data model changes.
   the same email is rejected atomically by the DB (not by a pre-check).
 - Passwords stored as BCrypt hash only — never plaintext, never logged.
 
+## Account blocking (`blocked` flag, ADR 0011 D3)
+
+- **Source of truth:** the `users` document carries an optional `blocked` boolean written by the admin
+  surface (`POST /api/v1/admin/users/{id}/block|unblock`). A document without the field reads as
+  `false` (existing users are unblocked by default).
+- **Expand-only field:** `setBlocked` uses a targeted `updateOne` (`$set blocked`) — never a
+  full-document rewrite, no schema migration required (V* migrations are indexes/collections only).
+- **Runtime semantics:** a blocked account answers `403 "Account blocked."` on `login`/`refresh`
+  **after** credential validation — wrong credentials stay 401, so neither the block status nor the
+  credentials leak in the other direction. Revocation does not rotate already-issued access tokens
+  (D4; see revisit triggers in ADR 0011).
+
 ## Multi-write / partial failure
 
 - **Never wrap Mongo + Redis in one `@Transactional`** — they are separate systems; a transaction

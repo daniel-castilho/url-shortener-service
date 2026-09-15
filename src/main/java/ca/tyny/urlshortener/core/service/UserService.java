@@ -1,5 +1,6 @@
 package ca.tyny.urlshortener.core.service;
 
+import ca.tyny.urlshortener.core.exception.ForbiddenException;
 import ca.tyny.urlshortener.core.model.User;
 import ca.tyny.urlshortener.core.ports.outgoing.AdminEmailPort;
 import ca.tyny.urlshortener.core.ports.outgoing.AuthenticationPort;
@@ -62,6 +63,7 @@ public class UserService {
         userRepository
             .findByEmail(email)
             .orElseThrow(() -> new IllegalArgumentException("User not found"));
+    enforceNotBlocked(user);
 
     String token = tokenPort.generateToken(user.email(), role(user.email()));
     String refreshToken = tokenPort.generateRefreshToken(user.email());
@@ -80,11 +82,25 @@ public class UserService {
         userRepository
             .findByEmail(email)
             .orElseThrow(() -> new IllegalArgumentException("User not found"));
+    enforceNotBlocked(user);
 
     String newToken = tokenPort.generateToken(email, role(email));
 
     return new AuthResult(
         newToken, refreshToken, user.id(), user.email(), role(user.email()), user.name());
+  }
+
+  /**
+   * Guards the authentication paths {login, refresh} against blocked accounts (ADR 0011 D3).
+   *
+   * <p>Credential validation runs first (401 for wrong credentials); only after a valid credential
+   * does a blocked account answer 403 "Account blocked." — the 403 leaks no information about
+   * credentials, the 401 leaks no information about the block.
+   */
+  private void enforceNotBlocked(User user) {
+    if (user.blocked()) {
+      throw new ForbiddenException("Account blocked.");
+    }
   }
 
   /**

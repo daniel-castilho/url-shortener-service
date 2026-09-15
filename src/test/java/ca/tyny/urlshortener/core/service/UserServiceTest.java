@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import ca.tyny.urlshortener.core.annotation.TracesRequirement;
+import ca.tyny.urlshortener.core.exception.ForbiddenException;
 import ca.tyny.urlshortener.core.model.User;
 import ca.tyny.urlshortener.core.ports.outgoing.AdminEmailPort;
 import ca.tyny.urlshortener.core.ports.outgoing.AuthenticationPort;
@@ -240,5 +241,41 @@ class UserServiceTest {
     assertThatThrownBy(() -> userService.refreshToken("invalid-token"))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessage("Invalid refresh token");
+  }
+
+  @Test
+  @DisplayName("Should refuse login for a blocked account (403 Account blocked)")
+  void shouldRefuseLoginForBlockedAccount() {
+    // Given - valid credential, blocked account (ADR 0011 D3: credential check first)
+    User user = mock(User.class);
+    when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(user));
+    when(user.blocked()).thenReturn(true);
+
+    // When/Then
+    assertThatThrownBy(() -> userService.login("test@example.com", "password123"))
+        .isInstanceOf(ForbiddenException.class)
+        .hasMessage("Account blocked.");
+
+    // No token must ever be minted for a blocked account
+    verify(tokenPort, never()).generateToken(any(), any());
+    verify(tokenPort, never()).generateRefreshToken(any());
+  }
+
+  @Test
+  @DisplayName("Should refuse refresh for a blocked account (403 Account blocked)")
+  void shouldRefuseRefreshForBlockedAccount() {
+    // Given - valid refresh token, blocked account
+    User user = mock(User.class);
+    when(tokenPort.validateToken("refresh-token")).thenReturn(true);
+    when(tokenPort.getUsernameFromToken("refresh-token")).thenReturn("test@example.com");
+    when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(user));
+    when(user.blocked()).thenReturn(true);
+
+    // When/Then
+    assertThatThrownBy(() -> userService.refreshToken("refresh-token"))
+        .isInstanceOf(ForbiddenException.class)
+        .hasMessage("Account blocked.");
+
+    verify(tokenPort, never()).generateToken(any(), any());
   }
 }
