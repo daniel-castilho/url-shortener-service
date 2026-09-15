@@ -4,9 +4,7 @@ import ca.tyny.urlshortener.core.model.ShortUrl;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.ShortUrlResponse;
 import java.util.List;
 import java.util.stream.Collectors;
-import org.springframework.stereotype.Component;
 
-@Component
 public class LinkMapper {
 
   public ShortUrlResponse toResponse(ShortUrl domain, String baseUrl) {

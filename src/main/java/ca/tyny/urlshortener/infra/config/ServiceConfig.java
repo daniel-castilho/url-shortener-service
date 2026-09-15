@@ -198,20 +198,26 @@ public class ServiceConfig {
       UrlCachePort urlCachePort,
       UrlValidator urlValidator,
       CustomDomainRepositoryPort customDomainRepository,
-      ShortenerProperties properties) {
+      ShortenerProperties properties,
+      UserRepositoryPort userRepository) {
     return new UpdateLinkUseCaseImpl(
         linkQueryPort,
         linkMutationPort,
         urlCachePort,
         urlValidator,
         customDomainRepository,
+        userRepository,
         properties.maxTtlSeconds());
   }
 
   @Bean
   public ArchiveLinkUseCase archiveLinkUseCase(
-      LinkQueryPort linkQueryPort, LinkMutationPort linkMutationPort, UrlCachePort urlCachePort) {
-    return new ArchiveLinkUseCaseImpl(linkQueryPort, linkMutationPort, urlCachePort);
+      LinkQueryPort linkQueryPort,
+      LinkMutationPort linkMutationPort,
+      UrlCachePort urlCachePort,
+      UserRepositoryPort userRepository) {
+    return new ArchiveLinkUseCaseImpl(
+        linkQueryPort, linkMutationPort, urlCachePort, userRepository);
   }
 
   @Bean
