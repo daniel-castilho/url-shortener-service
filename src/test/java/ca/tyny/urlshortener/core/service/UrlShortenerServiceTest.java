@@ -19,7 +19,11 @@ import ca.tyny.urlshortener.core.model.CacheLookup;
 import ca.tyny.urlshortener.core.model.CachedUrlValue;
 import ca.tyny.urlshortener.core.model.CustomDomain;
 import ca.tyny.urlshortener.core.model.DomainStatus;
+import ca.tyny.urlshortener.core.model.QuotaUsage;
 import ca.tyny.urlshortener.core.model.ShortUrl;
+import ca.tyny.urlshortener.core.model.SubscriptionPlan;
+import ca.tyny.urlshortener.core.model.SubscriptionStatus;
+import ca.tyny.urlshortener.core.model.User;
 import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlRepositoryPort;
@@ -147,7 +151,7 @@ class UrlShortenerServiceTest {
   }
 
   @Test
-  @DisplayName("Should throw CodeGenerationException when retries exhausted")
+  @DisplayName("Should throw on retry exhaustion")
   @TracesRequirement("REQ-SHORT-001")
   void shouldThrowOnRetryExhaustion() {
     // Given: every save throws collision
@@ -162,6 +166,52 @@ class UrlShortenerServiceTest {
 
     verify(urlRepository, times(UrlShortenerService.MAX_COLLISION_RETRIES + 1))
         .save(any(ShortUrl.class));
+  }
+
+  @Test
+  @DisplayName("Blocked account cannot shorten — 403 before any side effect (ADR 0011 D4)")
+  void shouldRejectShortenForBlockedAccount() {
+    // Only runs when a session is present (userId != null); anonymous stays allowed.
+    when(userRepository.findById("blocked-user"))
+        .thenReturn(Optional.of(blockedUser("blocked-user")));
+
+    assertThatThrownBy(() -> service.shorten(TEST_URL, null, "blocked-user"))
+        .isInstanceOf(ForbiddenException.class)
+        .hasMessageContaining("Account blocked.");
+
+    // nothing written, nothing counted, no code generated
+    verify(urlRepository, never()).save(any());
+    verify(quotaService, never()).incrementVanityUrlUsage(any());
+    verify(urlIdGenerator, never()).generateId(any(), any());
+  }
+
+  @Test
+  @DisplayName("Anonymous shorten is not affected by any account block (ADR 0011 D4)")
+  void anonymousShortenBypassesAccountBlock() {
+    // no lookup is performed for anonymous sessions
+    ShortUrl result = service.shorten(TEST_URL);
+
+    assertThat(result).isNotNull();
+    verify(userRepository, never()).findById(any());
+    verify(urlRepository).save(any(ShortUrl.class));
+  }
+
+  private User blockedUser(String id) {
+    return new User(
+        id,
+        "blocked@example.com",
+        "Blocked",
+        true,
+        "hash",
+        SubscriptionPlan.FREE,
+        SubscriptionStatus.ACTIVE,
+        LocalDateTime.now(),
+        null,
+        new QuotaUsage(),
+        null,
+        null,
+        LocalDateTime.now(),
+        LocalDateTime.now());
   }
 
   @Test
