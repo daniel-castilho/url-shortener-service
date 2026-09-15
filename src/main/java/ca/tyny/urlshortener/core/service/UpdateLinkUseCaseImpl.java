@@ -5,12 +5,14 @@ import ca.tyny.urlshortener.core.exception.ForbiddenException;
 import ca.tyny.urlshortener.core.exception.InvalidExpiryException;
 import ca.tyny.urlshortener.core.exception.UrlNotFoundException;
 import ca.tyny.urlshortener.core.model.ShortUrl;
+import ca.tyny.urlshortener.core.model.User;
 import ca.tyny.urlshortener.core.model.UtmParams;
 import ca.tyny.urlshortener.core.ports.incoming.UpdateLinkUseCase;
 import ca.tyny.urlshortener.core.ports.outgoing.CustomDomainRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.LinkMutationPort;
 import ca.tyny.urlshortener.core.ports.outgoing.LinkQueryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
+import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
 import ca.tyny.urlshortener.core.validation.DomainBindingValidator;
 import ca.tyny.urlshortener.core.validation.UrlValidator;
 import java.time.Instant;
@@ -24,6 +26,7 @@ public class UpdateLinkUseCaseImpl implements UpdateLinkUseCase {
   private final CustomDomainRepositoryPort customDomainRepository;
   private final UrlCachePort urlCachePort;
   private final UrlValidator urlValidator;
+  private final UserRepositoryPort userRepository;
   private final long maxTtlSeconds;
 
   public UpdateLinkUseCaseImpl(
@@ -42,11 +45,30 @@ public class UpdateLinkUseCaseImpl implements UpdateLinkUseCase {
       UrlValidator urlValidator,
       CustomDomainRepositoryPort customDomainRepository,
       long maxTtlSeconds) {
+    this(
+        linkQueryPort,
+        linkMutationPort,
+        urlCachePort,
+        urlValidator,
+        customDomainRepository,
+        null,
+        maxTtlSeconds);
+  }
+
+  public UpdateLinkUseCaseImpl(
+      LinkQueryPort linkQueryPort,
+      LinkMutationPort linkMutationPort,
+      UrlCachePort urlCachePort,
+      UrlValidator urlValidator,
+      CustomDomainRepositoryPort customDomainRepository,
+      UserRepositoryPort userRepository,
+      long maxTtlSeconds) {
     this.linkQueryPort = linkQueryPort;
     this.linkMutationPort = linkMutationPort;
     this.urlCachePort = urlCachePort;
     this.urlValidator = urlValidator;
     this.customDomainRepository = customDomainRepository;
+    this.userRepository = userRepository;
     this.maxTtlSeconds = maxTtlSeconds;
   }
 
@@ -62,6 +84,8 @@ public class UpdateLinkUseCaseImpl implements UpdateLinkUseCase {
     if (!shortUrl.userId().equals(userId)) {
       throw new ForbiddenException("User does not own this link");
     }
+
+    assertNotBlocked(userId);
 
     if (shortUrl.deletedAt() != null) {
       throw new IllegalArgumentException("Cannot update an archived link");
@@ -109,5 +133,17 @@ public class UpdateLinkUseCaseImpl implements UpdateLinkUseCase {
     linkMutationPort.update(updated);
     urlCachePort.evict(id);
     return updated;
+  }
+
+  private void assertNotBlocked(String userId) {
+    if (userRepository != null) {
+      userRepository
+          .findById(userId)
+          .filter(User::blocked)
+          .ifPresent(
+              u -> {
+                throw new ForbiddenException("Account blocked.");
+              });
+    }
   }
 }

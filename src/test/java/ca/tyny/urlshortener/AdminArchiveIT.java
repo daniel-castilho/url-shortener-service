@@ -3,6 +3,7 @@ package ca.tyny.urlshortener;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
@@ -162,14 +163,55 @@ class AdminArchiveIT extends BaseIntegrationTest {
   }
 
   @Test
-  @DisplayName("force archive of an unknown link answers 404")
-  void forceArchiveUnknownLinkIs404() {
+  @DisplayName("blocked user cannot update/archive their own links -> 403 before any side effect")
+  void blockedUserCannotUpdateOrArchiveOwnLinks() {
     String adminToken = register(ADMIN_EMAIL, "admin");
+    Response victim = registerAndExtract("blocked-updater@example.com", "BlockedUpdater");
+    String victimToken = victim.path("token");
+    String victimId = victim.path("userId");
+
+    // Create a link before blocking
+    String code =
+        given()
+            .header("Authorization", "Bearer " + victimToken)
+            .contentType(ContentType.JSON)
+            .body("{\"originalUrl\":\"https://example.com/to-update\"}")
+            .post("/api/v1/urls")
+            .then()
+            .statusCode(200)
+            .extract()
+            .path("id");
+
+    // Block the user
+    block(adminToken, victimId).then().statusCode(204);
+
+    // Try to update with pre-block token -> 403 "Account blocked."
     given()
-        .header("Authorization", "Bearer " + adminToken)
-        .delete("/api/v1/admin/urls/missing")
+        .header("Authorization", "Bearer " + victimToken)
+        .contentType(ContentType.JSON)
+        .body("{\"originalUrl\":\"https://example.com/updated\"}")
+        .patch("/api/v1/urls/" + code)
         .then()
-        .statusCode(404);
+        .statusCode(403)
+        .body("message", equalTo("Account blocked."));
+
+    // Try to archive with pre-block token -> 403 "Account blocked."
+    given()
+        .header("Authorization", "Bearer " + victimToken)
+        .delete("/api/v1/urls/" + code)
+        .then()
+        .statusCode(403)
+        .body("message", equalTo("Account blocked."));
+
+    // Verify link unchanged (not updated, not archived)
+    given()
+        .header("Authorization", "Bearer " + victimToken)
+        .get("/api/v1/urls")
+        .then()
+        .statusCode(200)
+        .body("items.size()", equalTo(1))
+        .body("items[0].originalUrl", equalTo("https://example.com/to-update"))
+        .body("items[0].deletedAt", nullValue());
   }
 
   // --- helpers ---
