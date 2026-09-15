@@ -27,6 +27,19 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
   updated. Blocked on red/purple vanity alias: write-path check lands with force-archive (story
   10.4).
 
+- **Admin read-only link inspection (ADR 0011, story 10.3)** — `GET /api/v1/admin/users/{userId}/
+  urls` lists any user's links with the owner-list contract (stable `createdAt DESC, id DESC` cursor
+  pagination, limit capped at 100), **including archived** links (`deletedAt` visible in
+  `ShortUrlResponse`); unknown user → 404. `GET /api/v1/admin/urls?code=` resolves any short code
+  globally (the code **is** the document id — reuses `LinkQueryPort.findById`, no new repository
+  method) and returns the link plus `ownerUserId` and `ownerEmail` (`ownerEmail` **nullable** when
+  the owner document no longer exists). New non-gated use cases `AdminListUserUrlsUseCase` /
+  `AdminLookupUrlUseCase` and the `AdminUrlLookup` domain result; ADMIN enforced at the application
+  layer (403); anonymous → 401. Tests: `AdminInspectIT` (7 outside the gate): archived item shows
+  `deletedAt`, pagination without overlap, 404 unknown user, lookup with ownership, 404 unknown
+  code, lookup with missing owner document → `ownerEmail` null, non-admin 403 / anonymous 401.
+  No new meters (metrics-frozen gate green).
+
 ### Fixed
 
 - **Wrong-credential login answered 500 instead of 401** — `AuthenticationException`(s) thrown by

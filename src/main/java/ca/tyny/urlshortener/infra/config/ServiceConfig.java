@@ -13,7 +13,9 @@ import ca.tyny.urlshortener.core.ports.incoming.GetLinkUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.ListUserLinksUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.UpdateLinkUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.admin.AdminBlockUserUseCase;
+import ca.tyny.urlshortener.core.ports.incoming.admin.AdminListUserUrlsUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.admin.AdminListUsersUseCase;
+import ca.tyny.urlshortener.core.ports.incoming.admin.AdminLookupUrlUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.admin.AdminUnblockUserUseCase;
 import ca.tyny.urlshortener.core.ports.outgoing.AuthenticationPort;
 import ca.tyny.urlshortener.core.ports.outgoing.ClickAnalyticsPort;
@@ -30,7 +32,9 @@ import ca.tyny.urlshortener.core.ports.outgoing.UrlRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.VerificationTokenPort;
 import ca.tyny.urlshortener.core.service.AdminBlockUserUseCaseImpl;
+import ca.tyny.urlshortener.core.service.AdminListUserUrlsUseCaseImpl;
 import ca.tyny.urlshortener.core.service.AdminListUsersUseCaseImpl;
+import ca.tyny.urlshortener.core.service.AdminLookupUrlUseCaseImpl;
 import ca.tyny.urlshortener.core.service.AdminUnblockUserUseCaseImpl;
 import ca.tyny.urlshortener.core.service.ArchiveLinkUseCaseImpl;
 import ca.tyny.urlshortener.core.service.CustomDomainService;
@@ -222,6 +226,18 @@ public class ServiceConfig {
   @Bean
   public AdminUnblockUserUseCase adminUnblockUserUseCase(UserRepositoryPort userRepository) {
     return new AdminUnblockUserUseCaseImpl(userRepository);
+  }
+
+  @Bean
+  public AdminListUserUrlsUseCase adminListUserUrlsUseCase(
+      UserRepositoryPort userRepository, LinkQueryPort linkQueryPort) {
+    return new AdminListUserUrlsUseCaseImpl(userRepository, linkQueryPort);
+  }
+
+  @Bean
+  public AdminLookupUrlUseCase adminLookupUrlUseCase(
+      LinkQueryPort linkQueryPort, UserRepositoryPort userRepository) {
+    return new AdminLookupUrlUseCaseImpl(linkQueryPort, userRepository);
   }
 
   @Bean
