@@ -7,6 +7,7 @@ import ca.tyny.urlshortener.core.model.PageResult;
 import ca.tyny.urlshortener.core.model.ShortUrl;
 import ca.tyny.urlshortener.core.model.UserAdminItem;
 import ca.tyny.urlshortener.core.ports.incoming.admin.AdminBlockUserUseCase;
+import ca.tyny.urlshortener.core.ports.incoming.admin.AdminForceArchiveLinkUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.admin.AdminListUserUrlsUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.admin.AdminListUsersUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.admin.AdminLookupUrlUseCase;
@@ -24,6 +25,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -49,6 +51,7 @@ public class AdminController {
   private final AdminUnblockUserUseCase unblockUserUseCase;
   private final AdminListUserUrlsUseCase listUserUrlsUseCase;
   private final AdminLookupUrlUseCase lookupUrlUseCase;
+  private final AdminForceArchiveLinkUseCase forceArchiveLinkUseCase;
   private final LinkMapper linkMapper;
 
   public AdminController(
@@ -57,12 +60,14 @@ public class AdminController {
       AdminUnblockUserUseCase unblockUserUseCase,
       AdminListUserUrlsUseCase listUserUrlsUseCase,
       AdminLookupUrlUseCase lookupUrlUseCase,
+      AdminForceArchiveLinkUseCase forceArchiveLinkUseCase,
       LinkMapper linkMapper) {
     this.listUsersUseCase = listUsersUseCase;
     this.blockUserUseCase = blockUserUseCase;
     this.unblockUserUseCase = unblockUserUseCase;
     this.listUserUrlsUseCase = listUserUrlsUseCase;
     this.lookupUrlUseCase = lookupUrlUseCase;
+    this.forceArchiveLinkUseCase = forceArchiveLinkUseCase;
     this.linkMapper = linkMapper;
   }
 
@@ -212,6 +217,30 @@ public class AdminController {
   }
 
   private static final String BASE_URL = "http://localhost"; // mirrors LinkController.getBaseUrl()
+
+  @DeleteMapping("/urls/{id}")
+  @Operation(
+      summary = "Force-archive a short URL",
+      description =
+          "Soft-deletes any link by its code (deletedAt semantics identical to the owner archive) "
+              + "and evicts the cache. Idempotent — archiving an already-archived link answers the "
+              + "same 204. After: the public redirect answers 404 while the link stays visible to "
+              + "its owner with deletedAt set.")
+  @ApiResponses(
+      value = {
+        @ApiResponse(responseCode = "204", description = "Link archived"),
+        @ApiResponse(responseCode = "401", description = "Unauthenticated"),
+        @ApiResponse(responseCode = "403", description = "Forbidden (not an ADMIN)"),
+        @ApiResponse(responseCode = "404", description = "Link not found")
+      })
+  public ResponseEntity<Void> forceArchiveLink(
+      @Parameter(description = "Short URL code (document id)", required = true, example = "vE1GpYK")
+          @PathVariable
+          String id,
+      Authentication authentication) {
+    forceArchiveLinkUseCase.forceArchiveLink(callerRole(authentication), id);
+    return ResponseEntity.noContent().build();
+  }
 
   private String callerEmail(Authentication authentication) {
     return authentication.getName();

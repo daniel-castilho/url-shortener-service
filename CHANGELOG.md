@@ -40,6 +40,19 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
   code, lookup with missing owner document → `ownerEmail` null, non-admin 403 / anonymous 401.
   No new meters (metrics-frozen gate green).
 
+- **Admin force archive + write-path block check (ADR 0011, story 10.4)** —
+  `DELETE /api/v1/admin/urls/{id}` force-archives any link (owner archive's `deletedAt`
+  semantics + cache eviction), **idempotent 204** on an already-archived link, 404 when the link
+  does not exist. After: the public redirect answers 404 while the owner keeps seeing the item with
+  `deletedAt` set. A **blocked account cannot write**: `POST /api/v1/urls` with a session (Bearer or
+  cookie) raises **403 `"Account blocked."` before any validation or side effect** (nothing written,
+  nothing counted against quota); anonymous shortening stays allowed — the block is per-account, not
+  per-IP (documented in OpenAPI). Reads remain open for blocked accounts in v1 (tokens live until
+  expiry; revocation/denylist is a registered follow-up). New non-gated
+  `AdminForceArchiveLinkUseCase`; block check lives in `UrlShortenerService.shorten`. Tests:
+  `AdminArchiveIT` (4), `UrlShortenerServiceTest` +2 (blocked reject without side effects, anonymous
+  bypass). No new meters (metrics-frozen gate green).
+
 ### Fixed
 
 - **Wrong-credential login answered 500 instead of 401** — `AuthenticationException`(s) thrown by

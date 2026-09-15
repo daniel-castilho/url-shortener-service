@@ -161,31 +161,51 @@ items 2 hasMore False
 # paginação por cursor coberta em AdminInspectIT (limit=2 → hasMore/nextCursor → page2 sem overlap)
 ```
 
-### 10.4 Force archive + write path (executado YYYY-MM-DD)
+### 10.4 Force archive + write path (executado 2026-09-15)
 
-**CI:** run + head sha.
+**CI:** run `epic-10 -> 10.4`, head sha `(a colar no commit 4)`.
 
 **Testes 9–11 (naming + PASS):**
 
 ```
-# ./mvnw verify -Dtest='Admin*IT' 2>&1 | grep -E "Tests run"
+$ ./mvnw test -Dtest='AdminArchiveIT' 2>&1 | grep -E "Tests run"
+Tests run: 4, Failures: 0, Errors: 0, Skipped: 0 -- in Admin force archive + write-path block check IT (10.4)
+BUILD SUCCESS
+-- nomes (matriz 9–11):
+forceArchiveSequence                                PASS (204 → redirect 404 → 204 idempotente → owner list deletedAt → 404 unknown)
+blockedUserCannotShortenButCanRead                  PASS (403 "Account blocked.", nada gravado; GET /urls 200; anônimo 200)
+securityOnForceArchive                              PASS (non-admin 403, anônimo 401, link intacto)
+forceArchiveUnknownLinkIs404                        PASS
+-- unit (write path, gated core/service, classe já traceada):
+UrlShortenerServiceTest > blocked account cannot shorten — 403 before any side effect : PASS
+                       > anonymous shorten is not affected by any account block        : PASS
+Tests run: 32 (UrlShortenerServiceTest), Failures: 0, Errors: 0
 ```
 
 **Sequência force archive (status codes na ordem):**
 
 ```
-# DELETE /api/v1/admin/urls/<id> → 204
-# GET /<id> → 404
-# DELETE novamente → 204 (idempotente)
+# boot local com APP_ADMIN_EMAILS=admin@example.com
+$ link XSFYZP2 (shorten autenticado da vítima, pré-block)
+redirect pre-archive   -> 302
+DELETE /admin/urls/XSFYZP2 -> 204
+redirect post-archive  -> 404
+DELETE novamente       -> 204 (idempotente)
+DELETE /admin/urls/zzzzzzz -> 404
 ```
+Owner list (token pós-unblock) → item com `deletedAt=2026-09-15T19:27:23.536Z`;
+lookup admin → `id=XSFYZP2 deletedAt=...474Z ownerEmail=victim6@example.com`.
 
 **Write path (sequência com status):**
 
 ```
 # token da vítima emitido ANTES do block; block → 204
-# POST /api/v1/urls (com o token) → 403
-# GET /api/v1/urls (com o token) → 200
-# POST /api/v1/urls (anônimo) → 200
+POST /api/v1/urls (com o mesmo token) →
+  {"status":403,"error":"Forbidden","message":"Account blocked.","timestamp":"..."}  STATUS=403
+# nada foi gravado: GET /api/v1/urls (mesmo token) → 200, items 1 (só o pré-block)
+# anônimo continua podendo encurtar:
+POST /api/v1/urls (anônimo) → STATUS=200
+# guardas: non-admin DELETE → 403 (IT) / lista vazia bearera 401; anônimo DELETE → 401
 ```
 
 ### 10.5 Contrato e gates finais (executado YYYY-MM-DD)
