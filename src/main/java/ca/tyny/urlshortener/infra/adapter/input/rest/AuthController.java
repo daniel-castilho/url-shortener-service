@@ -11,6 +11,8 @@ import ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.MeResponse;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.RefreshTokenRequest;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.auth.RegisterRequest;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -70,6 +72,12 @@ public class AuthController {
               + "cookies carrying the same JWTs: access_token (Path=/, Max-Age=access TTL) and "
               + "refresh_token (Path=/api/v1/auth/refresh, Max-Age=refresh TTL). Both are Secure, "
               + "SameSite=Lax, HttpOnly. Cache-Control: no-store.")
+  @ApiResponses(
+      value = {
+        @ApiResponse(responseCode = "200", description = "User registered, tokens issued"),
+        @ApiResponse(responseCode = "400", description = "Validation error"),
+        @ApiResponse(responseCode = "409", description = "Email already registered")
+      })
   public ResponseEntity<AuthResponse> register(
       @Valid @RequestBody RegisterRequest request, HttpServletResponse response) {
     UserService.AuthResult result =
@@ -88,6 +96,14 @@ public class AuthController {
               + "carrying the same JWTs: access_token (Path=/, Max-Age=access TTL) and "
               + "refresh_token (Path=/api/v1/auth/refresh, Max-Age=refresh TTL). Both are Secure, "
               + "SameSite=Lax, HttpOnly. Cache-Control: no-store.")
+  @ApiResponses(
+      value = {
+        @ApiResponse(responseCode = "200", description = "Login successful, tokens issued"),
+        @ApiResponse(responseCode = "400", description = "Validation error"),
+        @ApiResponse(responseCode = "401", description = "Invalid credentials"),
+        @ApiResponse(responseCode = "403", description = "Account blocked"),
+        @ApiResponse(responseCode = "429", description = "Rate limit exceeded (AUTH scope)")
+      })
   public ResponseEntity<AuthResponse> login(
       @Valid @RequestBody LoginRequest request, HttpServletResponse response) {
     RateLimitVerdict verdict = rateLimiter.tryAcquire(RateLimitScope.AUTH, resolveClientIp());
@@ -111,6 +127,16 @@ public class AuthController {
               + "cookie returns 401. On success sets a new access_token cookie and re-sets the "
               + "refresh_token cookie with the same value (sliding Max-Age). "
               + "Cache-Control: no-store.")
+  @ApiResponses(
+      value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "Token refreshed, new access token issued"),
+        @ApiResponse(responseCode = "400", description = "Validation error"),
+        @ApiResponse(responseCode = "401", description = "Missing or invalid refresh token"),
+        @ApiResponse(responseCode = "403", description = "Account blocked"),
+        @ApiResponse(responseCode = "429", description = "Rate limit exceeded (AUTH scope)")
+      })
   public ResponseEntity<AuthResponse> refresh(
       @RequestBody(required = false) RefreshTokenRequest request,
       @CookieValue(name = REFRESH_COOKIE, required = false) String refreshCookie,
@@ -139,12 +165,20 @@ public class AuthController {
   @Operation(
       summary = "Get current user identity",
       description =
-          "Returns the identity {userId, email, name} of the authenticated user. Authentication "
-              + "via the Authorization Bearer header or the access_token cookie. "
+          "Returns the identity {userId, email, role, name} of the authenticated user. The role is "
+              + "resolved from the configured admin email list (ADR 0011 D1), mirroring the role "
+              + "claim: ADMIN when the email is listed, USER otherwise. Authentication via the "
+              + "Authorization Bearer header or the access_token cookie. "
               + "Cache-Control: no-store.")
+  @ApiResponses(
+      value = {
+        @ApiResponse(responseCode = "200", description = "Authenticated user identity"),
+        @ApiResponse(responseCode = "401", description = "Unauthenticated")
+      })
   public ResponseEntity<MeResponse> me(Authentication authentication) {
     UserService.AuthResult result = userService.me(authentication.getName());
-    MeResponse meResponse = new MeResponse(result.userId(), result.email(), result.name());
+    MeResponse meResponse =
+        new MeResponse(result.userId(), result.email(), result.role(), result.name());
     return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store").body(meResponse);
   }
 
@@ -232,6 +266,7 @@ public class AuthController {
         .refreshToken(result.refreshToken())
         .userId(result.userId())
         .email(result.email())
+        .role(result.role())
         .name(result.name())
         .build();
   }

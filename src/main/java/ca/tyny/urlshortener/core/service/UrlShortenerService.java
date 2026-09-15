@@ -1,6 +1,7 @@
 package ca.tyny.urlshortener.core.service;
 
 import ca.tyny.urlshortener.core.exception.CodeGenerationException;
+import ca.tyny.urlshortener.core.exception.ForbiddenException;
 import ca.tyny.urlshortener.core.exception.InvalidExpiryException;
 import ca.tyny.urlshortener.core.exception.ShortCodeCollisionException;
 import ca.tyny.urlshortener.core.exception.UrlExpiredException;
@@ -11,6 +12,7 @@ import ca.tyny.urlshortener.core.model.CacheLookup;
 import ca.tyny.urlshortener.core.model.CachedUrlValue;
 import ca.tyny.urlshortener.core.model.ShortUrl;
 import ca.tyny.urlshortener.core.model.Url;
+import ca.tyny.urlshortener.core.model.User;
 import ca.tyny.urlshortener.core.ports.incoming.GetUrlUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.ShortenUrlUseCase;
 import ca.tyny.urlshortener.core.ports.outgoing.CustomDomainRegistryPort;
@@ -168,6 +170,14 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
   public ShortUrl shorten(
       String originalUrl, String customAlias, String userId, Instant expiresAt, String domain) {
     Objects.requireNonNull(originalUrl, "URL cannot be null");
+
+    // Write-path block check (ADR 0011 D4): only runs when a session is present (userId != null).
+    // Anonymous shortening stays allowed — the block is per-account, not per-IP. The check precedes
+    // any validation or persistence so a blocked account never writes nor counts quota.
+    if (userId != null) {
+      userRepository.findById(userId).ifPresent(this::assertNotBlocked);
+    }
+
     urlValidator.validate(originalUrl);
 
     Url validatedUrl = new Url(originalUrl);
@@ -345,5 +355,12 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
       throw new UrlNotFoundException(id);
     }
     return originalUrl;
+  }
+
+  /** Rejects a session belonging to a blocked account (ADR 0011 D4). */
+  private void assertNotBlocked(User user) {
+    if (user.blocked()) {
+      throw new ForbiddenException("Account blocked.");
+    }
   }
 }

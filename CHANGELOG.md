@@ -9,6 +9,72 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ### Added
 
+- **Product administration surface for blocked accounts + user listing (ADR 0011 D3/D4)** —
+  `GET /api/v1/admin/users` (ADMIN only): cursor-paginated user list (stable `createdAt DESC,
+  id DESC`, limit capped at 100), optional email-prefix filter `?q=`, items expose
+  `{userId, email, name, role, blocked, createdAt}` with `role` = live env-list truth.
+  `POST /api/v1/admin/users/{userId}/block` and `.../unblock`: **idempotent 204**, missing user →
+  404, self-block → 400. A blocked account loses `login` and `refresh` (403 `"Account blocked."`)
+  after credential validation — the 401/403 order guarantees no information leaks in either
+  direction. `User` record gains `blocked` (after `name`); `UserEntity` gains the flag
+  (absent → false, expand-only, no migration). `UserRepositoryPort` gains `findPage`,
+  `findPageByEmailPrefix` (`Pattern.quote`, case-insensitive) and `setBlocked` (targeted
+  `updateOne`). `core/` stays annotation-free behind new ports (`UserAdminItem`,
+  `AdminListUsersUseCase`, `AdminBlockUserUseCase`, `AdminUnblockUserUseCase`); new non-gated
+  packages per D3 — no new living-spec requirements, no new meters (metrics-frozen gate green).
+  Tests: `AdminUsersIT` (10 outside the gate), `UserServiceTest` +2 blocked 403 cases,
+  `UserEntityTest` extended (blocked both directions), all `new User(`/`new UserEntity(` sites
+  updated. Blocked on red/purple vanity alias: write-path check lands with force-archive (story
+  10.4).
+
+- **Admin read-only link inspection (ADR 0011, story 10.3)** — `GET /api/v1/admin/users/{userId}/
+  urls` lists any user's links with the owner-list contract (stable `createdAt DESC, id DESC` cursor
+  pagination, limit capped at 100), **including archived** links (`deletedAt` visible in
+  `ShortUrlResponse`); unknown user → 404. `GET /api/v1/admin/urls?code=` resolves any short code
+  globally (the code **is** the document id — reuses `LinkQueryPort.findById`, no new repository
+  method) and returns the link plus `ownerUserId` and `ownerEmail` (`ownerEmail` **nullable** when
+  the owner document no longer exists). New non-gated use cases `AdminListUserUrlsUseCase` /
+  `AdminLookupUrlUseCase` and the `AdminUrlLookup` domain result; ADMIN enforced at the application
+  layer (403); anonymous → 401. Tests: `AdminInspectIT` (7 outside the gate): archived item shows
+  `deletedAt`, pagination without overlap, 404 unknown user, lookup with ownership, 404 unknown
+  code, lookup with missing owner document → `ownerEmail` null, non-admin 403 / anonymous 401.
+  No new meters (metrics-frozen gate green).
+
+- **Admin force archive + write-path block check (ADR 0011, story 10.4)** —
+  `DELETE /api/v1/admin/urls/{id}` force-archives any link (owner archive's `deletedAt`
+  semantics + cache eviction), **idempotent 204** on an already-archived link, 404 when the link
+  does not exist. After: the public redirect answers 404 while the owner keeps seeing the item with
+  `deletedAt` set. A **blocked account cannot write**: `POST /api/v1/urls` with a session (Bearer or
+  cookie) raises **403 `"Account blocked."` before any validation or side effect** (nothing written,
+  nothing counted against quota); anonymous shortening stays allowed — the block is per-account, not
+  per-IP (documented in OpenAPI). Reads remain open for blocked accounts in v1 (tokens live until
+  expiry; revocation/denylist is a registered follow-up). New non-gated
+  `AdminForceArchiveLinkUseCase`; block check lives in `UrlShortenerService.shorten`. Tests:
+  `AdminArchiveIT` (4), `UrlShortenerServiceTest` +2 (blocked reject without side effects, anonymous
+  bypass). No new meters (metrics-frozen gate green).
+
+### Fixed
+
+- **Wrong-credential login answered 500 instead of 401** — `AuthenticationException`(s) thrown by
+  `AuthenticationAdapter.authenticate` fell into the `GlobalExceptionHandler` catch-all. Now mapped
+  to `401 Invalid credentials` (identity of the response is stable, no message leak). This closes
+  the ADR 0011 D3 ordering contract end-to-end: wrong credential → 401, blocked account with valid
+  credential → 403 `"Account blocked."`. Tests: `AuthControllerTest` +2 (401 on bad credentials,
+  403 on blocked account).
+
+- **Product ADMIN role from env list (REQ-AUTH-011, REQ-AUTH-012, ADR 0011)** — `POST
+  /api/v1/auth/register|login|refresh` and `GET /api/v1/auth/me` now expose a `role` field:
+  `ADMIN` when the email belongs to the configured admin list (`app.admin-emails` /
+  `APP_ADMIN_EMAILS`, comma-separated, empty = no admin), `USER` otherwise. The role claim lives
+  **only in the access token** (JWT `role` claim); the refresh token carries no claim (minimal
+  surface). A legacy token issued without the claim is authenticated with authority `ROLE_USER`
+  (documented + tested). `MeResponse` gains `role`; `AuthResponse` gains `role`. The new outbound
+  port `AdminEmailPort` keeps `core/` annotation-free (Rule 1). D1–D4 decisions and revisit
+  triggers: ADR 0011. Tests: `UserServiceTest` +2 (role USER/ADMIN in AuthResult), new
+  `JwtTokenAdapterTest` (2), new `JwtAuthenticationFilterTest` (3 authority cases), new
+  `AdminBootstrapIT` (3: admin→ADMIN, user→USER, legacy token→USER). Living spec: Auth now
+  12/12 (100%), gate 43/44 traced (97%).
+
 - **Auth rate limiting (REQ-AUTH-010, REQ-RATE-006)** — `POST /api/v1/auth/login` and
   `POST /api/v1/auth/refresh` are now rate-limited **per IP** through a new `AUTH` scope in the
   shared Redis token bucket (default `rate-limiter.auth-limit=10` / `auth-window=PT1M`; env

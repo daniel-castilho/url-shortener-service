@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import ca.tyny.urlshortener.config.WithMockSecurity;
 import ca.tyny.urlshortener.core.annotation.TracesRequirement;
+import ca.tyny.urlshortener.core.exception.ForbiddenException;
 import ca.tyny.urlshortener.core.model.RateLimitVerdict;
 import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.RateLimitScope;
@@ -30,6 +31,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
@@ -70,7 +72,8 @@ class AuthControllerTest {
     // Given
     RegisterRequest request = new RegisterRequest("Test User", "test@example.com", "password123");
     UserService.AuthResult result =
-        new UserService.AuthResult("token", "refresh-token", "id", "test@example.com", "Test User");
+        new UserService.AuthResult(
+            "token", "refresh-token", "id", "test@example.com", "USER", "Test User");
 
     when(userService.register(eq("test@example.com"), eq("Test User"), eq("password123")))
         .thenReturn(result);
@@ -84,6 +87,7 @@ class AuthControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.token").value("token"))
         .andExpect(jsonPath("$.email").value("test@example.com"))
+        .andExpect(jsonPath("$.role").value("USER"))
         .andExpect(header().string("Cache-Control", "no-store"))
         .andExpect(cookie().httpOnly(ACCESS_COOKIE, true))
         .andExpect(cookie().secure(ACCESS_COOKIE, true))
@@ -97,7 +101,8 @@ class AuthControllerTest {
     // Given
     LoginRequest request = new LoginRequest("test@example.com", "password123");
     UserService.AuthResult result =
-        new UserService.AuthResult("token", "refresh-token", "id", "test@example.com", "Test User");
+        new UserService.AuthResult(
+            "token", "refresh-token", "id", "test@example.com", "USER", "Test User");
 
     when(userService.login(eq("test@example.com"), eq("password123"))).thenReturn(result);
 
@@ -118,6 +123,45 @@ class AuthControllerTest {
         .andExpect(cookie().secure(REFRESH_COOKIE, true))
         .andExpect(cookie().path(REFRESH_COOKIE, "/api/v1/auth/refresh"))
         .andExpect(cookie().maxAge(REFRESH_COOKIE, 604800));
+  }
+
+  @Test
+  @DisplayName("Should return 401 when credentials are invalid")
+  void shouldReturn401OnInvalidCredentials() throws Exception {
+    // Given - wrong password: AuthenticationPort.authenticate (inside UserService.login) throws
+    LoginRequest request = new LoginRequest("test@example.com", "wrong-password");
+    when(userService.login(eq("test@example.com"), eq("wrong-password")))
+        .thenThrow(new BadCredentialsException("Bad credentials"));
+
+    // When/Then - mapped by GlobalExceptionHandler, NOT the catch-all 500
+    mockMvc
+        .perform(
+            post("/api/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.status").value(401))
+        .andExpect(jsonPath("$.error").value("Unauthorized"))
+        .andExpect(jsonPath("$.message").value("Invalid credentials"));
+  }
+
+  @Test
+  @DisplayName("Should return 403 when the account is blocked (valid credentials)")
+  void shouldReturn403OnBlockedAccount() throws Exception {
+    // Given - valid credentials, blocked account (ADR 0011 D3: 401 vs 403 ordering)
+    LoginRequest request = new LoginRequest("test@example.com", "password123");
+    when(userService.login(eq("test@example.com"), eq("password123")))
+        .thenThrow(new ForbiddenException("Account blocked."));
+
+    // When/Then
+    mockMvc
+        .perform(
+            post("/api/v1/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.error").value("Forbidden"))
+        .andExpect(jsonPath("$.message").value("Account blocked."));
   }
 
   @Test
@@ -144,7 +188,7 @@ class AuthControllerTest {
     RefreshTokenRequest request = new RefreshTokenRequest("valid-refresh-token");
     UserService.AuthResult result =
         new UserService.AuthResult(
-            "new-token", "valid-refresh-token", "id", "test@example.com", "Test User");
+            "new-token", "valid-refresh-token", "id", "test@example.com", "USER", "Test User");
 
     when(userService.refreshToken(eq("valid-refresh-token"))).thenReturn(result);
 
@@ -168,7 +212,7 @@ class AuthControllerTest {
     // Given
     UserService.AuthResult result =
         new UserService.AuthResult(
-            "new-token", "refresh-cookie-value", "id", "test@example.com", "Test User");
+            "new-token", "refresh-cookie-value", "id", "test@example.com", "USER", "Test User");
 
     when(userService.refreshToken(eq("refresh-cookie-value"))).thenReturn(result);
 
@@ -226,7 +270,7 @@ class AuthControllerTest {
   void shouldReturnMe() throws Exception {
     // Given
     UserService.AuthResult result =
-        new UserService.AuthResult(null, null, "id", "test@example.com", "Test User");
+        new UserService.AuthResult(null, null, "id", "test@example.com", "USER", "Test User");
     when(userService.me(eq("test@example.com"))).thenReturn(result);
 
     // When/Then
@@ -235,6 +279,7 @@ class AuthControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.userId").value("id"))
         .andExpect(jsonPath("$.email").value("test@example.com"))
+        .andExpect(jsonPath("$.role").value("USER"))
         .andExpect(jsonPath("$.name").value("Test User"))
         .andExpect(header().string("Cache-Control", "no-store"));
   }

@@ -6,7 +6,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import ca.tyny.urlshortener.core.annotation.TracesRequirement;
+import ca.tyny.urlshortener.core.exception.ForbiddenException;
 import ca.tyny.urlshortener.core.model.User;
+import ca.tyny.urlshortener.core.ports.outgoing.AdminEmailPort;
 import ca.tyny.urlshortener.core.ports.outgoing.AuthenticationPort;
 import ca.tyny.urlshortener.core.ports.outgoing.IdGeneratorPort;
 import ca.tyny.urlshortener.core.ports.outgoing.PasswordEncoderPort;
@@ -28,6 +30,7 @@ class UserServiceTest {
   @Mock private TokenPort tokenPort;
   @Mock private AuthenticationPort authenticationPort;
   @Mock private IdGeneratorPort idGeneratorPort;
+  @Mock private AdminEmailPort adminEmailPort;
 
   private UserService userService;
 
@@ -35,7 +38,12 @@ class UserServiceTest {
   void setUp() {
     userService =
         new UserService(
-            userRepository, passwordEncoder, tokenPort, authenticationPort, idGeneratorPort);
+            userRepository,
+            passwordEncoder,
+            tokenPort,
+            authenticationPort,
+            idGeneratorPort,
+            adminEmailPort);
   }
 
   @Test
@@ -46,7 +54,7 @@ class UserServiceTest {
     when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.empty());
     when(idGeneratorPort.generateId()).thenReturn("user123");
     when(passwordEncoder.encode("password123")).thenReturn("encodedPass");
-    when(tokenPort.generateToken("test@example.com")).thenReturn("jwt-token");
+    when(tokenPort.generateToken("test@example.com", "USER")).thenReturn("jwt-token");
     when(tokenPort.generateRefreshToken("test@example.com")).thenReturn("refresh-token");
 
     // When
@@ -59,8 +67,10 @@ class UserServiceTest {
     assertThat(result.email()).isEqualTo("test@example.com");
     assertThat(result.name()).isEqualTo("Test User");
     assertThat(result.userId()).isEqualTo("user123");
+    assertThat(result.role()).isEqualTo("USER");
 
     verify(userRepository).save(any(User.class));
+    verify(tokenPort).generateToken("test@example.com", "USER");
   }
 
   @Test
@@ -90,7 +100,7 @@ class UserServiceTest {
     when(user.id()).thenReturn("user123");
     when(user.email()).thenReturn("test@example.com");
     when(user.name()).thenReturn("Test User");
-    when(tokenPort.generateToken("test@example.com")).thenReturn("jwt-token");
+    when(tokenPort.generateToken("test@example.com", "USER")).thenReturn("jwt-token");
     when(tokenPort.generateRefreshToken("test@example.com")).thenReturn("refresh-token");
 
     // When
@@ -100,6 +110,7 @@ class UserServiceTest {
     assertThat(result.token()).isEqualTo("jwt-token");
     assertThat(result.refreshToken()).isEqualTo("refresh-token");
     assertThat(result.email()).isEqualTo("test@example.com");
+    assertThat(result.role()).isEqualTo("USER");
 
     verify(authenticationPort).authenticate("test@example.com", "password123");
   }
@@ -116,7 +127,7 @@ class UserServiceTest {
     when(user.id()).thenReturn("user123");
     when(user.email()).thenReturn("test@example.com");
     when(user.name()).thenReturn("Test User");
-    when(tokenPort.generateToken("test@example.com")).thenReturn("new-jwt-token");
+    when(tokenPort.generateToken("test@example.com", "USER")).thenReturn("new-jwt-token");
 
     // When
     UserService.AuthResult result = userService.refreshToken("old-refresh-token");
@@ -125,6 +136,98 @@ class UserServiceTest {
     assertThat(result.token()).isEqualTo("new-jwt-token");
     assertThat(result.refreshToken()).isEqualTo("old-refresh-token");
     assertThat(result.email()).isEqualTo("test@example.com");
+    assertThat(result.role()).isEqualTo("USER");
+  }
+
+  @Test
+  @TracesRequirement("REQ-AUTH-011")
+  @DisplayName("Should resolve ADMIN role and claim for emails in the admin list")
+  void shouldResolveAdminRoleFromList() {
+    // Given
+    when(adminEmailPort.isAdminEmail("admin@example.com")).thenReturn(true);
+    when(userRepository.findByEmail("admin@example.com")).thenReturn(Optional.empty());
+    when(idGeneratorPort.generateId()).thenReturn("userAdmin");
+    when(passwordEncoder.encode("password123")).thenReturn("encodedPass");
+    when(tokenPort.generateToken("admin@example.com", "ADMIN")).thenReturn("jwt-token");
+    when(tokenPort.generateRefreshToken("admin@example.com")).thenReturn("refresh-token");
+
+    // When
+    UserService.AuthResult result =
+        userService.register("admin@example.com", "Admin", "password123");
+
+    // Then
+    assertThat(result.role()).isEqualTo("ADMIN");
+    verify(tokenPort).generateToken("admin@example.com", "ADMIN");
+
+    User admin = mock(User.class);
+    when(userRepository.findByEmail("admin@example.com")).thenReturn(Optional.of(admin));
+    when(admin.id()).thenReturn("userAdmin");
+    when(admin.email()).thenReturn("admin@example.com");
+    when(admin.name()).thenReturn("Admin");
+
+    UserService.AuthResult me = userService.me("admin@example.com");
+
+    assertThat(me.role()).isEqualTo("ADMIN");
+    assertThat(me.token()).isNull();
+    assertThat(me.refreshToken()).isNull();
+  }
+
+  @Test
+  @TracesRequirement("REQ-AUTH-012")
+  @DisplayName("Should expose the resolved role in register, login and me results")
+  void shouldExposeResolvedRoleInAllAuthResultBodies() {
+    // Given
+    when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.empty());
+    when(idGeneratorPort.generateId()).thenReturn("user123");
+    when(passwordEncoder.encode("password123")).thenReturn("encodedPass");
+    when(tokenPort.generateToken("test@example.com", "USER")).thenReturn("jwt-token");
+    when(tokenPort.generateRefreshToken("test@example.com")).thenReturn("refresh-token");
+
+    // When / register
+    UserService.AuthResult registered =
+        userService.register("test@example.com", "Test User", "password123");
+
+    // Then
+    assertThat(registered.role()).isEqualTo("USER");
+
+    // When / login
+    User user = mock(User.class);
+    when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(user));
+    when(user.id()).thenReturn("user123");
+    when(user.email()).thenReturn("test@example.com");
+    when(user.name()).thenReturn("Test User");
+    when(tokenPort.generateToken("test@example.com", "USER")).thenReturn("jwt-token");
+    when(tokenPort.generateRefreshToken("test@example.com")).thenReturn("refresh-token");
+
+    UserService.AuthResult logged = userService.login("test@example.com", "password123");
+    assertThat(logged.role()).isEqualTo("USER");
+
+    // When / me
+    UserService.AuthResult me = userService.me("test@example.com");
+    assertThat(me.role()).isEqualTo("USER");
+  }
+
+  @Test
+  @TracesRequirement("REQ-AUTH-007")
+  @DisplayName("Should return identity without tokens from me")
+  void shouldReturnIdentityWithoutTokens() {
+    // Given
+    User user = mock(User.class);
+    when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(user));
+    when(user.id()).thenReturn("user123");
+    when(user.email()).thenReturn("test@example.com");
+    when(user.name()).thenReturn("Test User");
+
+    // When
+    UserService.AuthResult result = userService.me("test@example.com");
+
+    // Then
+    assertThat(result.token()).isNull();
+    assertThat(result.refreshToken()).isNull();
+    assertThat(result.userId()).isEqualTo("user123");
+    assertThat(result.email()).isEqualTo("test@example.com");
+    assertThat(result.name()).isEqualTo("Test User");
+    assertThat(result.role()).isEqualTo("USER");
   }
 
   @Test
@@ -138,5 +241,41 @@ class UserServiceTest {
     assertThatThrownBy(() -> userService.refreshToken("invalid-token"))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessage("Invalid refresh token");
+  }
+
+  @Test
+  @DisplayName("Should refuse login for a blocked account (403 Account blocked)")
+  void shouldRefuseLoginForBlockedAccount() {
+    // Given - valid credential, blocked account (ADR 0011 D3: credential check first)
+    User user = mock(User.class);
+    when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(user));
+    when(user.blocked()).thenReturn(true);
+
+    // When/Then
+    assertThatThrownBy(() -> userService.login("test@example.com", "password123"))
+        .isInstanceOf(ForbiddenException.class)
+        .hasMessage("Account blocked.");
+
+    // No token must ever be minted for a blocked account
+    verify(tokenPort, never()).generateToken(any(), any());
+    verify(tokenPort, never()).generateRefreshToken(any());
+  }
+
+  @Test
+  @DisplayName("Should refuse refresh for a blocked account (403 Account blocked)")
+  void shouldRefuseRefreshForBlockedAccount() {
+    // Given - valid refresh token, blocked account
+    User user = mock(User.class);
+    when(tokenPort.validateToken("refresh-token")).thenReturn(true);
+    when(tokenPort.getUsernameFromToken("refresh-token")).thenReturn("test@example.com");
+    when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(user));
+    when(user.blocked()).thenReturn(true);
+
+    // When/Then
+    assertThatThrownBy(() -> userService.refreshToken("refresh-token"))
+        .isInstanceOf(ForbiddenException.class)
+        .hasMessage("Account blocked.");
+
+    verify(tokenPort, never()).generateToken(any(), any());
   }
 }
