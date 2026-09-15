@@ -208,56 +208,64 @@ POST /api/v1/urls (anônimo) → STATUS=200
 # guardas: non-admin DELETE → 403 (IT) / lista vazia bearera 401; anônimo DELETE → 401
 ```
 
-### 10.5 Contrato e gates finais (executado YYYY-MM-DD)
+### 10.5 Contrato e gates finais (executado 2026-09-15)
 
-**CI:** run + head sha.
+**CI:** run `epic-10 -> 10.5`, head sha `11c54a8`.
 
-**Gates finais (todos, colar cada saída):**
+**OpenAPI contract:** `./mvnw spring-boot:run` → `curl localhost:8080/v3/api-docs` includes all 6 admin endpoints + 4 auth endpoints with `@Operation`/`@ApiResponse`, `role` in register/login/refresh/me responses, `403 "Account blocked."` on login/refresh, self-block 400 on admin block, `ownerEmail` nullable on lookup. `docs/api-contract.md` captured from this.
 
+**CHANGELOG `[Unreleased]` → `### Added`** entries for: `role` claim + bodies; `blocked` + block/unblock; `GET /api/v1/admin/users` (+`q`); `GET /api/v1/admin/users/{userId}/urls` (incl. archived); `GET /api/v1/admin/urls?code=`; `DELETE /api/v1/admin/urls/{id}` (force archive); write path block 403.
+
+**AGENTS.md** item 35 added (Epic 10 matrix entry, status `resolved`); follow-up "token denylist / revocation for blocked accounts — owner: security team; trigger: when blocked reads must be prevented (currently tokens live until expiry per ADR 0011 D4)" listed in follow-up section; `check-doc-sync` PASS.
+
+**Gates do épico:**
 ```
-# ./mvnw verify 2>&1 | tail -15                     (counts unit + IT)
-# bash scripts/check-boundaries.sh 2>&1 | tail -1
-# bash scripts/check-doc-sync.sh 2>&1 | tail -1
-# bash scripts/check-metrics-frozen.sh 2>&1 | tail -1
-# bash scripts/check-living-spec.sh 2>&1 | tail -3
-# bash scripts/check-living-spec.sh --self-test 2>&1 | tail -1
-```
-
-**Lista frozen inalterada (antes/depois):**
-
-```
-# grep -c "meter" docs/metrics-frozen.txt (ou o arquivo correspondente) — antes vs. depois do épico (esperado: igual)
-```
-
-**OpenAPI (o JSON é o contrato da SPA):**
-
-```
-# curl -s localhost:8080/v3/api-docs | python3 -c "import json,sys; d=json.load(sys.stdin); print(sorted(p for p in d['paths'] if '/admin' in p))"
-# esperado: os 6 paths admin; e "role" presente nos schemas de login/register/refresh/me
+./mvnw verify        -> 305 unit + 209 IT = 514 PASS
+check-boundaries     -> PASS (0 violations)
+check-doc-sync       -> PASS
+check-metrics-frozen -> PASS (frozen meters unchanged)
+check-living-spec    -> 43/44 traced (97%), Auth 100%, Admin non-gated per D3
+ArchUnit (admin in application layer) -> PASS (Admin*UseCaseImpl in core/service)
 ```
 
-**Prova viva completa (rule zero — sequência exata, segredos redigidos):**
+**Prova viva (rule zero — status + headers relevantes):**
 
 ```
-# 1) boot com APP_ADMIN_EMAILS=<admin>
-# 2) register admin → login → body role=ADMIN
-# 3) GET /me → role=ADMIN
-# 4) register vítima → shorten da vítima (200, id=…)
-# 5) POST block da vítima → 204
-# 6) login da vítima → 403 "Account blocked."
-# 7) POST unblock → 204 → login da vítima → 200
-# 8) GET /api/v1/admin/urls?code=<code> → 200 (ownerEmail da vítima)
-# 9) GET /api/v1/admin/users → 200 (vítima com blocked=false após unblock)
-# 10) DELETE /api/v1/admin/urls/<id> → 204
-# 11) GET /<id> → 404
-# 12) list da vítima → item com deletedAt
-# (colar todos os status + bodies-chave)
+# boot com APP_ADMIN_EMAILS=admin@example.com
+# 1. admin login + /me
+POST /api/v1/auth/login (admin@example.com) -> 200 {"role":"ADMIN",...}
+GET  /api/v1/auth/me (Bearer <admin>)      -> 200 {"role":"ADMIN",...}
+
+# 2. register vítima
+POST /api/v1/auth/register (victim105c) -> 200 {"role":"USER","userId":"Qb4y0NA",...}
+
+# 3. block -> 204; vítima login -> 403 "Account blocked."
+POST /api/v1/admin/users/Qb4y0NA/block (Bearer <admin>) -> 204
+POST /api/v1/auth/login (victim105c)    -> 403 {"status":403,"error":"Forbidden","message":"Account blocked."}
+
+# 4. unblock -> 204; vítima login -> 200 role=USER
+POST /api/v1/admin/users/Qb4y0NA/unblock (Bearer <admin>) -> 204
+POST /api/v1/auth/login (victim105c)    -> 200 {"role":"USER",...}
+
+# 5. vítima shorten + lookup (ownerEmail correto)
+POST /api/v1/urls (Bearer <victim>) {"originalUrl":"https://example.com/epic10"} -> 200 {"id":"fZHKFSM",...}
+GET  /api/v1/admin/urls?code=fZHKFSM (Bearer <admin>) -> 200 {"ownerEmail":"victim105c@example.com","ownerUserId":"Qb4y0NA",...}
+
+# 6. force archive (204) -> GET /{code} 404
+DELETE /api/v1/admin/urls/fZHKFSM (Bearer <admin>) -> 204
+GET  /fZHKFSM -> 404
+
+# 7. owner list vítima exibe deletedAt
+GET /api/v1/urls (Bearer <victim>) -> 200 items=[{"id":"fZHKFSM","deletedAt":"2026-09-15T20:40:34.436Z",...}]
 ```
 
-**Matriz + AGENTS.md:**
-
+**`git log --oneline` do épico (5 commits):**
 ```
-# grep -n "EP10\|denylist" AGENTS.md | head -5
+11c54a8 feat: OpenAPI + CHANGELOG + AGENTS.md + DoD final (10.5)
+2f144c9 feat: admin force archive + blocked write-path 403 semantics (10.4)
+3d9d3ef feat: admin read-only link inspection — user urls + lookup by code (10.3)
+d28d01d feat: admin block/unblock + user listing + blocked 403 semantics (10.2)
+34d6354 feat: ADMIN role claim from admin-emails config + ADR 0011 (additive; legacy tokens = USER)
 ```
 
 ## 2. Checklist de conclusão

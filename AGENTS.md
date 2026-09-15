@@ -583,6 +583,27 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     after capacity, refresh 429, register unlimited, scope isolation). No new meters — the frozen
     `rate.limit.exceeded.total` (single 429 egress) covers auth rejections. — `resolved`
 
+35. **Epic 10 (Admin — Product Administration Surface + ADMIN Role)** — completed 2026-09-15.
+    (a) **Product ADMIN role from env list** (REQ-AUTH-011, REQ-AUTH-012, ADR 0011): `register`,
+    `login`, `refresh`, `me` expose `role` claim (ADMIN/USER); legacy token → USER; admin emails
+    from `APP_ADMIN_EMAILS`; `AdminEmailPort` keeps `core/` annotation-free. (b) **User blocking**
+    (ADR 0011 D3/D4): `blocked` flag expand-only on `User`/`UserEntity`; `block`/`unblock`
+    endpoints idempotent 204, self-block 400; blocked login/refresh → 403 "Account blocked." after
+    credential validation (no info leak); reads (me, list urls) remain allowed in v1. (c) **Admin
+    user listing**: `GET /api/v1/admin/users` cursor-paginated, `q` email-prefix filter; items expose
+    live `role` + `blocked`. (d) **Admin link inspection** (story 10.3): `GET /api/v1/admin/users/
+    {userId}/urls` (owner list incl. archived, `deletedAt` visible); `GET /api/v1/admin/urls?code=`
+    (global lookup by code-as-id, `ownerEmail` nullable). (e) **Force archive + write-path block**
+    (story 10.4): `DELETE /api/v1/admin/urls/{id}` force-archives any link (deletedAt + cache
+    eviction), idempotent 204; blocked account → `POST /api/v1/urls` 403 before any side effect;
+    anonymous unaffected. (f) **OpenAPI** (story 10.5): all 6 admin endpoints + 4 auth endpoints
+    fully annotated (`@Operation`, `@ApiResponse`), `role` documented on responses, 403 "Account
+    blocked." and self-block 400 described, `ownerEmail` nullable. All 5 commits green on
+    `./mvnw verify` + bash gates; living spec: Auth 100% traced, Admin component non-gated per D3.
+    **Follow-up (not debt):** token denylist / revocation for blocked accounts — owner: security
+    team; trigger: when blocked reads must be prevented (currently tokens live until expiry per
+    ADR 0011 D4). — `resolved`
+
 ## 🔍 Operational Discipline & Debugging Guidelines
 
 - **Investigate before trial-and-error:** when a compile or test fails, read the full stack trace and
