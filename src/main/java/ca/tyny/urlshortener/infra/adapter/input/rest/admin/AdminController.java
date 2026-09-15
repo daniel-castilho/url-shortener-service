@@ -1,14 +1,22 @@
 package ca.tyny.urlshortener.infra.adapter.input.rest.admin;
 
+import ca.tyny.urlshortener.core.model.AdminUrlLookup;
 import ca.tyny.urlshortener.core.model.Cursor;
 import ca.tyny.urlshortener.core.model.PageRequest;
 import ca.tyny.urlshortener.core.model.PageResult;
+import ca.tyny.urlshortener.core.model.ShortUrl;
 import ca.tyny.urlshortener.core.model.UserAdminItem;
 import ca.tyny.urlshortener.core.ports.incoming.admin.AdminBlockUserUseCase;
+import ca.tyny.urlshortener.core.ports.incoming.admin.AdminListUserUrlsUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.admin.AdminListUsersUseCase;
+import ca.tyny.urlshortener.core.ports.incoming.admin.AdminLookupUrlUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.admin.AdminUnblockUserUseCase;
+import ca.tyny.urlshortener.infra.adapter.input.rest.dto.LinkListResponse;
+import ca.tyny.urlshortener.infra.adapter.input.rest.dto.ShortUrlResponse;
+import ca.tyny.urlshortener.infra.adapter.input.rest.dto.admin.AdminUrlLookupResponse;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.admin.AdminUserItem;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.admin.AdminUserListResponse;
+import ca.tyny.urlshortener.infra.adapter.input.rest.mapper.LinkMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -39,14 +47,23 @@ public class AdminController {
   private final AdminListUsersUseCase listUsersUseCase;
   private final AdminBlockUserUseCase blockUserUseCase;
   private final AdminUnblockUserUseCase unblockUserUseCase;
+  private final AdminListUserUrlsUseCase listUserUrlsUseCase;
+  private final AdminLookupUrlUseCase lookupUrlUseCase;
+  private final LinkMapper linkMapper;
 
   public AdminController(
       AdminListUsersUseCase listUsersUseCase,
       AdminBlockUserUseCase blockUserUseCase,
-      AdminUnblockUserUseCase unblockUserUseCase) {
+      AdminUnblockUserUseCase unblockUserUseCase,
+      AdminListUserUrlsUseCase listUserUrlsUseCase,
+      AdminLookupUrlUseCase lookupUrlUseCase,
+      LinkMapper linkMapper) {
     this.listUsersUseCase = listUsersUseCase;
     this.blockUserUseCase = blockUserUseCase;
     this.unblockUserUseCase = unblockUserUseCase;
+    this.listUserUrlsUseCase = listUserUrlsUseCase;
+    this.lookupUrlUseCase = lookupUrlUseCase;
+    this.linkMapper = linkMapper;
   }
 
   @GetMapping("/users")
@@ -129,6 +146,72 @@ public class AdminController {
     unblockUserUseCase.unblock(callerEmail(authentication), callerRole(authentication), userId);
     return ResponseEntity.noContent().build();
   }
+
+  @GetMapping("/users/{userId}/urls")
+  @Operation(
+      summary = "List a user's links",
+      description =
+          "Cursor-paginated list of the given user's short links, newest first — the owner list "
+              + "contract, including archived links (deletedAt visible). Read-only.")
+  @ApiResponses(
+      value = {
+        @ApiResponse(responseCode = "200", description = "Paginated list of the user's links"),
+        @ApiResponse(responseCode = "400", description = "Malformed cursor"),
+        @ApiResponse(responseCode = "401", description = "Unauthenticated"),
+        @ApiResponse(responseCode = "403", description = "Forbidden (not an ADMIN)"),
+        @ApiResponse(responseCode = "404", description = "User not found")
+      })
+  public ResponseEntity<LinkListResponse> listUserUrls(
+      @Parameter(description = "User id whose links are inspected", required = true) @PathVariable
+          String userId,
+      @Parameter(description = "Page size (max 100)", example = "20")
+          @RequestParam(defaultValue = "20")
+          int limit,
+      @Parameter(description = "Opaque cursor for pagination") @RequestParam(required = false)
+          String cursor,
+      Authentication authentication) {
+
+    PageRequest request =
+        PageRequest.of(
+            Math.min(limit, PageRequest.MAX_LIMIT), cursor != null ? new Cursor(cursor) : null);
+    PageResult<ShortUrl> page =
+        listUserUrlsUseCase.listUserUrls(callerRole(authentication), userId, request);
+
+    LinkListResponse response =
+        new LinkListResponse(
+            linkMapper.toResponseList(page.items(), BASE_URL),
+            page.nextCursor() != null ? page.nextCursor().value() : null,
+            page.hasMore());
+    return ResponseEntity.ok(response);
+  }
+
+  @GetMapping("/urls")
+  @Operation(
+      summary = "Look up a short URL by code",
+      description =
+          "Resolves any short code globally (any owner, including archived). The code is the "
+              + "document id. Returns the standard link view plus ownerUserId and ownerEmail "
+              + "(ownerEmail is null when the owner document no longer exists). Read-only.")
+  @ApiResponses(
+      value = {
+        @ApiResponse(responseCode = "200", description = "Resolved short URL with ownership"),
+        @ApiResponse(responseCode = "400", description = "Missing code parameter"),
+        @ApiResponse(responseCode = "401", description = "Unauthenticated"),
+        @ApiResponse(responseCode = "403", description = "Forbidden (not an ADMIN)"),
+        @ApiResponse(responseCode = "404", description = "Short URL not found")
+      })
+  public ResponseEntity<AdminUrlLookupResponse> lookupUrl(
+      @Parameter(description = "Short URL code (document id)", required = true, example = "vE1GpYK")
+          @RequestParam
+          String code,
+      Authentication authentication) {
+
+    AdminUrlLookup lookup = lookupUrlUseCase.lookup(callerRole(authentication), code);
+    ShortUrlResponse item = linkMapper.toResponse(lookup.shortUrl(), BASE_URL);
+    return ResponseEntity.ok(new AdminUrlLookupResponse(item, item.userId(), lookup.ownerEmail()));
+  }
+
+  private static final String BASE_URL = "http://localhost"; // mirrors LinkController.getBaseUrl()
 
   private String callerEmail(Authentication authentication) {
     return authentication.getName();

@@ -118,21 +118,47 @@ $ git diff HEAD --stat -- src/main/java/ca/tyny/urlshortener/infra/adapter/outpu
 UserEntityTest: shouldCreateEntityWithAllArgs/set-e-get-todos (blocked=false default sem campo) : PASS
 ```
 
-### 10.3 Inspeção read-only (executado YYYY-MM-DD)
+### 10.3 Inspeção read-only (executado 2026-09-15)
 
-**CI:** run + head sha.
+**CI:** run `epic-10 -> 10.3`, head sha `(a colar no commit 3)`.
 
 **Testes 7–8 (naming + PASS):**
 
 ```
-# ./mvnw verify -Dtest='Admin*IT' 2>&1 | grep -E "Tests run"
+$ ./mvnw test -Dtest='AdminInspectIT' 2>&1 | grep -E "Tests run"
+Tests run: 7, Failures: 0, Errors: 0, Skipped: 0 -- in Admin read-only inspection IT (10.3)
+BUILD SUCCESS
+-- nomes (matriz 7–8 + guardas):
+adminInspectsUserUrlsIncludingArchived                  PASS (archived com deletedAt visível + live deletedAt null)
+adminListUserUrlsPagination                             PASS (limit=2, hasMore, nextCursor, sem overlap)
+adminListUserUrlsUnknownUserIs404                       PASS
+adminLooksUpUrlByCode                                   PASS (ownerUserId + ownerEmail corretos)
+adminLookupUnknownCodeIs404                             PASS
+adminLookupReturnsNullOwnerEmailWhenOwnerMissing        PASS (ownerUserId presente, ownerEmail null)
+securityOnInspectionEndpoints                           PASS (non-admin 403, anônimo 401)
 ```
 
 **Lookup por code (body completo — donos redigidos):**
 
 ```
-# GET /api/v1/admin/urls?code=<code> → 200 {…ShortUrlResponse, "ownerUserId":"…", "ownerEmail":"…"}
-# GET /api/v1/admin/urls?code=zzzzzzz → 404
+$ CU=$(shorten da vítima victim5@example.com)   # code = id do documento
+$ curl -s "localhost:8080/api/v1/admin/urls?code=$CU" -H "Authorization: Bearer <admin>"
+{"item":{"id":"fNvQzId","originalUrl":"https://example.com/live-v5","shortUrl":"http://localhost/fNvQzId",
+ "createdAt":"...","userId":"Ebtyccp","isCustomAlias":false,"clickCount":0,"expiresAt":null,
+ "title":null,"tags":null,"utm":null,"deletedAt":null,"domain":null},
+ "ownerUserId":"Ebtyccp","ownerEmail":"victim5@example.com"}
+STATUS=200
+
+$ curl -s "localhost:8080/api/v1/admin/urls?code=zzzzzzz" ...
+{"status":404,"error":"URL Not Found","message":"URL not found for ID: zzzzzzz","timestamp":"..."} STATUS=404
+
+# lista de links do usuário (inclui archived): C2 arquivado → deletedAt visível
+GET /api/v1/admin/users/Ebtyccp/urls?limit=2 (STATUS=200)
+items 2 hasMore False
+  id= mXN9zp3 deletedAt= 2026-09-15T19:14:52.768Z
+  id= fNvQzId deletedAt= None
+# guards: non-admin → 403; anônimo → 401; list de user inexistente → 404
+# paginação por cursor coberta em AdminInspectIT (limit=2 → hasMore/nextCursor → page2 sem overlap)
 ```
 
 ### 10.4 Force archive + write path (executado YYYY-MM-DD)
