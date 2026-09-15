@@ -1,24 +1,20 @@
-# Epic 10 – Definition of Done (DoD) [template de evidências]
+# Epic 10 – Definition of Done (DoD) [evidence template]
 
-**Regra zero — zero-from-memory:** Todo número, sha ou contagem neste documento
-deve ser colado de um output de comando incluído neste documento. Se não der
-para colar o comando que gerou, trata-se de hipótese e deve ser etiquetado
-como tal (TD-13 class). Segredos (e-mails de teste reais, tokens) redigidos
-como `<redigido>` — mas status codes, headers e bodies **completos**.
+**Rule zero — zero-from-memory:** Every number, sha, or count in this document must be pasted from a command output included in this document. If you can't paste the command that generated it, it's a hypothesis and must be tagged as such (TD-13 class). Secrets (real test emails, tokens) redacted as `<redacted>` — but status codes, headers, and bodies **complete**.
 
-**Commits do épico (colar no fechamento):**
+**Epic commits (paste at closing):**
 
 ```
-# git log --oneline <base>..HEAD   (esperado: 5 commits, 10.1 → 10.5)
+# git log --oneline <base>..HEAD   (expected: 5 commits, 10.1 → 10.5)
 ```
 
-## 1. Evidências obrigatórias (outputs reais coladas)
+## 1. Mandatory Evidence (real outputs pasted)
 
-### 10.1 Papel ADMIN no token + ADR 0011 (executado 2026-09-15)
+### 10.1 ADMIN role in token + ADR 0011 (executed 2026-09-15)
 
-**CI (commit da story):** run `epic-10 -> 10.1`, head sha `34d6354`.
+**CI (story commit):** run `epic-10 -> 10.1`, head sha `34d6354`.
 
-**Unit/IT desta story (colar o resumo do surefire/failsafe — counts e PASS):**
+**Unit/IT for this story (paste surefire/failsafe summary — counts and PASS):**
 
 ```
 $ ./mvnw verify 2>&1 | grep -E 'Tests run: [0-9]+.*Failures'
@@ -26,54 +22,54 @@ Tests run: 487 ... (299 unit + 188 IT, Failures: 0, Errors: 0)  # BUILD SUCCESS
 (AdminBootstrapIT: Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 24.78 s)
 ```
 
-**Living spec (Auth ≥ 100% com os requisitos novos + traces):**
+**Living spec (Auth ≥ 100% with new requirements + traces):**
 
 ```
-$ bash scripts/check-living-spec.sh 2>&1 | tail -3
+$ bash scripts/check-living-spec.sh 2>&1 | tail-3
 REQ-AUTH-011 (Auth) — traced
 REQ-AUTH-012 (Auth) — traced
 Coverage: 43 / 44 requirements traced (97%)
 PASS: living specification gate.
 
-$ bash scripts/check-living-spec.sh --self-test 2>&1 | tail -1
+$ bash scripts/check-living-spec.sh --self-test 2>&1 | tail-1
 PASS: self-test verified — gate detects missing traces, stray classes, dangling refs, ...
 ```
 
-**Prova do claim (token de teste decodificado — segredo redigido):**
+**Claim proof (decoded test token — secret redacted):**
 
 ```
-# boot local com APP_ADMIN_EMAILS=admin@example.com
+# boot local with APP_ADMIN_EMAILS=admin@example.com
 $ register admin → login
-admin token payload (decodificado): {"sub":"admin@example.com","iat":...,"exp":...,"role":"ADMIN"}
+admin token payload (decoded): {"sub":"admin@example.com","iat":...,"exp":...,"role":"ADMIN"}
 $ register victim → login
-victim token payload (decodificado): {"sub":"victim@example.com","iat":...,"exp":...,"role":"USER"}
-(decodificação: echo '<token>' | cut -d. -f2 | base64 -d 2>/dev/null | python3 -m json.tool)
+victim token payload (decoded): {"sub":"victim@example.com","iat":...,"exp":...,"role":"USER"}
+(decoding: echo '<token>' | cut -d. -f2 | base64 -d 2>/dev/null | python3 -m json.tool)
 ```
 
-**Compat legada (IT):**
+**Legacy compat (IT):**
 
 ```
 AdminBootstrapIT > legacyTokenWithoutClaimIsAuthenticatedAsUserRole : PASS
-(https gerado com jwtTokenProvider.generateToken(email, null) → authority ROLE_USER, /me → USER)
+(token generated with jwtTokenProvider.generateToken(email, null) → authority ROLE_USER, /me → USER)
 ```
 
-### 10.2 Block/unblock + listagem (executado 2026-09-15)
+### 10.2 Block/unblock + listing (executed 2026-09-15)
 
-**CI:** run `epic-10 -> 10.2`, head sha `(a colar no commit 2)`.
+**CI:** run `epic-10 -> 10.2`, head sha `d28d01d`.
 
-**Itens 1–6 da matriz de testes (nome de cada teste + PASS):**
+**Matrix items 1–6 (each test name + PASS):**
 
 ```
 $ ./mvnw test -Dtest='AdminUsersIT' 2>&1 | grep -E "Tests run|in Admin product"
 Tests run: 10, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 27.75 s -- in Admin product administration surface IT (ADR 0011)
 BUILD SUCCESS
 
--- nomes dos testes (matriz 1–6 + extras):
+-- test names (matrix 1–6 + extras):
 adminCanListUsersWithRoleAndBlockedFields           PASS
 emailPrefixFilter                                    PASS
 cursorPagination                                     PASS
-blockedUserLosesLogin                                PASS (bloqueado → login 403 + block idempotente 204)
-blockedUserCannotRefresh                             PASS (refresh de bloqueado → 403)
+blockedUserLosesLogin                                PASS (blocked → login 403 + block idempotent 204)
+blockedUserCannotRefresh                             PASS (blocked refresh → 403)
 selfBlockRejected                                    PASS (400)
 unblockRestoresAccess                                PASS
 blockUnknownUserAnswers404                           PASS
@@ -81,25 +77,25 @@ nonAdminForbidden                                    PASS (403)
 anonymousRejected                                    PASS (401)
 ```
 
-**403 de bloqueado (corpo completo):**
+**Blocked 403 (full body):**
 
 ```
-# boot local; register vítima; block como admin (204); login da vítima:
+# boot local; register victim; block as admin (204); victim login:
 $ curl -s -X POST localhost:8080/api/v1/auth/login \
     -H 'Content-Type: application/json' \
     -d '{"email":"victim@example.com","password":"password123"}' -w '\nSTATUS=%{http_code}\n'
 {"status":403,"error":"Forbidden","message":"Account blocked.","timestamp":"..."}
 STATUS=403
 
-# prova da ordem — credencial inválida de bloqueado → 401 (não 500):
+# order proof — invalid credential of blocked → 401 (not 500):
 $ curl -s -X POST ... -d '{"email":"victim@example.com","password":"WRONG"}' ...
 {"status":401,"error":"Unauthorized","message":"Invalid credentials","timestamp":"..."}
 STATUS=401
 
-# prova viva adicional (same session):
-block             → 204 ; block novamente (idempotente) → 204
-unblock           → 204 ; login após unblock → 200
-refresh de bloqueado → 403 "Account blocked."
+# additional live proof (same session):
+block             → 204 ; block again (idempotent) → 204
+unblock           → 204 ; login after unblock → 200
+blocked refresh   → 403 "Account blocked."
 self-block        → 400 {"error":"Invalid Request","message":"You cannot block your own account"}
 block unknown     → 404 {"error":"User Not Found","message":"User not found"}
 non-admin GET     → 403 {"error":"Forbidden","message":"Forbidden"}
@@ -110,105 +106,105 @@ GET /users?q=victim → 1 item (prefix filter)
 GET /users?limit=1 → hasMore=true, nextCursor=... ; ?cursor=<next> → page2
 ```
 
-**Expands-only (sem V-migration):**
+**Expand-only (no V-migration):**
 
 ```
 $ git diff HEAD --stat -- src/main/java/ca/tyny/urlshortener/infra/adapter/output/persistence/migration
-(empty — nenhum V* adicionado; blocked é campo expand-only via updateOne $set)
-UserEntityTest: shouldCreateEntityWithAllArgs/set-e-get-todos (blocked=false default sem campo) : PASS
+(empty — no V* added; blocked is expand-only field via updateOne $set)
+UserEntityTest: shouldCreateEntityWithAllArgs/set-e-get-todos (blocked=false default without field) : PASS
 ```
 
-### 10.3 Inspeção read-only (executado 2026-09-15)
+### 10.3 Read-only inspection (executed 2026-09-15)
 
-**CI:** run `epic-10 -> 10.3`, head sha `(a colar no commit 3)`.
+**CI:** run `epic-10 -> 10.3`, head sha `3d9d3ef`.
 
-**Testes 7–8 (naming + PASS):**
+**Tests 7–8 (naming + PASS):**
 
 ```
 $ ./mvnw test -Dtest='AdminInspectIT' 2>&1 | grep -E "Tests run"
 Tests run: 7, Failures: 0, Errors: 0, Skipped: 0 -- in Admin read-only inspection IT (10.3)
 BUILD SUCCESS
--- nomes (matriz 7–8 + guardas):
-adminInspectsUserUrlsIncludingArchived                  PASS (archived com deletedAt visível + live deletedAt null)
-adminListUserUrlsPagination                             PASS (limit=2, hasMore, nextCursor, sem overlap)
+-- names (matrix 7–8 + guards):
+adminInspectsUserUrlsIncludingArchived                  PASS (archived with deletedAt visible + live deletedAt null)
+adminListUserUrlsPagination                             PASS (limit=2, hasMore, nextCursor, no overlap)
 adminListUserUrlsUnknownUserIs404                       PASS
-adminLooksUpUrlByCode                                   PASS (ownerUserId + ownerEmail corretos)
+adminLooksUpUrlByCode                                   PASS (correct ownerUserId + ownerEmail)
 adminLookupUnknownCodeIs404                             PASS
-adminLookupReturnsNullOwnerEmailWhenOwnerMissing        PASS (ownerUserId presente, ownerEmail null)
-securityOnInspectionEndpoints                           PASS (non-admin 403, anônimo 401)
+adminLookupReturnsNullOwnerEmailWhenOwnerMissing        PASS (ownerUserId present, ownerEmail null)
+securityOnInspectionEndpoints                           PASS (non-admin 403, anonymous 401)
 ```
 
-**Lookup por code (body completo — donos redigidos):**
+**Lookup by code (full body — owners redacted):**
 
 ```
-$ CU=$(shorten da vítima victim5@example.com)   # code = id do documento
+$ CU=$(victim5@example.com shorten)   # code = document id
 $ curl -s "localhost:8080/api/v1/admin/urls?code=$CU" -H "Authorization: Bearer <admin>"
 {"item":{"id":"fNvQzId","originalUrl":"https://example.com/live-v5","shortUrl":"http://localhost/fNvQzId",
- "createdAt":"...","userId":"Ebtyccp","isCustomAlias":false,"clickCount":0,"expiresAt":null,
- "title":null,"tags":null,"utm":null,"deletedAt":null,"domain":null},
- "ownerUserId":"Ebtyccp","ownerEmail":"victim5@example.com"}
+  "createdAt":"...","userId":"Ebtyccp","isCustomAlias":false,"clickCount":0,"expiresAt":null,
+  "title":null,"tags":null,"utm":null,"deletedAt":null,"domain":null},
+  "ownerUserId":"Ebtyccp","ownerEmail":"victim5@example.com"}
 STATUS=200
 
 $ curl -s "localhost:8080/api/v1/admin/urls?code=zzzzzzz" ...
 {"status":404,"error":"URL Not Found","message":"URL not found for ID: zzzzzzz","timestamp":"..."} STATUS=404
 
-# lista de links do usuário (inclui archived): C2 arquivado → deletedAt visível
+# user's link list (includes archived): C2 archived → deletedAt visible
 GET /api/v1/admin/users/Ebtyccp/urls?limit=2 (STATUS=200)
 items 2 hasMore False
   id= mXN9zp3 deletedAt= 2026-09-15T19:14:52.768Z
   id= fNvQzId deletedAt= None
-# guards: non-admin → 403; anônimo → 401; list de user inexistente → 404
-# paginação por cursor coberta em AdminInspectIT (limit=2 → hasMore/nextCursor → page2 sem overlap)
+# guards: non-admin → 403; anonymous → 401; non-existent user list → 404
+# cursor pagination covered in AdminInspectIT (limit=2 → hasMore/nextCursor → page2 no overlap)
 ```
 
-### 10.4 Force archive + write path (executado 2026-09-15)
+### 10.4 Force archive + write path (executed 2026-09-15)
 
-**CI:** run `epic-10 -> 10.4`, head sha `(a colar no commit 4)`.
+**CI:** run `epic-10 -> 10.4`, head sha `2f144c9`.
 
-**Testes 9–11 (naming + PASS):**
+**Tests 9–11 (naming + PASS):**
 
 ```
 $ ./mvnw test -Dtest='AdminArchiveIT' 2>&1 | grep -E "Tests run"
 Tests run: 4, Failures: 0, Errors: 0, Skipped: 0 -- in Admin force archive + write-path block check IT (10.4)
 BUILD SUCCESS
--- nomes (matriz 9–11):
-forceArchiveSequence                                PASS (204 → redirect 404 → 204 idempotente → owner list deletedAt → 404 unknown)
-blockedUserCannotShortenButCanRead                  PASS (403 "Account blocked.", nada gravado; GET /urls 200; anônimo 200)
-securityOnForceArchive                              PASS (non-admin 403, anônimo 401, link intacto)
+-- names (matrix 9–11):
+forceArchiveSequence                                PASS (204 → redirect 404 → 204 idempotent → owner list deletedAt → 404 unknown)
+blockedUserCannotShortenButCanRead                  PASS (403 "Account blocked.", nothing written; GET /urls 200; anonymous 200)
+securityOnForceArchive                              PASS (non-admin 403, anonymous 401, link intact)
 forceArchiveUnknownLinkIs404                        PASS
--- unit (write path, gated core/service, classe já traceada):
+-- unit (write path, gated core/service, class already traced):
 UrlShortenerServiceTest > blocked account cannot shorten — 403 before any side effect : PASS
                        > anonymous shorten is not affected by any account block        : PASS
 Tests run: 32 (UrlShortenerServiceTest), Failures: 0, Errors: 0
 ```
 
-**Sequência force archive (status codes na ordem):**
+**Force archive sequence (status codes in order):**
 
 ```
-# boot local com APP_ADMIN_EMAILS=admin@example.com
-$ link XSFYZP2 (shorten autenticado da vítima, pré-block)
+# boot local with APP_ADMIN_EMAILS=admin@example.com
+$ link XSFYZP2 (victim authenticated shorten, pre-block)
 redirect pre-archive   -> 302
 DELETE /admin/urls/XSFYZP2 -> 204
 redirect post-archive  -> 404
-DELETE novamente       -> 204 (idempotente)
+DELETE again           -> 204 (idempotent)
 DELETE /admin/urls/zzzzzzz -> 404
 ```
-Owner list (token pós-unblock) → item com `deletedAt=2026-09-15T19:27:23.536Z`;
-lookup admin → `id=XSFYZP2 deletedAt=...474Z ownerEmail=victim6@example.com`.
+Owner list (post-unblock token) → item with `deletedAt=2026-09-15T19:27:23.536Z`;
+admin lookup → `id=XSFYZP2 deletedAt=...474Z ownerEmail=victim6@example.com`.
 
-**Write path (sequência com status):**
+**Write path (sequence with status):**
 
 ```
-# token da vítima emitido ANTES do block; block → 204
-POST /api/v1/urls (com o mesmo token) →
+# victim token issued BEFORE block; block → 204
+POST /api/v1/urls (with same token) →
   {"status":403,"error":"Forbidden","message":"Account blocked.","timestamp":"..."}  STATUS=403
-# nada foi gravado: GET /api/v1/urls (mesmo token) → 200, items 1 (só o pré-block)
-# anônimo continua podendo encurtar:
-POST /api/v1/urls (anônimo) → STATUS=200
-# guardas: non-admin DELETE → 403 (IT) / lista vazia bearera 401; anônimo DELETE → 401
+# nothing written: GET /api/v1/urls (same token) → 200, items 1 (only pre-block)
+# anonymous still can shorten:
+POST /api/v1/urls (anonymous) → STATUS=200
+# guards: non-admin DELETE → 403 (IT) / empty bearer list 401; anonymous DELETE → 401
 ```
 
-### 10.5 Contrato e gates finais (executado 2026-09-15)
+### 10.5 Contract and final gates (executed 2026-09-15)
 
 **CI:** run `epic-10 -> 10.5`, head sha `11c54a8`.
 
@@ -218,7 +214,7 @@ POST /api/v1/urls (anônimo) → STATUS=200
 
 **AGENTS.md** item 35 added (Epic 10 matrix entry, status `resolved`); follow-up "token denylist / revocation for blocked accounts — owner: security team; trigger: when blocked reads must be prevented (currently tokens live until expiry per ADR 0011 D4)" listed in follow-up section; `check-doc-sync` PASS.
 
-**Gates do épico:**
+**Epic gates:**
 ```
 ./mvnw verify        -> 305 unit + 209 IT = 514 PASS
 check-boundaries     -> PASS (0 violations)
@@ -228,26 +224,26 @@ check-living-spec    -> 43/44 traced (97%), Auth 100%, Admin non-gated per D3
 ArchUnit (admin in application layer) -> PASS (Admin*UseCaseImpl in core/service)
 ```
 
-**Prova viva (rule zero — status + headers relevantes):**
+**Live proof (rule zero — status + relevant headers):**
 
 ```
-# boot com APP_ADMIN_EMAILS=admin@example.com
+# boot with APP_ADMIN_EMAILS=admin@example.com
 # 1. admin login + /me
 POST /api/v1/auth/login (admin@example.com) -> 200 {"role":"ADMIN",...}
 GET  /api/v1/auth/me (Bearer <admin>)      -> 200 {"role":"ADMIN",...}
 
-# 2. register vítima
+# 2. register victim
 POST /api/v1/auth/register (victim105c) -> 200 {"role":"USER","userId":"Qb4y0NA",...}
 
-# 3. block -> 204; vítima login -> 403 "Account blocked."
+# 3. block -> 204; victim login -> 403 "Account blocked."
 POST /api/v1/admin/users/Qb4y0NA/block (Bearer <admin>) -> 204
 POST /api/v1/auth/login (victim105c)    -> 403 {"status":403,"error":"Forbidden","message":"Account blocked."}
 
-# 4. unblock -> 204; vítima login -> 200 role=USER
+# 4. unblock -> 204; victim login -> 200 role=USER
 POST /api/v1/admin/users/Qb4y0NA/unblock (Bearer <admin>) -> 204
 POST /api/v1/auth/login (victim105c)    -> 200 {"role":"USER",...}
 
-# 5. vítima shorten + lookup (ownerEmail correto)
+# 5. victim shorten + lookup (correct ownerEmail)
 POST /api/v1/urls (Bearer <victim>) {"originalUrl":"https://example.com/epic10"} -> 200 {"id":"fZHKFSM",...}
 GET  /api/v1/admin/urls?code=fZHKFSM (Bearer <admin>) -> 200 {"ownerEmail":"victim105c@example.com","ownerUserId":"Qb4y0NA",...}
 
@@ -255,11 +251,11 @@ GET  /api/v1/admin/urls?code=fZHKFSM (Bearer <admin>) -> 200 {"ownerEmail":"vict
 DELETE /api/v1/admin/urls/fZHKFSM (Bearer <admin>) -> 204
 GET  /fZHKFSM -> 404
 
-# 7. owner list vítima exibe deletedAt
+# 7. victim owner list shows deletedAt
 GET /api/v1/urls (Bearer <victim>) -> 200 items=[{"id":"fZHKFSM","deletedAt":"2026-09-15T20:40:34.436Z",...}]
 ```
 
-**`git log --oneline` do épico (5 commits):**
+**`git log --oneline` of epic (5 commits):**
 ```
 11c54a8 feat: OpenAPI + CHANGELOG + AGENTS.md + DoD final (10.5)
 2f144c9 feat: admin force archive + blocked write-path 403 semantics (10.4)
@@ -268,28 +264,28 @@ d28d01d feat: admin block/unblock + user listing + blocked 403 semantics (10.2)
 34d6354 feat: ADMIN role claim from admin-emails config + ADR 0011 (additive; legacy tokens = USER)
 ```
 
-## 2. Checklist de conclusão
+## 2. Closing Checklist
 
-- [ ] 5 commits (10.1–10.5), cada um com `./mvnw verify` + gates bash verdes — 5 pares run/sha de CI colados acima.
-- [ ] 18 testes de contrato da matriz (`epic-10-testing.md`) presentes e verdes (nomes colados).
-- [ ] `check-living-spec` + `--self-test` verdes (Auth ≥ 100% traced; Admin ainda **não** gated — nenhum `@spec-complete` novo).
-- [ ] `check-metrics-frozen` verde — lista intacta (zero metros novos).
-- [ ] `check-boundaries` + asserção ArchUnit de use cases admin em application layer verdes.
-- [ ] `check-doc-sync` verde (AGENTS.md matrix + CHANGELOG consistentes).
-- [ ] ADR 0011 Accepted (com a consequência dos tiers do actuator escrita).
-- [ ] OpenAPI: 6 paths admin + `role` nos 4 responses de auth + 403 "Account blocked." + self-block 400 + `ownerEmail` nullable.
-- [ ] CHANGELOG `[Unreleased]` completo (tudo que o operator vê).
-- [ ] Follow-up de **denylist/revogação ao bloquear** registrado na matriz (com gatilho) — não vira dívida fantasma.
-- [ ] Proof viva completa colada (12 passos).
-- [ ] `git status` limpo no fechamento.
+- [ ] 5 commits (10.1–10.5), each with `./mvnw verify` + green bash gates — 5 CI run/sha pairs pasted above.
+- [ ] 18 contract tests from matrix (`epic-10-testing.md`) present and green (names pasted).
+- [ ] `check-living-spec` + `--self-test` PASS (Auth ≥ 100% traced; Admin still **not** gated — no new `@spec-complete`).
+- [ ] `check-metrics-frozen` PASS — list intact (zero new meters).
+- [ ] `check-boundaries` + ArchUnit assertion for admin use cases in application layer PASS.
+- [ ] `check-doc-sync` PASS (AGENTS.md matrix + CHANGELOG consistent).
+- [ ] ADR 0011 Accepted (with actuator tiers consequence written).
+- [ ] OpenAPI: 6 admin paths + `role` in 4 auth responses + 403 "Account blocked." + self-block 400 + `ownerEmail` nullable.
+- [ ] CHANGELOG `[Unreleased]` complete (everything the operator sees).
+- [ ] Follow-up for **denylist/revocation on block** registered in matrix (with trigger) — not ghost debt.
+- [ ] Complete live proof pasted (12 steps).
+- [ ] `git status` clean at closing.
 
-## 3. Fora de escopo confirmado (não vira dívida fantasma)
+## 3. Confirmed Out of Scope (not ghost debt)
 
-- **Denylist/revogação de JWTs ao bloquear** — follow-up registrado (matriz AGENTS.md + corpo do commit 5); gatilho nomeado; mesma família da rotação de refresh. Em v1, tokens de acesso de bloqueado vivem até o expiry (documentado no ADR 0011).
-- **Rotação de refresh** — dívida pré-existente, não tocada.
-- **Admin de branded domains / dashboard de rate limit** — fora do produto atual (Prometheus cobre o observável).
-- **Novo path de cookie `/admin`** — o access cookie `Path=/` já cobre (ADR 0010).
-- **CORS / header CSRF** — não se aplica (same-origin; R2 do ADR 0010).
-- **Campo `role` no banco / "first user = admin"** — rejeitados no ADR 0011 (bootstrap circular / ambiguidade); o papel vem da env list.
-- **Bloqueio de shorten anônimo (por IP)** — o throttle AUTH já é por IP; block de conta não se estende a IPs (documentado no OpenAPI).
-- **Componente Admin spec-complete** — a story de living-spec 100% do Admin é trabalho futuro (padrão: nenhum componente nasce gated).
+- **Denylist/revocation of JWTs on block** — follow-up registered (AGENTS.md matrix + commit 5 body); trigger named; same family as refresh rotation. In v1, blocked user's access tokens live until expiry (documented in ADR 0011).
+- **Refresh rotation** — pre-existing debt, untouched.
+- **Admin of branded domains / rate limit dashboard** — outside current product (Prometheus covers the observable).
+- **New cookie path `/admin`** — access cookie `Path=/` already covers (ADR 0010).
+- **CORS / CSRF header** — not applicable (same-origin; R2 of ADR 0010).
+- **`role` field in DB / "first user = admin"** — rejected in ADR 0011 (circular bootstrap / ambiguity); role comes from env list.
+- **Blocking anonymous shorten (by IP)** — AUTH throttle already by IP; account block doesn't extend to IPs (documented in OpenAPI).
+- **Admin component spec-complete** — living-spec 100% for Admin is future work (pattern: no component starts gated).
