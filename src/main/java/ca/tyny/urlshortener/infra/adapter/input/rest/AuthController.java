@@ -139,12 +139,15 @@ public class AuthController {
   @Operation(
       summary = "Get current user identity",
       description =
-          "Returns the identity {userId, email, name} of the authenticated user. Authentication "
-              + "via the Authorization Bearer header or the access_token cookie. "
+          "Returns the identity {userId, email, role, name} of the authenticated user. The role is "
+              + "resolved from the configured admin email list (ADR 0011 D1), mirroring the role "
+              + "claim: ADMIN when the email is listed, USER otherwise. Authentication via the "
+              + "Authorization Bearer header or the access_token cookie. "
               + "Cache-Control: no-store.")
   public ResponseEntity<MeResponse> me(Authentication authentication) {
     UserService.AuthResult result = userService.me(authentication.getName());
-    MeResponse meResponse = new MeResponse(result.userId(), result.email(), result.name());
+    MeResponse meResponse =
+        new MeResponse(result.userId(), result.email(), result.role(), result.name());
     return ResponseEntity.ok().header(HttpHeaders.CACHE_CONTROL, "no-store").body(meResponse);
   }
 
@@ -232,6 +235,7 @@ public class AuthController {
         .refreshToken(result.refreshToken())
         .userId(result.userId())
         .email(result.email())
+        .role(result.role())
         .name(result.name())
         .build();
   }

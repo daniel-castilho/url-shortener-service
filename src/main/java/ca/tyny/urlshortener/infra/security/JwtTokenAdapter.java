@@ -13,8 +13,8 @@ public class JwtTokenAdapter implements TokenPort {
   }
 
   @Override
-  public String generateToken(String email) {
-    return jwtTokenProvider.generateToken(email);
+  public String generateToken(String email, String role) {
+    return jwtTokenProvider.generateToken(email, role);
   }
 
   @Override

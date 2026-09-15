@@ -40,6 +40,7 @@ import ca.tyny.urlshortener.core.validation.UrlValidator;
 import ca.tyny.urlshortener.infra.adapter.input.rest.mapper.LinkMapper;
 import ca.tyny.urlshortener.infra.adapter.output.analytics.GeoIpCountryResolver;
 import ca.tyny.urlshortener.infra.adapter.output.validation.DefaultUrlValidator;
+import ca.tyny.urlshortener.infra.config.properties.AdminProperties;
 import ca.tyny.urlshortener.infra.config.properties.AnalyticsProperties;
 import ca.tyny.urlshortener.infra.config.properties.DomainProperties;
 import ca.tyny.urlshortener.infra.config.properties.ShortenerProperties;
@@ -59,7 +60,8 @@ import org.springframework.core.annotation.Order;
   ca.tyny.urlshortener.infra.config.properties.ShortenerProperties.class,
   ca.tyny.urlshortener.infra.config.properties.DomainProperties.class,
   ca.tyny.urlshortener.infra.config.properties.AnalyticsProperties.class,
-  ca.tyny.urlshortener.infra.config.properties.UrlCacheProperties.class
+  ca.tyny.urlshortener.infra.config.properties.UrlCacheProperties.class,
+  ca.tyny.urlshortener.infra.config.properties.AdminProperties.class
 })
 public class ServiceConfig {
 
@@ -113,9 +115,15 @@ public class ServiceConfig {
       PasswordEncoderPort passwordEncoder,
       TokenPort tokenPort,
       AuthenticationPort authenticationPort,
-      IdGeneratorPort idGeneratorPort) {
+      IdGeneratorPort idGeneratorPort,
+      AdminProperties adminEmailPort) {
     return new UserService(
-        userRepository, passwordEncoder, tokenPort, authenticationPort, idGeneratorPort);
+        userRepository,
+        passwordEncoder,
+        tokenPort,
+        authenticationPort,
+        idGeneratorPort,
+        adminEmailPort);
   }
 
   @Bean

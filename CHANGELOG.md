@@ -9,6 +9,19 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ### Added
 
+- **Product ADMIN role from env list (REQ-AUTH-011, REQ-AUTH-012, ADR 0011)** — `POST
+  /api/v1/auth/register|login|refresh` and `GET /api/v1/auth/me` now expose a `role` field:
+  `ADMIN` when the email belongs to the configured admin list (`app.admin-emails` /
+  `APP_ADMIN_EMAILS`, comma-separated, empty = no admin), `USER` otherwise. The role claim lives
+  **only in the access token** (JWT `role` claim); the refresh token carries no claim (minimal
+  surface). A legacy token issued without the claim is authenticated with authority `ROLE_USER`
+  (documented + tested). `MeResponse` gains `role`; `AuthResponse` gains `role`. The new outbound
+  port `AdminEmailPort` keeps `core/` annotation-free (Rule 1). D1–D4 decisions and revisit
+  triggers: ADR 0011. Tests: `UserServiceTest` +2 (role USER/ADMIN in AuthResult), new
+  `JwtTokenAdapterTest` (2), new `JwtAuthenticationFilterTest` (3 authority cases), new
+  `AdminBootstrapIT` (3: admin→ADMIN, user→USER, legacy token→USER). Living spec: Auth now
+  12/12 (100%), gate 43/44 traced (97%).
+
 - **Auth rate limiting (REQ-AUTH-010, REQ-RATE-006)** — `POST /api/v1/auth/login` and
   `POST /api/v1/auth/refresh` are now rate-limited **per IP** through a new `AUTH` scope in the
   shared Redis token bucket (default `rate-limiter.auth-limit=10` / `auth-window=PT1M`; env

@@ -26,6 +26,8 @@ spring:
 # Application Configuration
 # ========================================
 app:
+  # Comma-separated admin emails (env APP_ADMIN_EMAILS). Empty = no admin. (ADR 0011)
+  admin-emails: []
   redis:
     # Redisson client timeout budget (ADR 0005: "Redis ≤ 500ms").
     # Under an outage these bound each Redis op, so fail-open degrades instead of hangs.

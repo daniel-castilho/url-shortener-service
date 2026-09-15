@@ -70,7 +70,8 @@ class AuthControllerTest {
     // Given
     RegisterRequest request = new RegisterRequest("Test User", "test@example.com", "password123");
     UserService.AuthResult result =
-        new UserService.AuthResult("token", "refresh-token", "id", "test@example.com", "Test User");
+        new UserService.AuthResult(
+            "token", "refresh-token", "id", "test@example.com", "USER", "Test User");
 
     when(userService.register(eq("test@example.com"), eq("Test User"), eq("password123")))
         .thenReturn(result);
@@ -84,6 +85,7 @@ class AuthControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.token").value("token"))
         .andExpect(jsonPath("$.email").value("test@example.com"))
+        .andExpect(jsonPath("$.role").value("USER"))
         .andExpect(header().string("Cache-Control", "no-store"))
         .andExpect(cookie().httpOnly(ACCESS_COOKIE, true))
         .andExpect(cookie().secure(ACCESS_COOKIE, true))
@@ -97,7 +99,8 @@ class AuthControllerTest {
     // Given
     LoginRequest request = new LoginRequest("test@example.com", "password123");
     UserService.AuthResult result =
-        new UserService.AuthResult("token", "refresh-token", "id", "test@example.com", "Test User");
+        new UserService.AuthResult(
+            "token", "refresh-token", "id", "test@example.com", "USER", "Test User");
 
     when(userService.login(eq("test@example.com"), eq("password123"))).thenReturn(result);
 
@@ -144,7 +147,7 @@ class AuthControllerTest {
     RefreshTokenRequest request = new RefreshTokenRequest("valid-refresh-token");
     UserService.AuthResult result =
         new UserService.AuthResult(
-            "new-token", "valid-refresh-token", "id", "test@example.com", "Test User");
+            "new-token", "valid-refresh-token", "id", "test@example.com", "USER", "Test User");
 
     when(userService.refreshToken(eq("valid-refresh-token"))).thenReturn(result);
 
@@ -168,7 +171,7 @@ class AuthControllerTest {
     // Given
     UserService.AuthResult result =
         new UserService.AuthResult(
-            "new-token", "refresh-cookie-value", "id", "test@example.com", "Test User");
+            "new-token", "refresh-cookie-value", "id", "test@example.com", "USER", "Test User");
 
     when(userService.refreshToken(eq("refresh-cookie-value"))).thenReturn(result);
 
@@ -226,7 +229,7 @@ class AuthControllerTest {
   void shouldReturnMe() throws Exception {
     // Given
     UserService.AuthResult result =
-        new UserService.AuthResult(null, null, "id", "test@example.com", "Test User");
+        new UserService.AuthResult(null, null, "id", "test@example.com", "USER", "Test User");
     when(userService.me(eq("test@example.com"))).thenReturn(result);
 
     // When/Then
@@ -235,6 +238,7 @@ class AuthControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.userId").value("id"))
         .andExpect(jsonPath("$.email").value("test@example.com"))
+        .andExpect(jsonPath("$.role").value("USER"))
         .andExpect(jsonPath("$.name").value("Test User"))
         .andExpect(header().string("Cache-Control", "no-store"));
   }
