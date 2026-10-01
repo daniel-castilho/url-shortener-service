@@ -72,8 +72,54 @@ jobs:
       - name: CHANGELOG gate
         run: bash scripts/check-changelog.sh
 
-      - name: Build jar with semver
-        run: ./mvnw -B clean package -DskipTests -Drevision="${{ steps.extract-tag.outputs.semver }}"
+      # The gates `verify` run above is the ONLY build in the pipeline (ADR 0008).
+      # Capture exactly one candidate, record its provenance, self-verify, upload.
+      - name: Capture exactly one release candidate (no fallback build)
+        id: candidate
+        run: |
+          CANDIDATE="$(bash scripts/verify-release-artifact.sh --strict-single \
+            "target/url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar")"
+          echo "candidate=$CANDIDATE" >> "$GITHUB_OUTPUT"
+          echo "Captured release candidate: $CANDIDATE"
+
+      - name: Write provenance manifest (KEY=VALUE contract)
+        run: |
+          {
+            echo "repository=${GITHUB_REPOSITORY}"
+            echo "tag=${GITHUB_REF_NAME}"
+            echo "semver=${{ steps.extract-tag.outputs.semver }}"
+            echo "commit=${{ steps.extract-tag.outputs.source_commit }}"
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "run_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "jar=$(basename ${{ steps.candidate.outputs.candidate }})"
+            echo "sha256=$(sha256sum ${{ steps.candidate.outputs.candidate }} | awk '{print $1}')"
+          } > RELEASE-PROVENANCE.txt
+          sha256sum "${{ steps.candidate.outputs.candidate }}" > SHA256SUMS
+          echo "--- RELEASE-PROVENANCE.txt ---"
+          cat RELEASE-PROVENANCE.txt
+
+      - name: Self-verify candidate against provenance
+        run: |
+          bash scripts/verify-release-artifact.sh \
+            --jar "${{ steps.candidate.outputs.candidate }}" \
+            --manifest RELEASE-PROVENANCE.txt \
+            --expect-repository "${{ github.repository }}" \
+            --expect-tag "${{ github.ref_name }}" \
+            --expect-commit "${{ steps.extract-tag.outputs.source_commit }}" \
+            --expect-run-id "${{ github.run_id }}" \
+            --expect-semver "${{ steps.extract-tag.outputs.semver }}"
+          sha256sum -c SHA256SUMS
+
+      - name: Upload release candidate (single build, single upstream artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-candidate
+          path: |
+            target/url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar
+            RELEASE-PROVENANCE.txt
+            SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
 
   k6-gate:
     name: k6 Gate
@@ -121,14 +167,29 @@ jobs:
       - name: Source identity (tag peels to checkout HEAD)
         run: bash scripts/verify-release-artifact.sh --peel "${{ github.ref_name }}"
 
-      - name: Build jar with semver
-        run: ./mvnw -B clean package -DskipTests -Drevision="${{ steps.extract-tag.outputs.semver }}"
-        # This produces the exact same jar as the gates job (deterministic build with same revision)
-        # We rebuild in each job to avoid artifact download timing issues
+      - name: Download release candidate (single build, single upstream artifact)
+        uses: actions/download-artifact@v4
+        with:
+          name: release-candidate
+          path: release-candidate
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify candidate identity (provenance + sha256)
+        run: |
+          bash scripts/verify-release-artifact.sh \
+            --jar "release-candidate/url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar" \
+            --manifest release-candidate/RELEASE-PROVENANCE.txt \
+            --expect-repository "${{ github.repository }}" \
+            --expect-tag "${{ github.ref_name }}" \
+            --expect-commit "${{ needs.gates.outputs.source_commit }}" \
+            --expect-run-id "${{ github.run_id }}" \
+            --expect-semver "${{ steps.extract-tag.outputs.semver }}"
+          ( cd release-candidate && sha256sum -c SHA256SUMS )
 
       - name: Start app (relaxed rate limits)
         run: |
-          JAR=$(ls target/url-shortener-service-*.jar | head -1)
+          JAR=release-candidate/url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar
           MONGODB_URI='mongodb://localhost:27017/url_shortener' \
           REDIS_HOST=localhost REDIS_PORT=6379 \
           RATE_LIMITER_LIMIT=1000000 RATE_LIMITER_REDIRECT_LIMIT=1000000 \
@@ -197,14 +258,29 @@ jobs:
       - name: Source identity (tag peels to checkout HEAD)
         run: bash scripts/verify-release-artifact.sh --peel "${{ github.ref_name }}"
 
-      - name: Build jar with semver
-        run: ./mvnw -B clean package -DskipTests -Drevision="${{ steps.extract-tag.outputs.semver }}"
-        # This produces the exact same jar as the gates job (deterministic build with same revision)
-        # We rebuild in each job to avoid artifact download timing issues
+      - name: Download release candidate (single build, single upstream artifact)
+        uses: actions/download-artifact@v4
+        with:
+          name: release-candidate
+          path: release-candidate
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify candidate identity (provenance + sha256)
+        run: |
+          bash scripts/verify-release-artifact.sh \
+            --jar "release-candidate/url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar" \
+            --manifest release-candidate/RELEASE-PROVENANCE.txt \
+            --expect-repository "${{ github.repository }}" \
+            --expect-tag "${{ github.ref_name }}" \
+            --expect-commit "${{ needs.gates.outputs.source_commit }}" \
+            --expect-run-id "${{ github.run_id }}" \
+            --expect-semver "${{ steps.extract-tag.outputs.semver }}"
+          ( cd release-candidate && sha256sum -c SHA256SUMS )
 
       - name: Start app
         run: |
-          JAR=$(ls target/url-shortener-service-*.jar | head -1)
+          JAR=release-candidate/url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar
           MONGODB_URI='mongodb://localhost:27017/url_shortener' \
           REDIS_HOST=localhost REDIS_PORT=6379 \
           nohup java -jar "$JAR" > app.log 2>&1 &
@@ -251,14 +327,30 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Build jar with semver
+      - name: Download release candidate (single build, single upstream artifact)
+        uses: actions/download-artifact@v4
+        with:
+          name: release-candidate
+          path: release-candidate
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify candidate identity (provenance + sha256)
         run: |
-          SEMVER="${{ steps.extract-tag.outputs.semver }}"
-          echo "Building with revision: $SEMVER"
-          ./mvnw -B clean package -DskipTests -Drevision="$SEMVER"
+          bash scripts/verify-release-artifact.sh \
+            --jar "release-candidate/url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar" \
+            --manifest release-candidate/RELEASE-PROVENANCE.txt \
+            --expect-repository "${{ github.repository }}" \
+            --expect-tag "${{ github.ref_name }}" \
+            --expect-commit "${{ needs.gates.outputs.source_commit }}" \
+            --expect-run-id "${{ github.run_id }}" \
+            --expect-semver "${{ steps.extract-tag.outputs.semver }}"
+          ( cd release-candidate && sha256sum -c SHA256SUMS )
 
       - name: Run ci-restore-drill.sh
         run: bash scripts/ci-restore-drill.sh
+        env:
+          JAR: release-candidate/url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar
 
   release:
     name: Release
