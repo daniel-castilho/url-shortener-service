@@ -2,6 +2,15 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-12
+- **Reconciled (Epic 21, 2026-10-01):** the decision is now fully implemented in `release.yml`
+  (was: release jobs still rebuilt the jar, and the release image re-ran Maven). Today the `gates`
+  `verify` run is the **only** build; every downstream job downloads the same-run `release-candidate`
+  artifact and re-verifies it (`scripts/verify-release-artifact.sh`: tag/commit peel identity +
+  provenance manifest `repository`/`tag`/`semver`/`commit`/`run_id`/`run_attempt`/`jar`/`sha256` +
+  `SHA256SUMS`). The release image is packaged from the downloaded candidate via single-stage
+  `Dockerfile.release` (no Maven); its embedded JAR is extracted and hash-compared to the candidate
+  before scan/SBOM/publish, and the image digest is recorded. `latest` is not a release identity.
+  `deploy.sh`'s download-and-verify contract is unchanged.
 - **Context:** The pom is `0.0.1-SNAPSHOT`; tags exist (`v0.13.0` current) but trigger nothing.
   The CI `build` job produces a jar that is never promoted: whoever deploys rebuilds locally, so
   the bytes that serve production are not the bytes the gates validated. Docker images are built
