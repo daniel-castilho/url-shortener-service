@@ -217,7 +217,7 @@ Security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
 
 ## Current State
 
-**Latest tagged release: `v0.14.0`** (Deployable / Release Engineering, 2026-09-13) · see
+**Latest tagged release: `v0.15.0`** (Release Artifact Identity & Promotion / Epic 21, 2026-10-01) · see
 [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
 Implemented on `main`:
