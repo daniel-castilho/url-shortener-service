@@ -7,6 +7,8 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-01
+
 ### Added
 
 - **Release artifact identity & promotion (Epic 21, ADR 0008 — fully enforced)** — the release
