@@ -20,19 +20,23 @@ watches), `docs/adr/0007`, `docs/adr/0008`, `scripts/deploy.sh`, `scripts/smoke.
      git tag -a vX.Y.Z       │                promtool/amtool                │      ├─ stage idle color (graceful)
      git push origin vX.Y.Z  │                CHANGELOG gate (Unreleased must │      ├─ wait readiness (budget 90s)
                              │                be empty at the tag)           │      ├─ canary 10/30/100
-                             │                → uploads THE jar (single      │      │   render → nginx -t → reload
-                             │                  build, promoted verbatim)    │      │   → smoke after each bump
-                             ├──────────────────────────────────────────────┤      ├─ 100%: last-deploy.txt,
-                             │ 3. k6-gate       load-tests/mixed.js on the    │      │   drain+stop old color
-                             │ 4. runtime-smoke scripts/smoke.sh + graceful- │      └─ one-liner DEPLOY OK
-                             │                  shutdown drain                 │   9. post-deploy verification
-                             │ 5. restore-drill ci-restore-drill.sh         │      (smoke + 10 min burn-rate watch
-                             │                  (RTO ≤ budget)               │       + schema.migrations.* logs)
+                             │                → capture THE candidate        │      │   render → nginx -t → reload
+                             │                  (one build) + provenance      │      │   → smoke after each bump
+                             │                  (tag/commit/run/jar/sha256)   │      ├─ 100%: last-deploy.txt,
+                             ├──────────────────────────────────────────────┤      │   drain+stop old color
+                             │ 3. k6-gate       load-tests/mixed.js on the    │      └─ one-liner DEPLOY OK
+                             │                  same candidate (verified)     │   9. post-deploy verification
+                             │ 4. runtime-smoke scripts/smoke.sh + graceful- │      (smoke + 10 min burn-rate watch
+                             │                  shutdown drain                 │       + schema.migrations.* logs)
+                             │ 5. restore-drill ci-restore-drill.sh           │
+                             │                  (RTO ≤ budget)               │
                              ├──────────────────────────────────────────────┤
-                             │ 6. release       image (non-root + Trivy      │
-                             │                  HIGH/CRITICAL + CycloneDX    │
-                             │                  SBOM) + gh release create    │
-                             │                  (jar + SHA256SUMS + SBOM)   │
+                             │ 6. release       image from candidate without │
+                             │                  rebuilding (single-stage,     │
+                             │                  embedded-JAR hash proven) +   │
+                             │                  Trivy HIGH/CRITICAL + SBOM +  │
+                             │                  gh release create (jar +      │
+                             │                  SHA256SUMS + provenance + SBOM)│
                              └──────────────────────────────────────────────┘
 ```
 
@@ -55,15 +59,29 @@ Everything is **fail-closed**: a failed gate means no Release, and no Release me
 | 9 | Post-deploy verification: smoke + 10 min SLO/burn-rate watch + `schema.migrations.*` in new color logs | Operator | Burn-rate alert; unexpected migration | Operator decision: watch or `scripts/rollback.sh` (one command, no rebuild) |
 | 10 | Rollback (`scripts/rollback.sh`) | Operator | Previous color won't start | Fallback = manual runbook §2 (named fallback) |
 
-## 3. Identity: revision, tag, artifact
+## 3. Identity: revision, tag, candidate, provenance
 
 - The pom version is `${revision}` (default `0.0.1-SNAPSHOT` locally); the release build passes
   `-Drevision=<semver>` so the jar is `target/url-shortener-service-<semver>.jar` (flatten-maven,
   `resolveCiFriendliesOnly` — story 8.2).
-- `## [Unreleased]` in `CHANGELOG.md` must be **empty at the tag commit** (the promotion happened);
-  the CHANGELOG gate enforces keep-a-changelog discipline — a tag with draft entries is refused.
-- The GitHub Release is the **only** promotion channel: jar + `SHA256SUMS` + CycloneDX SBOM.
-  `deploy.sh` resolves the jar by semver tag, never "latest build" (ADR 0008).
+- **`## [Unreleased]` in `CHANGELOG.md`** is **empty at the tag commit**; the CHANGELOG gate
+  enforces keep-a-changelog discipline.
+- **Source identity (Epic 21):** on a tag push the checkout may not match the trigger tag. Every
+  `release.yml` job runs `scripts/verify-release-artifact.sh --peel <tag>` and fails unless
+  `refs/tags/<tag>^{commit}` equals its HEAD. The `gates` job exposes the peeled commit as its
+  `source_commit` output; downstream jobs pin the candidate to it.
+- **Candidate identity (Epic 21):** *one* `./mvnw verify -Drevision=<semver>` run in `gates` is
+  the only build. It captures exactly one `url-shortener-service-<semver>.jar` and emits a
+  provenance manifest `RELEASE-PROVENANCE.txt` — `repository`, `tag`, `semver`, `commit`,
+  `run_id`, `run_attempt`, `jar`, `sha256` — plus `SHA256SUMS`. k6-gate, runtime-smoke,
+  restore-drill and release download that **same-run** artifact and re-verify all identity fields
+  and the SHA-256 before use (fail-closed; no fallback build anywhere).
+- The GitHub Release is the **only** promotion channel: jar + `SHA256SUMS` + `RELEASE-PROVENANCE.txt`
+  + CycloneDX SBOM. The release image is built from the downloaded candidate via single-stage
+  `Dockerfile.release` (never re-runs Maven); the embedded `app.jar` SHA-256 is extracted and
+  hash-compared to the candidate before the image is scanned/SBOM'd/published, and the image
+  digest/id is recorded in the Release body. `deploy.sh` resolves the jar by semver tag, never
+  "latest build" (ADR 0008), and `latest` is not used as release image identity.
 
 ## 4. Deploy topology (blue-green) — summary
 

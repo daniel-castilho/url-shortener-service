@@ -383,20 +383,45 @@ UAT compose stack when up, else staging):
 
 ## Release artifacts & promotion
 
-The CI `release.yml` pipeline produces a GitHub Release on every tag `v*`:
+The CI `release.yml` pipeline produces a GitHub Release on every tag `v*`. **Artifact identity
+and single-build promotion (Epic 21, ADR 0008):** every job is pinned to the trigger tag — 
+`s scripts/verify-release-artifact.sh` resolves `refs/tags/<tag>^{commit}` and fails unless it
+equals that job's checkout HEAD, and one and only one `./mvnw verify -Drevision=<semver>` run
+produces the release candidate.
 
-1. **gates** job: full `./mvnw verify -Drevision=<semver>` + all bash gates + promtool/amtool + CHANGELOG gate → uploads the built jar as artifact.
-2. **k6-gate** (needs gates): `k6 run load-tests/mixed.js` against the artifact (thresholds `p95 < 200ms`, `error < 0.1%`).
-3. **runtime-smoke** (needs gates): `scripts/smoke.sh` + `scripts/verify-graceful-shutdown.sh` against the artifact.
-4. **restore-drill** (needs gates): `scripts/ci-restore-drill.sh` (RTO ≤ 300s, RPO = last backup).
-5. **release** (needs all): builds Docker image (non-root + Trivy HIGH/CRITICAL SHA-pinned + CycloneDX SBOM), computes jar sha256, creates GitHub Release with assets:
-   - `url-shortener-service-<semver>.jar` (the exact jar from gates job)
-   - `SHA256SUMS` (sha256 of the jar)
-   - `sbom-url-shortener-<semver>.json` (CycloneDX SBOM, CycloneDX format via Trivy)
+1. **gates** job: full `./mvnw verify -Drevision=<semver>` (the **only** build in the pipeline)
+   + all bash gates + promtool/amtool + CHANGELOG gate. Captures exactly one candidate, writes
+   `RELEASE-PROVENANCE.txt` (KEY=VALUE: `repository`, `tag`, `semver`, `commit`, `run_id`,
+   `run_attempt`, `jar`, `sha256`) and `SHA256SUMS`, self-verifies them, and uploads all three as
+   the `release-candidate` artifact (30-day retention).
+2. **k6-gate** (needs gates): downloads the *same-run* `release-candidate`, verifies the
+   provenance/hash, then `k6 run load-tests/mixed.js` against that exact JAR (thresholds
+   `p95 < 200ms`, `error < 0.1%`).
+3. **runtime-smoke** (needs gates): downloads + verifies the candidate, then `scripts/smoke.sh` +
+   `scripts/verify-graceful-shutdown.sh` against it.
+4. **restore-drill** (needs gates): downloads + verifies the candidate and passes its path via the
+   `JAR` env var to `scripts/ci-restore-drill.sh` (RTO ≤ 300s, RPO = last backup).
+5. **release** (needs all): downloads + verifies the candidate, packages it **without rebuilding**
+   via the single-stage `Dockerfile.release` (copies the candidate as `app.jar`; no Maven), proves
+   the image-embedded JAR SHA-256 equals the candidate's (extract + hash-compare, fail-closed),
+   non-root gate + Trivy HIGH/CRITICAL SHA-pinned + CycloneDX SBOM on that image, records the
+   image digest/id, and creates the GitHub Release with assets:
+   - `url-shortener-service-<semver>.jar` (the exact tested candidate; the only JAR ever published)
+   - `SHA256SUMS` (sha256 of the jar, relative-path format for `sha256sum -c` and `deploy.sh` grep)
+   - `RELEASE-PROVENANCE.txt` (full provenance: tag, semver, source commit, run id/attempt, jar, sha256)
+   - `sbom-url-shortener-<semver>.json` (CycloneDX SBOM; subject = the verified candidate image)
 
-Artifact promotion is **single-build**: the jar uploaded by `gates` is the exact byte-for-byte artifact consumed by `k6-gate`, `runtime-smoke`, `restore-drill`, and `release`. There is no second build. `deploy.sh <tag>` downloads the jar from the Release, verifies the sha256 against `SHA256SUMS`, and stages it — a local rebuild is never a deploy source.
+Artifact promotion is **single-build and identity-checked at every hop**: the jar uploaded by
+`gates` is byte-for-byte what `k6-gate`, `runtime-smoke`, `restore-drill`, and `release` verify
+and exercise, and each hop cross-checks repository, tag, source commit, run id, semver, filename
+and SHA-256. There is never a fallback build. `deploy.sh <tag>` downloads the jar from the
+Release, verifies the sha256 against `SHA256SUMS`, and stages it — a local rebuild is never a
+deploy source.
 
-Tag immutability: a bad release is fixed forward with `vX.Y.Z+1`; a tag is never moved or deleted (moving a tag invalidates every recorded sha256 and the Release that references it). Auth is `GITHUB_TOKEN` only.
+Tag immutability: a bad release is fixed forward with `vX.Y.Z+1`; a tag is never moved or deleted
+(moving a tag invalidates every recorded sha256, the `commit` provenance field, and the Release
+that references it). Auth is `GITHUB_TOKEN` only. The `latest` Docker tag is **not** used as
+release identity (the release image is tagged with the semantic version only).
 
 ---
 
@@ -547,4 +572,27 @@ Shared-resource note: each instance adds one Mongo connection pool and one Redis
 to the backing services — watch connection counts as N grows.
 ---
 
-*Last updated: 2026-09-12 (Epic 8 — Release Engineering: release.yml + runbook + tag v0.14.0, ADRs 0007–0008, blue-green deploy/rollback, backup drill, artifacts promotion)*
+## Governance reference (T5 — Dargent recorded, AGENTS.md authoritative)
+
+**Reference policy (Dargent documentation):** English-only repository content; doc/CHANGELOG
+synchronization with code changes; focused Conventional Commits using `feat/`, `fix/`, and
+`chore/` branch prefixes; small, one-concern pull requests with green, unskipped CI when a PR
+is used; annotated semver tags created only after Definition of Done; and evidence tied to the
+tagged commit.
+
+**Dargent E3.5 exception (recorded as documented):** the reference process preserves direct
+pushes to the default branch and does not require a PR-only flow or required status checks; it
+describes protecting branches by blocking force-pushes and branch deletions. The E3.5 backlog
+item is **open** — the GitHub branch-protection setting was not verified as enabled. The
+repository prescribes no squash, rebase, or merge-commit strategy.
+
+**Reconciliation with this service (binding):** `AGENTS.md` is authoritative over the Dargent
+reference. In particular — pushes and annotated tags require **explicit human authorization**;
+no Dargent direct-push exception, PR-only rule, branch-prefix rule, or merge strategy is
+imposed on `url-shortener-service` by this epic. Release evidence is tied to the tagged commit,
+matching the identity chain in §"Release artifacts & promotion".
+
+---
+
+*Last updated: 2026-10-01 (Epic 21 — artifact identity & single-build promotion: peel gate,
+  provenance manifest, candidate artifact, Dockerfile.release, governance reference)*
