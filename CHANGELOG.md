@@ -9,6 +9,24 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ### Added
 
+- **Release artifact identity & promotion (Epic 21, ADR 0008 — fully enforced)** — the release
+  pipeline now proves, at every hop, that the bytes tested are the bytes published and deployed.
+  `scripts/verify-release-artifact.sh` (with `--self-test`, wired into `ci.yml` and the release
+  gates): `--peel <tag>` fails unless `refs/tags/<tag>^{commit}` equals the job's checkout HEAD
+  (source identity — every release job runs it); `--strict-single` rejects absent/ambiguous release
+  candidates; `--jar/--manifest` verifies a candidate against its provenance manifest.
+  The `gates` `./mvnw verify -Drevision=<semver>` run is now the **only** build; k6-gate,
+  runtime-smoke, restore-drill and release download the same-run `release-candidate` artifact and
+  re-verify `repository`/`tag`/`semver`/`commit`/`run_id`/`run_attempt`/`jar`/`sha256`
+  (`RELEASE-PROVENANCE.txt` + `SHA256SUMS`, relative-path format so `sha256sum -c` and
+  `deploy.sh`'s grep both work). The release image is packaged from the downloaded candidate via
+  single-stage `Dockerfile.release` (no Maven); the embedded JAR is extracted and hash-compared to
+  the candidate before the non-root gate + Trivy HIGH/CRITICAL + CycloneDX SBOM; the image
+  digest/id and a provenance table are recorded in the GitHub Release body, whose assets are now
+  jar + `SHA256SUMS` + `RELEASE-PROVENANCE.txt` + SBOM. `latest` is dropped as release identity.
+  Tests: gate script self-test (14 assertions). Docs reconciled: `docs/release-engineering.md`,
+  `docs/release-runbook.md` (§"Release artifacts & promotion"), ADR 0008.
+
 - **Product administration surface for blocked accounts + user listing (ADR 0011 D3/D4)** —
   `GET /api/v1/admin/users` (ADMIN only): cursor-paginated user list (stable `createdAt DESC,
   id DESC`, limit capped at 100), optional email-prefix filter `?q=`, items expose

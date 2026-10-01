@@ -1,0 +1,51 @@
+# Single-stage release packaging for Epic 21 (ADR 0008 / T4).
+# Consumes the VERIFIED release candidate as an input instead of re-running
+# Maven — the multi-stage developer `Dockerfile` stays for local/CI images,
+# but it must never produce a second release candidate.
+#
+# The release job builds this from a temporary context that holds `app.jar`
+# (the candidate, copied to that name) plus this file:
+#   mkdir release-context && cp target/url-shortener-service-<semver>.jar release-context/app.jar
+#   cp Dockerfile.release release-context/
+#   docker build --build-arg VERSION=<semver> --build-arg SOURCE_COMMIT=<sha> \
+#     -f release-context/Dockerfile.release -t url-shortener:<semver> release-context/
+#
+# Losing `SOURCE_COMMIT` (the release manifest `commit`) breaks the image
+# identity chain, so the release job passes it explicitly.
+
+FROM eclipse-temurin:25-jre-alpine
+ARG VERSION=local
+ARG SOURCE_COMMIT=unknown
+WORKDIR /app
+
+# Patch base-OS packages to latest distribution (closes base-image CVEs:
+# openssl/libexpat HIGH/CRITICAL findings reported by Trivy at release time)
+RUN apk upgrade --no-cache
+
+# Release identity (Epic 8 story 8.2 + Epic 21): trivy/SBOM read it too
+LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.revision="${SOURCE_COMMIT}"
+LABEL org.opencontainers.image.title="URL Shortener Service"
+LABEL org.opencontainers.image.description="High-performance link-shortening API with hexagonal architecture"
+LABEL org.opencontainers.image.source="https://github.com/daniel-castilho/url-shortener-service"
+LABEL org.opencontainers.image.licenses="MIT"
+
+# Create non-root user for security
+RUN addgroup -S spring && adduser -S spring -G spring
+USER spring:spring
+
+# The candidate JAR (prebuilt & verified; never built here)
+COPY app.jar app.jar
+
+# Expose port
+EXPOSE 8080
+
+# Health check - use curl which is available in the base image
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+  CMD curl -fsS http://localhost:8080/actuator/health/liveness || exit 1
+
+# JVM optimization flags
+ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
+
+# Run application
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]

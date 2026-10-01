@@ -216,6 +216,38 @@
     <!-- Explicit overrides on top of the spring-boot-starter-parent BOM. -->
     <dependencyManagement>
         <dependencies>
+            <!-- MongoDB Java driver 5.8.1 (Boot 4.1.1 BOM) is in the affected range of
+                 CVE-2026-18710 (ProxySettings.toString() leaks SOCKS5 proxy credentials to
+                 logs; 4.11.0..5.9.1, first fixed 5.9.2) and CVE-2026-88032 (use-after-free in
+                 reactive client-side encryption; < 5.11.1). Neither path is reachable by this
+                 service (sync driver, no proxy settings, no client-side encryption) — the
+                 honest fix per the gate policy is a bump, not a suppression: 5.11.1 fixes
+                 both. (Epic 2 story 2.5 policy; owner approval 2026-10-01) -->
+            <dependency>
+                <groupId>org.mongodb</groupId>
+                <artifactId>mongodb-driver-sync</artifactId>
+                <version>5.11.1</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mongodb</groupId>
+                <artifactId>mongodb-driver-core</artifactId>
+                <version>5.11.1</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mongodb</groupId>
+                <artifactId>bson</artifactId>
+                <version>5.11.1</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mongodb</groupId>
+                <artifactId>bson-record-codec</artifactId>
+                <version>5.11.1</version>
+            </dependency>
+            <dependency>
+                <groupId>org.mongodb</groupId>
+                <artifactId>mongodb-driver-legacy</artifactId>
+                <version>5.11.1</version>
+            </dependency>
             <!-- kotlin-stdlib 2.3.21 (pulled at runtime by okio -> okhttp -> OTel exporter) is in
                  the affected range of CVE-2026-53914 per the jetbrains:kotlin CPE. The vulnerable
                  path is the Kotlin compiler build-cache (GHSA r937-wjx7-w2jp classifies the
