@@ -604,6 +604,23 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     team; trigger: when blocked reads must be prevented (currently tokens live until expiry per
     ADR 0011 D4). — `resolved`
 
+36. **Epic 21 (Release Artifact Identity & Promotion)** — completed 2026-10-01.
+    (a) **Identity gate** (`scripts/verify-release-artifact.sh`): `--peel` verifies tag peels
+    to checkout HEAD; `--strict-single` rejects ambiguous/missing candidates; `--jar/--manifest`
+    verifies candidate against provenance (`RELEASE-PROVENANCE.txt` + `SHA256SUMS`); self-test
+    14 assertions. Wired into `ci.yml` + all 5 release jobs. (b) **Single build**: `gates` job
+    = only `./mvnw verify -Drevision=<semver>`; captures candidate, writes provenance + sha256,
+    self-verifies, uploads `release-candidate` artifact. (c) **Downstream consumers** (k6, runtime
+    smoke, restore drill) download same-run artifact (`run-id` pinned) and re-verify identity.
+    (d) **Release job promotes verified candidate**: `Dockerfile.release` single-stage (no Maven);
+    embedded JAR extracted + hash-compared; non-root gate; Trivy HIGH/CRITICAL; CycloneDX SBOM;
+    image digest recorded; `latest` dropped. Assets = jar + `SHA256SUMS` + provenance + SBOM.
+    (e) **MongoDB driver bumped to 5.11.1** (CVE-2026-18710, CVE-2026-88032, CVSS 8.2) — owner
+    approved per Rule 9. (f) **Jackson CVEs** ignored via `.trivyignore` (patched 3.x versions
+    under `tools.jackson.core` groupId, migration deferred). All gates green: boundaries,
+    living-spec (97%), metrics-frozen, security, doc-sync. Release workflow `v0.15.0` green.
+    — `resolved`
+
 ## 🔍 Operational Discipline & Debugging Guidelines
 
 - **Investigate before trial-and-error:** when a compile or test fails, read the full stack trace and
