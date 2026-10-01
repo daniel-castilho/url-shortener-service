@@ -455,12 +455,11 @@ jobs:
       - name: Record image digest/identity
         id: image-id
         run: |
-          DIGEST=$(docker image inspect --format '{{index .RepoDigests 0}}' "url-shortener:${{ steps.extract-tag.outputs.semver }}")
+          # For locally built images, RepoDigests is empty; use image ID (sha256 of config) as digest
           IMAGE_ID=$(docker image inspect --format '{{.Id}}' "url-shortener:${{ steps.extract-tag.outputs.semver }}")
-          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "digest=$IMAGE_ID" >> "$GITHUB_OUTPUT"
           echo "image_id=$IMAGE_ID" >> "$GITHUB_OUTPUT"
-          echo "Docker image digest: $DIGEST"
-          echo "Docker image id: $IMAGE_ID"
+          echo "Docker image digest (ID): $IMAGE_ID"
 
       - name: Trivy scan (HIGH/CRITICAL, SHA-pinned)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
