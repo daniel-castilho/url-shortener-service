@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       semver: ${{ steps.extract-tag.outputs.semver }}
+      source_commit: ${{ steps.extract-tag.outputs.source_commit }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -29,22 +30,34 @@ jobs:
       - name: Extract semver from tag
         id: extract-tag
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
+          case "$TAG" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "FAIL: tag '$TAG' is not a vX.Y.Z semver tag"; exit 1 ;;
+          esac
           SEMVER="${TAG#v}"
           echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
-          echo "Tag: $TAG, SemVer: $SEMVER"
+          # Source identity: the annotated tag must peel to exactly this checkout's HEAD.
+          SOURCE_COMMIT="$(git rev-parse "refs/tags/${TAG}^{commit}")"
+          echo "source_commit=$SOURCE_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "Tag: $TAG, SemVer: $SEMVER, SourceCommit: $SOURCE_COMMIT"
+
+      - name: Source identity (tag peels to checkout HEAD)
+        run: bash scripts/verify-release-artifact.sh --peel "${{ github.ref_name }}"
 
       - name: Run full verify with revision
         run: |
           ./mvnw -B verify -Drevision="${{ steps.extract-tag.outputs.semver }}"
 
-      - name: Bash gates (boundaries, doc-sync, security, metrics-frozen, living-spec)
+      - name: Bash gates (boundaries, doc-sync, security, metrics-frozen, living-spec, release-artifact)
         run: |
           bash scripts/check-boundaries.sh && bash scripts/check-boundaries.sh --self-test
           bash scripts/check-doc-sync.sh && bash scripts/check-doc-sync.sh --self-test
           bash scripts/check-security.sh && bash scripts/check-security.sh --self-test
           bash scripts/check-metrics-frozen.sh && bash scripts/check-metrics-frozen.sh --self-test
           bash scripts/check-living-spec.sh && bash scripts/check-living-spec.sh --self-test
+          bash scripts/verify-release-artifact.sh --self-test
 
       - name: Promtool/amtool checks
         run: |
@@ -83,6 +96,9 @@ jobs:
           --health-interval=10s --health-timeout=5s --health-retries=5
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - uses: actions/setup-java@v6
         with:
           java-version: '25'
@@ -92,9 +108,18 @@ jobs:
       - name: Extract semver from tag
         id: extract-tag
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
+          case "$TAG" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "FAIL: tag '$TAG' is not a vX.Y.Z semver tag"; exit 1 ;;
+          esac
           SEMVER="${TAG#v}"
           echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
+          echo "Tag: $TAG, SemVer: $SEMVER"
+
+      - name: Source identity (tag peels to checkout HEAD)
+        run: bash scripts/verify-release-artifact.sh --peel "${{ github.ref_name }}"
 
       - name: Build jar with semver
         run: ./mvnw -B clean package -DskipTests -Drevision="${{ steps.extract-tag.outputs.semver }}"
@@ -147,6 +172,9 @@ jobs:
           - 6379:6379
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - uses: actions/setup-java@v6
         with:
           java-version: '25'
@@ -156,9 +184,18 @@ jobs:
       - name: Extract semver from tag
         id: extract-tag
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
+          case "$TAG" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "FAIL: tag '$TAG' is not a vX.Y.Z semver tag"; exit 1 ;;
+          esac
           SEMVER="${TAG#v}"
           echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
+          echo "Tag: $TAG, SemVer: $SEMVER"
+
+      - name: Source identity (tag peels to checkout HEAD)
+        run: bash scripts/verify-release-artifact.sh --peel "${{ github.ref_name }}"
 
       - name: Build jar with semver
         run: ./mvnw -B clean package -DskipTests -Drevision="${{ steps.extract-tag.outputs.semver }}"
@@ -189,19 +226,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Extract semver from tag
         id: extract-tag
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
+          case "$TAG" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "FAIL: tag '$TAG' is not a vX.Y.Z semver tag"; exit 1 ;;
+          esac
           SEMVER="${TAG#v}"
           echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
-          echo "DEBUG: TAG=$TAG, SEMVER=$SEMVER, GITHUB_OUTPUT=$GITHUB_OUTPUT"
 
-      - name: Debug semver output
-        run: |
-          echo "DEBUG: extract-tag output = '${{ steps.extract-tag.outputs.semver }}'"
-          echo "DEBUG: GITHUB_REF_NAME = $GITHUB_REF_NAME"
+      - name: Source identity (tag peels to checkout HEAD)
+        run: bash scripts/verify-release-artifact.sh --peel "${{ github.ref_name }}"
 
       - uses: actions/setup-java@v6
         with:
@@ -239,9 +281,18 @@ jobs:
       - name: Extract semver from tag
         id: extract-tag
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
+          case "$TAG" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "FAIL: tag '$TAG' is not a vX.Y.Z semver tag"; exit 1 ;;
+          esac
           SEMVER="${TAG#v}"
           echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
+          echo "Tag: $TAG, SemVer: $SEMVER"
+
+      - name: Source identity (tag peels to checkout HEAD)
+        run: bash scripts/verify-release-artifact.sh --peel "${{ github.ref_name }}"
 
       - name: Build jar with semver
         run: ./mvnw -B clean package -DskipTests -Drevision="${{ steps.extract-tag.outputs.semver }}"
