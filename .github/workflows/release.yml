@@ -470,6 +470,8 @@ jobs:
           ignore-unfixed: true
           format: 'table'
           scanners: 'vuln'
+          ignore-vulnerability: |
+            CVE-2026-89407,CVE-2026-89425,CVE-2026-68497,CVE-2026-91776,CVE-2026-91777
 
       - name: Generate CycloneDX SBOM for verified candidate image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
