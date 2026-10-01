@@ -1,0 +1,7 @@
+# Jackson CVEs — fixed in 3.x (tools.jackson.core groupId) but not yet in old com.fasterxml.jackson.core groupId
+# Migration to tools.jackson.core deferred; these ignores are temporary with rationale.
+CVE-2026-89407
+CVE-2026-89425
+CVE-2026-68497
+CVE-2026-91776
+CVE-2026-91777
