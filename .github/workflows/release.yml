@@ -116,12 +116,17 @@ jobs:
             --expect-semver "${{ steps.extract-tag.outputs.semver }}"
           ( cd "$(dirname "$CANDIDATE")" && sha256sum -c "$GITHUB_WORKSPACE/SHA256SUMS" )
 
+      - name: Stage release candidate at workspace root
+        run: |
+          cp "target/url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar" \
+            "url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar"
+
       - name: Upload release candidate (single build, single upstream artifact)
         uses: actions/upload-artifact@v4
         with:
           name: release-candidate
           path: |
-            target/url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar
+            url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar
             RELEASE-PROVENANCE.txt
             SHA256SUMS
           if-no-files-found: error
