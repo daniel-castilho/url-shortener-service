@@ -201,7 +201,8 @@ echo "OK: candidate $(basename "$jar") sha256=$real_sha matches manifest (repo=$
 # exist (never overwrite), its parent directory must exist, and a path must actually be given.
 # The write is fail-closed: content goes to a unique temp file in the destination directory;
 # on any failure the temp is removed and no partial final destination remains. Publication
-# uses a no-clobber move.
+# uses a no-clobber move, and success is proven by the temp actually being gone — GNU
+# coreutils `mv -n` may return zero while skipping the move when the destination exists.
 write_output_jar() { # $1 = validated source JAR (absolute path)
     local jar="$1"
     [ -n "$jar" ] || fail "--output-jar: no validated JAR source given"
@@ -213,8 +214,19 @@ write_output_jar() { # $1 = validated source JAR (absolute path)
     local tmp
     tmp="$(mktemp -p "$out_dir" .validated.XXXXXX.jar)" || fail "--output-jar: failed to create temp file in '$out_dir'"
     cp "$jar" "$tmp" || { rm -f "$tmp"; fail "--output-jar failed to copy '$jar' to temp '$tmp'"; }
-    # No-clobber move: fail if destination somehow appeared (should not, we checked above)
-    mv -n "$tmp" "$OUTPUT_JAR" || { rm -f "$tmp"; [ -e "$OUTPUT_JAR" ] && fail "--output-jar destination '$OUTPUT_JAR' appeared during move"; fail "--output-jar failed to publish temp to '$OUTPUT_JAR'"; }
+    # No-clobber publication. `mv -n` exit code alone is NOT proof of publication:
+    # on GNU coreutils a skipped move (destination exists) still returns zero. If the
+    # destination appeared after the preflight check above, `mv -n` silently skips and
+    # leaves the temp in place — detect exactly that (temp still exists): remove the
+    # temp, preserve the destination that appeared, and fail. Never overwrite, never
+    # report success without a published output.
+    mv -n "$tmp" "$OUTPUT_JAR" || true
+    if [ -e "$tmp" ]; then
+        rm -f "$tmp"
+        [ -e "$OUTPUT_JAR" ] && fail "--output-jar destination '$OUTPUT_JAR' appeared after the preflight check — destination preserved, temp removed, nothing published"
+        fail "--output-jar failed to publish temp to '$OUTPUT_JAR'"
+    fi
+    [ -e "$OUTPUT_JAR" ] || fail "--output-jar publication left no output at '$OUTPUT_JAR'"
     note "validate-release: copied validated JAR to $OUTPUT_JAR"
 }
 
@@ -605,6 +617,36 @@ EOF
   leftovers=$(find "$TMP/copyfail" -name '.validated.*.jar' 2>/dev/null | wc -l)
   [ "$leftovers" -eq 0 ] || claim_fail "18: stray temp file(s) remain after copy failure"
   claim_ok "18: copy failure leaves no partial destination and no stray temp file"
+
+  # case 19: destination APPEARS between the preflight existence check and the
+  # no-clobber publication. On GNU coreutils `mv -n` returns ZERO while skipping
+  # the move, so the exit code alone would let the helper report success with
+  # nothing published. Simulate the race by intercepting `mktemp` (invoked by the
+  # helper AFTER the preflight): the fake creates the real temp, then plants a
+  # sentinel destination before returning. The helper must then detect the skipped
+  # publication via the still-present temp, remove it, preserve the sentinel
+  # destination, and fail.
+  mkdir -p "$TMP/race/bin"
+  local race_dst="$TMP/race/out.jar"
+  local real_mktemp; real_mktemp="$(command -v mktemp)"
+  cat > "$TMP/race/bin/mktemp" <<EOF
+#!/usr/bin/env bash
+# Fake mktemp: create the real temp, then plant the destination (race window).
+t="\$("$real_mktemp" "\$@")" || exit 1
+printf 'sentinel-race\n' > "$race_dst"
+echo "\$t"
+EOF
+  chmod +x "$TMP/race/bin/mktemp"
+  if ( PATH="$TMP/race/bin:$PATH" OUTPUT_JAR="$race_dst" write_output_jar "$TMP/candidate.jar" ) >/dev/null 2>&1; then
+    claim_fail "19: skipped no-clobber publication (destination appeared) must be rejected, not reported as success"
+  fi
+  [ -e "$race_dst" ] || claim_fail "19: the destination that appeared must be preserved"
+  [ "$(cat "$race_dst" 2>/dev/null)" = "sentinel-race" ] \
+    || claim_fail "19: sentinel destination was overwritten/changed by the helper"
+  local race_leftovers
+  race_leftovers=$(find "$TMP/race" -name '.validated.*.jar' 2>/dev/null | wc -l)
+  [ "$race_leftovers" -eq 0 ] || claim_fail "19: stray temp file(s) remain after skipped publication"
+  claim_ok "19: destination appearing mid-flight — helper fails, sentinel preserved, temp cleaned"
 
   echo "OK: acceptance + rejection paths all asserted (incl. --output-jar interface)."
   echo "PASS: self-test verified — gate detects violations."
