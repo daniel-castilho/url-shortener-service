@@ -47,8 +47,9 @@ against the committed schema), and performs a canary cutover.
 docker-compose up -d       # mongo + redis
 
 # 2. Deploy (blue-green, canary 10/30/100, 30s dwell)
-#    - downloads JAR from GitHub Release, validates full artifact chain
-#    - stages idle color, waits readiness (90s budget)
+#    - STEP 0: downloads JAR from GitHub Release + validates full artifact chain
+#      BEFORE any host mutation (no runtime-conf --init, no service/nginx change)
+#    - stages the SAME validated JAR into the idle color (single download; no re-fetch)
 #    - canary bumps: render → nginx -t → reload → smoke → dwell
 #    - success: last-deploy.txt + drain old color + one-liner
 sudo bash scripts/deploy.sh vX.Y.Z
@@ -646,4 +647,6 @@ matching the identity chain in §"Release artifacts & promotion".
 
 *Last updated: 2026-10-02 (Epic 24 — production deploy hardening: artifact validation gate,
   canary argument safety, runbook reconciliation; deploy.sh validate-release integration,
-  canary arg constraints, runbook §1/§12.2 updated)*
+  canary arg constraints, runbook §1/§12.2 updated; deploy hardening #2 — validation precedes
+  any host mutation, same validated JAR staged via --output-jar, self-test exercises the real
+  CLI argument parser, deploy self-test wired into CI)*

@@ -38,6 +38,11 @@ jobs:
       # Epic 21: release-artifact identity gate — plant/reject planted violations.
       - name: Release-artifact identity gate self-test
         run: bash scripts/verify-release-artifact.sh --self-test
+      # Epic 8 / deploy hardening: blue-green deploy — renders, abort path, canary
+      # validator, and the real CLI argument parser (reject invalid/accept valid)
+      # are all proven in a temp dir WITHOUT touching the host (no systemd/nginx/Release).
+      - name: Deploy script self-test
+        run: bash scripts/deploy.sh --self-test
       # Epic 22: machine-generated release evidence — schema/generator, per-job
       # receipts, and the draft-finalizer. Each gate plants violations and must reject them.
       - name: Release-evidence generator self-test
