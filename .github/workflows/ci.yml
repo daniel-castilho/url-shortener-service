@@ -134,7 +134,7 @@ jobs:
       # OWASP dependency-check is bound to the verify phase; prime the NVD data cache so this
       # verify hit (and the dedicated security-check job) runs a delta sync, not a cold one.
       - name: Cache OWASP NVD data
-        uses: actions/cache@v4
+        uses: actions/cache@v4.2.0
         with:
           path: ~/.m2/dependency-check-data
           key: owasp-nvd-v1
@@ -153,7 +153,7 @@ jobs:
           distribution: 'temurin'
           cache: maven
       - name: Cache OWASP NVD data
-        uses: actions/cache@v4
+        uses: actions/cache@v4.2.0
         with:
           path: ~/.m2/dependency-check-data
           key: owasp-nvd-v1
