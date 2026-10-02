@@ -7,6 +7,34 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ## [Unreleased]
 
+### Added
+- **Metrics-gated blue-green canary (Epic 25 / ADR 0012)** — production canary deployments
+  now run a Prometheus-backed gate per stage (10→30→100) instead of fixed dwell:
+  - Per-color Prometheus scrape config (`deploy/monitoring/prometheus.yml`) with
+    `color=blue/green` labels, `application=url-shortener`, `environment=prod`, Operator
+    BasicAuth via `password_file`, 15s scrape interval.
+  - Hardened systemd unit (`deploy/systemd/prometheus.service`) on loopback 127.0.0.1:9090,
+    retention 30d + 8GiB, no admin API / lifecycle, `prometheus` user, `ProtectSystem=strict`.
+  - Pinned Prometheus 3.3.0 install script (`scripts/install-prometheus.sh`) with sha256
+    verification, free-disk assert (8GiB), env scaffold for scrape credentials, self-test.
+  - Canary gate (`scripts/canary-gate.sh`) evaluates 6 signals over a 30s window: `up==1`,
+    scrape count ≥2, source freshness ≤45s, 5xx ratio <0.001, latency ratio ≥0.99, volume ≥1.
+    Bounded retry (configurable evals), fail-closed on measured breach, NO-EVIDENCE on
+    indeterminate. Fixed timestamp arithmetic bug: Prometheus returns float-second
+    timestamps (e.g. `1790965152.964`); gate now computes age in seconds with awk
+    float-safe math and allows 2s clock skew.
+  - Ephemeral Prometheus e2e test (`scripts/canary-prometheus-e2e.sh`) spins up pinned
+    `prom/prometheus:v3.3.0` + mock Actuator endpoints, validates healthy pass,
+    broken fail-closed, auth'd scrape, anonymous NO-EVIDENCE. 3 consecutive clean runs.
+  - Deploy contract: `METRICS_WINDOW_SECONDS` (default 90s) is the total per-stage wait
+    containing the former 30s dwell (not additive); after window: smoke probe + gate;
+    any non-zero gate aborts fail-closed naming the step.
+
+### Changed
+- **Prometheus 3.x flag syntax fix** — `--web.enable-admin-api=false` crashes;
+  replaced with `--no-web.enable-admin-api` / `--no-web.enable-lifecycle` in systemd
+  unit and install script self-test.
+
 ## [0.17.0] - 2026-10-02
 
 ### Added

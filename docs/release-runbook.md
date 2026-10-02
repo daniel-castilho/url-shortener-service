@@ -32,6 +32,12 @@ client ──► [NGINX/Caddy :443] ──► url-shortener instances (HTTP, no 
 - **Scale-out:** instances are stateless (12-factor §6/§8; per-IP rate limiting and the bloom/L2
   cache live in Redis, shared across instances — ADR 0002/0003). Add capacity by starting another
   instance and listing it in the nginx upstream (see §12).
+- **Metrics-gated canary (Epic 25 / ADR 0012):** canary stages require a Prometheus 3.3.0
+  instance scraping per-color `/actuator/prometheus` endpoints (blue `:8080`, green `:8081`)
+  with `color` label and Operator BasicAuth. Install via `scripts/install-prometheus.sh`
+  (systemd unit `prometheus.service`, loopback 127.0.0.1:9090, retention 30d + 8GiB,
+  no admin API). Scrape credentials in `/etc/url-shortener/prometheus.env` (0600).
+  See `deploy/monitoring/prometheus.yml` for the scrape config.
 
 ---
 
@@ -46,16 +52,20 @@ against the committed schema), and performs a canary cutover.
 # 1. Ensure backing services are up
 docker-compose up -d       # mongo + redis
 
-# 2. Deploy (blue-green, canary 10/30/100, 30s dwell)
+# 2. Deploy (blue-green, metrics-gated canary 10/30/100 per ADR 0012)
 #    - STEP 0: downloads JAR from GitHub Release + validates full artifact chain
 #      BEFORE any host mutation (no runtime-conf --init, no service/nginx change)
 #    - stages the SAME validated JAR into the idle color (single download; no re-fetch)
-#    - canary bumps: render → nginx -t → reload → smoke → dwell
+#    - canary stages: render → nginx -t → reload → smoke → METRICS_WINDOW_SECONDS window
+#      (default 90s, contains former 30s dwell) → Prometheus canary gate
+#    - gate signals: up==1, scrape count≥2, source freshness≤45s, 5xx<0.001,
+#      latency≥0.99, volume≥1; bounded retry; measured breach=fail-closed
 #    - success: last-deploy.txt + drain old color + one-liner
 sudo bash scripts/deploy.sh vX.Y.Z
 ```
 
-Custom canary weights (must be strictly increasing integers 1–100 ending at 100):
+Custom canary weights (must be strictly increasing integers 1–100 ending at 100;
+each stage runs the full `METRICS_WINDOW_SECONDS` window + gate):
 ```sh
 sudo bash scripts/deploy.sh vX.Y.Z --canary 5,25,50,100
 ```
