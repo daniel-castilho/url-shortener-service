@@ -624,6 +624,40 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     as passed. Tag and assets must remain unchanged. Future releases must use annotated tags
     with repository controls preventing tag updates/deletions. — `resolved`
 
+37. **Epic 22 (Machine-Generated Release Evidence)** — completed 2026-10-02, rehearsed end-to-end
+    on `v0.16.0` (published). (a) **Canonical record**: `schemas/release-evidence.schema.json` (v1)
+    + stdlib `scripts/release_evidence.py` (generate/validate/render/self-test 25/25).
+    `RELEASE-EVIDENCE.json` = observed-facts-only record (repository/tag/semver/annotated-tag
+    object type/source commit/originating run id+attempt+number+URL/job conclusions/candidate+
+    asset hashes/image id + embedded-JAR hash/CycloneDX SBOM subject/authoritative completion time
+    from the Actions jobs API — never guessed; UTC `Z`; no self-hash). `RELEASE-EVIDENCE.md`
+    rendered only from the JSON. (b) **Same-run receipts (22.2)**: `scripts/write-release-receipt.sh`
+    (self-test 7/7 incl. CLI-contract case) emits a receipt in every pipeline job (gates, k6-gate,
+    runtime-smoke, restore-drill, release); uploaded `receipt-*` (90-day retention), fetched only by
+    exact run id. (c) **Draft-first + machine-finalized release (22.3)**: `release.yml` creates a
+    **draft**; `.github/workflows/release-finalizer.yml` (unbounded workflow_run) guards
+    event/repo/run/status/conclusion, downloads the receipts, verifies the annotated tag peels to
+    the originating commit via `verify-release-artifact.sh --tag-resolves`, checks out the tag,
+    runs `scripts/finalize-release-evidence.sh` (self-test 22/22: acceptance + 19 security/fail-
+    closed cases), which re-verifies run/jobs/receipts/draft assets/provenance/sha256sums/SBOM,
+    generates + validates the report, attaches it, then publishes **last** (fail-closed `EV-*`;
+    idempotent SKIP for already-finalized). (d) **Auditability (22.4)**: runbook §"Draft →
+    finalizer → publish", DoD §7 traceability matrix (requirement → implementation/gate → test →
+    generated evidence); CHANGELOG `[0.16.0]`; CI + release gates wire all four self-tests.
+    Rehearsal proof: run `36952425861` (Release, success 5/5) + run `36953205133` (Finalizer,
+    success) published `v0.16.0` with `RELEASE-EVIDENCE.json` (5971 B) + `.md` (3300 B); published
+    JAR passes `sha256sum -c`; report schema-validated standalone; receipts (producer `gates`,
+    consumers k6/smoke/drill/release) all agree on the candidate SHA; embedded-JAR and SBOM subject
+    == candidate/image. **Rehearsal deviations (owner-authorized):** the v0.16.0 tag was deleted and
+    re-issued twice — (1) `write-release-receipt.sh` arg loop dropped its values (`unknown argument:
+    gates`, fixed `6196be2`; self-test extended to exercise the CLI contract, not just the internal
+    function); (2) `actions/download-artifact@v4` cannot read another run's artifacts from a
+    `workflow_run` without explicit `github-token` + `repository` inputs (go-swagger/go-swagger#3344;
+    fixed `8605fa4`; job also now guards `conclusion == 'success'`). Neither failed attempt produced
+    a release. **Open (owner):** GitHub tag-protection ruleset (block tag update/delete) — DoD keeps
+    it exported as the only owner-verification item; the report/verifier assert current tag object
+    type/target but never historical immutability. — `resolved`
+
 ## 🔍 Operational Discipline & Debugging Guidelines
 
 - **Investigate before trial-and-error:** when a compile or test fails, read the full stack trace and
