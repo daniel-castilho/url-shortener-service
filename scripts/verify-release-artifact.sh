@@ -196,6 +196,22 @@ echo "OK: candidate $(basename "$jar") sha256=$real_sha matches manifest (repo=$
 }
 
 # ---------------------------------------------------------------- validate-release mode
+# Writes the validated JAR to $OUTPUT_JAR (optional but required --output-jar semantics with
+# --validate-release). All precondition checks run BEFORE the copy: the destination must not
+# exist (never overwrite), its parent directory must exist, and a path must actually be given.
+# On any rejection nothing is written — no partial output, no clobbering.
+write_output_jar() { # $1 = validated source JAR (absolute path)
+    local jar="$1"
+    [ -n "$jar" ] || fail "--output-jar: no validated JAR source given"
+    [ -n "$OUTPUT_JAR" ] || fail "--output-jar requires a path argument"
+    [ -e "$OUTPUT_JAR" ] && fail "--output-jar destination '$OUTPUT_JAR' already exists"
+    local out_dir
+    out_dir="$(dirname "$OUTPUT_JAR")"
+    [ -d "$out_dir" ] || fail "--output-jar parent directory '$out_dir' does not exist"
+    cp "$jar" "$OUTPUT_JAR" || fail "--output-jar failed to copy '$jar' to '$OUTPUT_JAR'"
+    note "validate-release: copied validated JAR to $OUTPUT_JAR"
+}
+
 # Validates the complete release artifact chain from a GitHub Release before host mutation.
 # Downloads JAR, SHA256SUMS, RELEASE-PROVENANCE.txt, RELEASE-EVIDENCE.json and cross-checks
 # all against the requested tag, the committed schema, and each other. Fail-closed.
@@ -353,13 +369,8 @@ print('OK: all cross-checks passed')
     note "  evidence: schema v1, jobs=${evidence_jobs:-5}, assets=4, image+sbom verified"
 
     # Copy validated JAR to output path if requested
-    if [ -n "$OUTPUT_JAR" ]; then
-        [ -e "$OUTPUT_JAR" ] && fail "--output-jar destination '$OUTPUT_JAR' already exists"
-        local out_dir
-        out_dir="$(dirname "$OUTPUT_JAR")"
-        [ -d "$out_dir" ] || fail "--output-jar parent directory '$out_dir' does not exist"
-        cp "$jar" "$OUTPUT_JAR"
-        note "validate-release: copied validated JAR to $OUTPUT_JAR"
+    if [ "$OUTPUT_JAR_REQUESTED" = "1" ]; then
+        write_output_jar "$jar"
     fi
 
     exit 0
@@ -529,7 +540,42 @@ do_self_test() {
     claim_ok "14: moved tag rejected by tag-resolves"
   fi
 
-  echo "OK: acceptance + rejection paths all asserted."
+  # case 15: output-jar copies the validated fixture to a NEW path — same bytes/hash
+  # (requires parent dir to exist, destination not to exist — exactly the deploy
+  # staging contract: fresh temp dir + non-existent file path inside it)
+  mkdir -p "$TMP/out"
+  rm -f "$TMP/out/validated.jar"
+  ( OUTPUT_JAR="$TMP/out/validated.jar" write_output_jar "$TMP/candidate.jar" ) >/dev/null 2>&1
+  [ -f "$TMP/out/validated.jar" ] || claim_fail "15: output-jar did not produce the output file"
+  [ "$(sha256_of "$TMP/out/validated.jar")" = "$SHA" ] \
+    || claim_fail "15: output-jar bytes differ from the validated JAR fixture"
+  claim_ok "15: output-jar copied validated JAR to a new path (hash matches)"
+
+  # case 16: existing destination rejected WITHOUT overwrite; missing parent rejected
+  # WITHOUT partial output
+  printf 'precious\n' > "$TMP/existing.jar"
+  if ( OUTPUT_JAR="$TMP/existing.jar" write_output_jar "$TMP/candidate.jar" ) >/dev/null 2>&1; then
+    claim_fail "16: existing destination must be rejected"
+  fi
+  [ "$(cat "$TMP/existing.jar")" = "precious" ] \
+    || claim_fail "16: existing destination was overwritten on rejection"
+  if ( OUTPUT_JAR="$TMP/no-such-dir/validated.jar" write_output_jar "$TMP/candidate.jar" ) >/dev/null 2>&1; then
+    claim_fail "16: missing parent directory must be rejected"
+  fi
+  [ ! -e "$TMP/no-such-dir" ] || claim_fail "16: missing-parent rejection left partial output"
+  claim_ok "16: existing destination + missing parent rejected; no overwrite/partial output"
+
+  # case 17: CLI gate — --output-jar without a path value rejected, and incompatible
+  # mode rejected, both BEFORE any download (verified via a fresh subprocess invocation)
+  if bash "$0" --validate-release v9.9.9 --output-jar >/dev/null 2>&1; then
+    claim_fail "17: --output-jar with no path value must be rejected"
+  fi
+  if bash "$0" --jar "$TMP/candidate.jar" --manifest "$TMP/good.txt" --output-jar "$TMP/out/x.jar" >/dev/null 2>&1; then
+    claim_fail "17: --output-jar outside --validate-release must be rejected"
+  fi
+  claim_ok "17: --output-jar missing-path + incompatible-mode rejected before any download"
+
+  echo "OK: acceptance + rejection paths all asserted (incl. --output-jar interface)."
   echo "PASS: self-test verified — gate detects violations."
   exit 0
 }
@@ -546,6 +592,7 @@ EXPECT_SEMVER=""
 RESOLVE_SHA=""
 VALIDATE_TAG=""
 OUTPUT_JAR=""
+OUTPUT_JAR_REQUESTED=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -560,16 +607,19 @@ while [ $# -gt 0 ]; do
     --expect-run-id)   shift; EXPECT_RUN_ID="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
     --expect-semver)   shift; EXPECT_SEMVER="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
     --validate-release) shift; MODE=validate-release; VALIDATE_TAG="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
-    --output-jar)      shift; OUTPUT_JAR="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
+    --output-jar)      shift; OUTPUT_JAR_REQUESTED=1; OUTPUT_JAR="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
     --check)           shift; MODE=check; CHECK_TAG="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
     --self-test)       MODE=self-test; shift ;;
     *) fail "unknown argument: $1" ;;
   esac
 done
 
-# Validate that --output-jar is only used with --validate-release
-if [ -n "$OUTPUT_JAR" ] && [ "$MODE" != "validate-release" ]; then
-    fail "--output-jar can only be used with --validate-release"
+# Validate --output-jar: only valid with --validate-release, and it REQUIRES a non-empty
+# path value. An empty/missing value must never be silently ignored (the caller would
+# believe the validated JAR was written to a path when it was not).
+if [ "$OUTPUT_JAR_REQUESTED" = "1" ]; then
+    [ -n "$OUTPUT_JAR" ] || fail "--output-jar requires a path argument"
+    [ "$MODE" = "validate-release" ] || fail "--output-jar can only be used with --validate-release"
 fi
 
 case "$MODE" in

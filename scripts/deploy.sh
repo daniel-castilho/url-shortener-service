@@ -50,6 +50,12 @@ READY_BUDGET_SECONDS="${READY_BUDGET_SECONDS:-90}"
 BLUE_PORT="${BLUE_PORT:-8080}"
 GREEN_PORT="${GREEN_PORT:-8081}"
 
+# Staging dir for the validated JAR (precondition 0). Script-global, NOT function-local,
+# so the EXIT trap keeps working under `set -u` after deploy() has returned. Only the
+# --self-test mode may pre-set it (to a path it owns) so the test can prove cleanup;
+# production deploy always creates a fresh mktemp -d and never honors an exported value.
+DEPLOY_TMP_DIR=""
+
 note() { echo "DEPLOY $(date +%T): $*" >&2; }
 warn() { echo "DEPLOY $(date +%T) WARN: $*" >&2; }
 die()  { echo "DEPLOY $(date +%T) ABORT: $*" >&2; exit 1; }
@@ -241,24 +247,57 @@ do_self_test() {
 
     # --- create stub commands to intercept external calls ---
     # Each stub records its invocation to $tmp/calls/<name> (so the test can prove
-    # which commands a code path attempted) and fails hard. No real host command,
-    # no network, no systemd, no nginx is ever reached.
+    # which commands a code path attempted). gh always fails (never legitimately
+    # reached). systemctl/nginx/curl/sudo are CONTROLLED: the abort-proof probe wants
+    # wait_ready to fail (curl stub returns 000 by default), while the full successful
+    # deployment simulation needs restart/reload/readiness/install to succeed (set
+    # CURL_STUB_CODE=200 in that subshell; sudo's `install` actually copies the JAR so
+    # the same-bytes guarantee can be asserted). No real host command, no network,
+    # no systemd, no nginx is ever reached.
     local stub_bin="$tmp/stub_bin" calls_dir="$tmp/calls"
     mkdir -p "$stub_bin" "$calls_dir"
-    mk_stub() { # $1 = command name
-        cat > "$stub_bin/$1" <<EOF
+
+    cat > "$stub_bin/gh" <<EOF
 #!/usr/bin/env bash
-echo "\$*" >> "$calls_dir/$1"
-echo "STUB $1 called with: \$*" >&2
+echo "\$*" >> "$calls_dir/gh"
+echo "STUB gh called with: \$* (must never be reached in self-test)" >&2
 exit 1
 EOF
-        chmod +x "$stub_bin/$1"
-    }
-    mk_stub gh
-    mk_stub systemctl
-    mk_stub nginx
-    mk_stub curl
-    mk_stub sudo
+    cat > "$stub_bin/systemctl" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "$calls_dir/systemctl"
+echo "STUB systemctl \$* (simulated success)" >&2
+exit 0
+EOF
+    cat > "$stub_bin/nginx" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "$calls_dir/nginx"
+echo "STUB nginx \$* (simulated success)" >&2
+exit 0
+EOF
+    cat > "$stub_bin/curl" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "$calls_dir/curl"
+echo "STUB curl \$* (simulated http code \${CURL_STUB_CODE:-000})" >&2
+echo "\${CURL_STUB_CODE:-000}"
+exit 0
+EOF
+    cat > "$stub_bin/sudo" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "$calls_dir/sudo"
+if [ "\${1:-}" = "install" ]; then
+    # sudo install -D -o ... -m 0644 <src> <dst> — simulate faithfully: stage the copy.
+    last=""; prev=""
+    for a in "\$@"; do prev="\$last"; last="\$a"; done
+    mkdir -p "\$(dirname "\$last")" || exit 1
+    cp "\$prev" "\$last" || exit 1
+    echo "STUB sudo install: staged \$prev -> \$last (simulated)" >&2
+    exit 0
+fi
+echo "STUB sudo \$* (simulated success)" >&2
+exit 0
+EOF
+    chmod +x "$stub_bin"/*
     # Prepend stub_bin to PATH so stubs are used instead of real commands
     PATH="$stub_bin:$PATH"
 
@@ -405,7 +444,91 @@ EOF
     grep -qF "step validate: release artifact validation failed for v0.17.0" "$tmp/err" \
         || die "self-test: default-canary invocation did not reach the release-validation gate"
 
-    echo "OK: render weights, abort render, validate_canary (valid/invalid), CLI argument parser (reject + accept) — all asserted"
+    # --- successful mocked deployment: same validated bytes staged, temp cleaned up ---
+    # The verifier is stubbed SUCCESSFUL and writes a known fixture JAR to the
+    # --output-jar path; smoke.sh is stubbed; systemctl/nginx stubs succeed; curl
+    # reports readiness 200; sudo's `install` faithfully stages the copy. With
+    # DWELL_SECONDS=0 the full canary (10/30/100) runs without sleeping. This proves
+    # the whole path: parser -> validation gate -> runtime --init -> install of the
+    # EXACT validated bytes -> readiness -> nginx bumps -> smoke -> cutover.
+    echo "self-test: successful mocked deploy — same validated JAR staged, temp staging cleaned on success"
+    local fixture="$tmp/fixture.jar"
+    head -c 4096 /dev/urandom > "$fixture"
+    local fixture_sha; fixture_sha="$(sha256sum "$fixture" | awk '{print $1}')"
+    local ok_scripts="$tmp/ok_scripts"
+    mkdir -p "$ok_scripts" "$tmp/deploy-stage"
+    cat > "$ok_scripts/verify-release-artifact.sh" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "$calls_dir/verify"
+out=""; prev=""
+for a in "\$@"; do
+    [ "\$prev" = "--output-jar" ] && out="\$a"
+    prev="\$a"
+done
+[ -n "\$out" ] || { echo "STUB verify(ok): missing --output-jar value" >&2; exit 1; }
+cp "$fixture" "\$out" || exit 1
+echo "STUB verify(ok): validated and wrote \$out" >&2
+exit 0
+EOF
+    cat > "$ok_scripts/smoke.sh" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "$calls_dir/smoke"
+echo "STUB smoke \$* (simulated success)" >&2
+exit 0
+EOF
+    chmod +x "$ok_scripts/verify-release-artifact.sh" "$ok_scripts/smoke.sh"
+
+    calls_clear
+    rc=0
+    # All test vars are set via `export` inside the subshell (NOT as prefixes to
+    # deploy): (a) prefix assignments are restored after a function returns, which would
+    # make the EXIT trap reference the reverted (empty) DEPLOY_TMP_DIR and skip cleanup;
+    # (b) plain (unexported) assignments would never reach CHILD processes — wait_ready's
+    # curl is the stub script itself, which must see CURL_STUB_CODE=200 to report ready.
+    ( export SCRIPT_DIR="$ok_scripts" CURL_STUB_CODE=200 DWELL_SECONDS=0 \
+            READY_BUDGET_SECONDS=5 \
+            NGINX_RUNTIME_CONF="$tmp/deploy/runtime/nginx.conf" \
+            LAST_DEPLOY_FILE="$tmp/deploy/runtime/last-deploy.txt" \
+            URLS_HOME="$tmp/homes" DEPLOY_TMP_DIR="$tmp/deploy-stage"; \
+      deploy v0.17.0 --canary 10,30,100 ) 2>"$tmp/err" >/dev/null || rc=$?
+    [ "$rc" -eq 0 ] || { echo "--- deploy stderr ---" >&2; sed -n '/precondition 0/,$p' "$tmp/err" >&2; die "self-test: successful mocked deploy exited $rc (expected 0)"; }
+    [ -f "$tmp/homes/green/url-shortener.jar" ] || die "self-test: staged JAR not found under the idle color home"
+    local staged_sha; staged_sha="$(sha256sum "$tmp/homes/green/url-shortener.jar" | awk '{print $1}')"
+    [ "$staged_sha" = "$fixture_sha" ] \
+        || die "self-test: staged/installed JAR bytes differ from the validated fixture ($staged_sha != $fixture_sha)"
+    [ ! -e "$tmp/deploy-stage" ] || die "self-test: temporary staging dir was NOT cleaned on success"
+    [ -f "$tmp/deploy/runtime/nginx.conf" ] || die "self-test: runtime conf was not created during the mocked deploy"
+    [ -f "$tmp/deploy/runtime/last-deploy.txt" ] || die "self-test: last-deploy record was not written during the mocked deploy"
+    grep -q "DEPLOY OK" "$tmp/err" || die "self-test: mocked deploy did not report DEPLOY OK"
+    # systemctl is ALWAYS invoked through `sudo systemctl`, so the sudo stub absorbs it
+    # (only the `sudo` marker is written); nginx is invoked directly via $NGINX_CMD.
+    for cmd in verify sudo nginx curl smoke; do
+        [ -f "$calls_dir/$cmd" ] || die "self-test: mocked deploy never invoked stub '$cmd'"
+    done
+
+    # --- validation failure leaves runtime config + deploy state untouched ---
+    echo "self-test: validation failure leaves runtime config + deploy state untouched"
+    mkdir -p "$tmp/fail-stage"
+    calls_clear
+    rc=0
+    ( export SCRIPT_DIR="$val_scripts" \
+            NGINX_RUNTIME_CONF="$tmp/failcheck/runtime/nginx.conf" \
+            LAST_DEPLOY_FILE="$tmp/failcheck/runtime/last-deploy.txt" \
+            URLS_HOME="$tmp/failcheck-homes" DEPLOY_TMP_DIR="$tmp/fail-stage"; \
+      deploy v0.17.0 --canary 10,30,100 ) 2>"$tmp/err" >/dev/null || rc=$?
+    [ "$rc" -ne 0 ] || die "self-test: validation-failure deploy unexpectedly succeeded"
+    grep -qF "step validate: release artifact validation failed for v0.17.0" "$tmp/err" \
+        || die "self-test: validation-failure deploy did not fail at the release-validation gate"
+    [ ! -e "$tmp/failcheck/runtime/nginx.conf" ] || die "self-test: validation failure created a runtime conf (host mutation before validation)"
+    [ ! -e "$tmp/failcheck/runtime/last-deploy.txt" ] || die "self-test: validation failure wrote a last-deploy record (host mutation before validation)"
+    [ ! -e "$tmp/failcheck-homes/green/url-shortener.jar" ] || die "self-test: validation failure staged a JAR (host mutation before validation)"
+    [ ! -e "$tmp/fail-stage" ] || die "self-test: temporary staging dir was NOT cleaned on validation failure"
+    [ -f "$calls_dir/verify" ] || die "self-test: verify stub was not reached on the validation-failure path"
+    for cmd in systemctl nginx curl sudo; do
+        [ -f "$calls_dir/$cmd" ] && die "self-test: validation failure attempted host mutation via stub '$cmd'"
+    done
+
+    echo "OK: render, abort render, validate_canary, CLI parser (reject+accept), same-bytes staging, cleanup on success+failure — all asserted"
     echo "PASS: self-test verified"
 }
 
@@ -435,8 +558,17 @@ deploy() {
     # This includes downloading and fully validating the artifact chain.
     # On failure, no host state has been modified.
     note "precondition 0/4: validate full release artifact chain for $tag"
-    local validated_jar; validated_jar="$(mktemp --suffix=.jar)"
-    trap 'rm -f "$validated_jar"' EXIT
+    # Staging: a fresh temp DIRECTORY (mktemp -d, not a file) with the output path
+    # inside it. The verifier's --output-jar requires a destination that does NOT yet
+    # exist inside an EXISTING parent dir — a `mktemp --suffix=.jar` would pre-create the
+    # file and make every deployment fail at the gate. Cleanup lives on the global
+    # DEPLOY_TMP_DIR (see its declaration), so the EXIT trap survives deploy() returning
+    # and never references a function-local under `set -u`.
+    if [ "$MODE" != "--self-test" ] || [ -z "$DEPLOY_TMP_DIR" ]; then
+        DEPLOY_TMP_DIR="$(mktemp -d)"
+    fi
+    trap '[ -n "$DEPLOY_TMP_DIR" ] && rm -rf "$DEPLOY_TMP_DIR"' EXIT
+    local validated_jar="$DEPLOY_TMP_DIR/validated.jar"
     bash "$SCRIPT_DIR/verify-release-artifact.sh" --validate-release "$tag" --output-jar "$validated_jar" \
         || die "step validate: release artifact validation failed for $tag"
     note "validated JAR staged at $validated_jar"
