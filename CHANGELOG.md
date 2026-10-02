@@ -45,7 +45,8 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
     traceability matrix (§7). Tag-update/deletion protection remains an owner-verified
     repository-control (not claimed by this epic).
 
-  Tests & gates: generator self-test 25/25; receipt self-test 5/5; finalizer
+  Tests & gates: generator self-test 25/25; receipt self-test 7/7 (incl. the
+  CLI contract — value-consuming flags cannot leak into the next parse pass); finalizer
   (acceptance + 19 security/reliability cases) 22/22; `verify-release-artifact.sh` self-test 17/17;
   actionlint clean on `release.yml` + `release-finalizer.yml`.
 

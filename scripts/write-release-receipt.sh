@@ -139,6 +139,22 @@ assert r["sbom_sha256"]
 PYEOF
   echo "case 5 OK"
 
+  # case 6: the CLI contract itself — invoke the script's own argument loop
+  # (not write_receipt directly) exactly as release.yml does; a value-consuming
+  # flag must not leak its value into the next parse iteration.
+  if ( eval "$EXPORTENV"; bash "$0" --job k6-gate \
+        --out "$TMP/cli.json" --commit "$COMMIT" \
+        --filename url-shortener-service-1.2.3.jar --sha256 "$SHA" ) \
+      >/dev/null 2>&1; then echo "case 6 OK"; else echo "FAIL: case 6: CLI invocation must succeed"; ok=0; fi
+  python3 - "$TMP/cli.json" <<'PYEOF' || { echo "FAIL: case 6b: CLI receipt must be valid"; ok=0; }
+import json, sys
+r = json.load(open(sys.argv[1]))
+assert r["job"] == "k6-gate"
+PYEOF
+  # case 7: CLI rejects an unknown flag
+  if ( eval "$EXPORTENV"; bash "$0" --job gates --undefined-flag ) \
+      >/dev/null 2>&1; then echo "FAIL: case 7: unknown flag must be rejected"; ok=0; else echo "case 7 OK"; fi
+
   if [ "$ok" -eq 1 ]; then echo "PASS: self-test verified — receipt writer is sound."; exit 0; fi
   echo "FAIL: self-test failed."; exit 1
 }
@@ -155,15 +171,15 @@ SBOM_SHA=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --job) shift; JOB="${1:-}" ;;
-    --out) shift; OUT="${1:-}" ;;
-    --commit) shift; COMMIT="${1:-}" ;;
-    --filename) shift; FILENAME="${1:-}" ;;
-    --sha256) shift; SHA256="${1:-}" ;;
-    --image-id) shift; IMAGE_ID="${1:-}" ;;
-    --embedded-jar-sha256) shift; EMBEDDED_JAR_SHA="${1:-}" ;;
-    --sbom) shift; SBOM="${1:-}" ;;
-    --sbom-sha256) shift; SBOM_SHA="${1:-}" ;;
+    --job) shift; JOB="${1:-}"; shift ;;
+    --out) shift; OUT="${1:-}"; shift ;;
+    --commit) shift; COMMIT="${1:-}"; shift ;;
+    --filename) shift; FILENAME="${1:-}"; shift ;;
+    --sha256) shift; SHA256="${1:-}"; shift ;;
+    --image-id) shift; IMAGE_ID="${1:-}"; shift ;;
+    --embedded-jar-sha256) shift; EMBEDDED_JAR_SHA="${1:-}"; shift ;;
+    --sbom) shift; SBOM="${1:-}"; shift ;;
+    --sbom-sha256) shift; SBOM_SHA="${1:-}"; shift ;;
     --self-test) self_test; exit 0 ;;
     *) fail "unknown argument: $1" ;;
   esac
