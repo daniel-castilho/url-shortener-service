@@ -1,0 +1,364 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/daniel-castilho/url-shortener-service/schemas/release-evidence.schema.json",
+  "title": "Release Evidence report",
+  "description": "Machine-generated evidence record for a URL Shortener Service release. Generated only by the release finalizer after the originating `Release` workflow run completes successfully, from facts observed over the GitHub API and verified artifacts. The report records observed facts only — it never makes policy claims (e.g. it does not claim repository tag-protection exists).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "repository",
+    "tag",
+    "tag_object_type",
+    "semver",
+    "source_commit",
+    "workflow",
+    "jobs",
+    "candidate",
+    "receipts",
+    "published_assets",
+    "evidence",
+    "generated_by"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["1"]
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    },
+    "tag": {
+      "type": "string",
+      "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "tag_object_type": {
+      "type": "string",
+      "enum": ["tag"],
+      "description": "The tag ref must point to an annotated tag object (git object type \"tag\"). Lightweight tags are rejected by the Epic 21 identity verifier."
+    },
+    "semver": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "workflow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "path",
+        "run_id",
+        "run_number",
+        "run_attempt",
+        "event",
+        "url",
+        "conclusion",
+        "completion_time_utc",
+        "completion_time_source"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^\\.github/workflows/[A-Za-z0-9_.-]+\\.ya?ml$"
+        },
+        "run_id": {
+          "type": "integer"
+        },
+        "run_number": {
+          "type": "integer"
+        },
+        "run_attempt": {
+          "type": "integer"
+        },
+        "event": {
+          "type": "string",
+          "enum": ["push"]
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^https://github\\.com/[^/]+/[^/]+/actions/runs/[0-9]+$"
+        },
+        "conclusion": {
+          "type": "string",
+          "enum": ["success"]
+        },
+        "completion_time_utc": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$"
+        },
+        "completion_time_source": {
+          "type": "string",
+          "pattern": "^actions .*jobs.*api.*$"
+        }
+      }
+    },
+    "jobs": {
+      "type": "array",
+      "minItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "name", "conclusion", "completed_at_utc"],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string",
+            "enum": ["Gates", "k6 Gate", "Runtime Smoke", "Restore Drill", "Release"]
+          },
+          "conclusion": {
+            "type": "string",
+            "enum": ["success"]
+          },
+          "completed_at_utc": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$"
+          }
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["filename", "sha256"],
+      "properties": {
+        "filename": {
+          "type": "string",
+          "pattern": "^url-shortener-service-[0-9]+\\.[0-9]+\\.[0-9]+\\.jar$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "receipts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["producer", "consumers", "sha256sums_verified"],
+      "properties": {
+        "producer": {
+          "$ref": "#/definitions/receipt"
+        },
+        "consumers": {
+          "type": "array",
+          "minItems": 4,
+          "items": {
+            "$ref": "#/definitions/receipt"
+          }
+        },
+        "sha256sums_verified": {
+          "type": "boolean",
+          "const": true,
+          "description": "The finalizer ran sha256sum -c against the published SHA256SUMS covering the released candidate."
+        }
+      }
+    },
+    "published_assets": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "sha256", "role"],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "role": {
+            "type": "string",
+            "enum": ["jar", "checksums", "provenance", "sbom"]
+          }
+        }
+      }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "embedded_jar_sha256"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^url-shortener:[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "embedded_jar_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "sbom": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["filename", "sha256", "format", "subject_name", "subject_image_id"],
+      "properties": {
+        "filename": {
+          "type": "string",
+          "pattern": "^sbom-url-shortener-[0-9]+\\.[0-9]+\\.[0-9]+\\.json$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "format": {
+          "type": "string",
+          "enum": ["cyclonedx"]
+        },
+        "subject_name": {
+          "type": "string",
+          "pattern": "^url-shortener:[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "subject_image_id": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["json", "markdown"],
+      "properties": {
+        "json": {
+          "type": "string",
+          "const": "RELEASE-EVIDENCE.json"
+        },
+        "markdown": {
+          "type": "string",
+          "const": "RELEASE-EVIDENCE.md"
+        }
+      }
+    },
+    "generated_by": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tool",
+        "schema_version",
+        "finalizer_workflow",
+        "finalizer_run_id",
+        "finalizer_run_attempt",
+        "recorded_at_utc",
+        "observed_facts_only"
+      ],
+      "properties": {
+        "tool": {
+          "type": "string",
+          "enum": ["release_evidence.py"]
+        },
+        "schema_version": {
+          "type": "string",
+          "enum": ["1"]
+        },
+        "finalizer_workflow": {
+          "type": "string",
+          "pattern": "^\\.github/workflows/[A-Za-z0-9_.-]+\\.ya?ml$"
+        },
+        "finalizer_run_id": {
+          "type": "integer"
+        },
+        "finalizer_run_attempt": {
+          "type": "integer"
+        },
+        "recorded_at_utc": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$"
+        },
+        "observed_facts_only": {
+          "type": "boolean",
+          "const": true
+        }
+      }
+    }
+  },
+  "definitions": {
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "tag",
+        "semver",
+        "source_commit",
+        "run_id",
+        "run_attempt",
+        "job",
+        "filename",
+        "sha256",
+        "produced_at_utc"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        },
+        "tag": {
+          "type": "string",
+          "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "semver": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        },
+        "source_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "run_id": {
+          "type": "integer"
+        },
+        "run_attempt": {
+          "type": "integer"
+        },
+        "job": {
+          "type": "string",
+          "enum": ["gates", "k6-gate", "runtime-smoke", "restore-drill", "release"]
+        },
+        "filename": {
+          "type": "string",
+          "pattern": "^url-shortener-service-.*\\.jar$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "produced_at_utc": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,6})?Z$"
+        },
+        "image_id": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "embedded_jar_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "sbom": {
+          "type": "string"
+        },
+        "sbom_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

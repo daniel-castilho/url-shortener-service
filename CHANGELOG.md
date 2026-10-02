@@ -7,6 +7,46 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ## [Unreleased]
 
+### Added
+
+- **Machine-generated release evidence (Epic 22)** — every release now ships a canonical,
+  verifiable record of what the pipeline actually built and trusted, closing epics/reviews by
+  citing the report instead of hand-transcribed hashes:
+  - **Canonical record** — `schemas/release-evidence.schema.json` (versioned, `$ref`-driven) and
+    `scripts/release_evidence.py` (stdlib generator/validator/renderer; `generate`, `validate`,
+    `render`, `self-test`). `RELEASE-EVIDENCE.json` records repository/tag/semver/annotated-tag
+    object type/source commit, originating workflow run (id, attempt, number, URL, event),
+    authoritative conclusion + completion time (from the Actions jobs API — never guessed),
+    job conclusions, candidate + consumer SHA-256, release asset hashes, image id +
+    image-embedded JAR hash, and the CycloneDX SBOM subject. Populated **observed-facts-only**;
+    UTC `Z`; no self-hash. `RELEASE-EVIDENCE.md` is rendered solely from the JSON.
+  - **Same-run receipts (story 22.2)** — `scripts/write-release-receipt.sh` emits a receipt in
+    every pipeline job (gates, k6-gate, runtime-smoke, restore-drill, release); each consumer
+    records the exact candidate bytes (repository/tag/semver/commit/run id/attempt/filename/
+    sha256) it verified immediately before use. Uploaded as `receipt-*` artifacts under the run
+    (90-day retention), fetched only by exact run id.
+  - **Draft-first, machine-finalized release (story 22.3)** — the `Release` workflow now creates a
+    **draft**; `.github/workflows/release-finalizer.yml` (new `workflow_run` workflow) verifies the
+    annotated tag peels to the originating commit, checks out the tag, runs
+    `scripts/finalize-release-evidence.sh`, which re-verifies run/job/receipts/draft assets/
+    provenance/sha256sums/SBOM from authoritative data, generates + validates the evidence report,
+    attaches it, and publishes **only after all checks pass** (publish is the last action).
+    Any `EV-*` failure leaves the release unpublished; already-finalized release = idempotent no-op.
+  - **Verification gates** — `scripts/verify-release-artifact.sh` gained `--tag-resolves
+    <tag> <sha>` (annotated tag required, peels to the expected commit); self-tests extended.
+    Finalizer self-test harness (`finalize-release-evidence-self-test.py`, 22 acceptance/rejection
+    cases) driven by `finalize-release-evidence.sh --self-test`. All generator/receipt/verify
+    self-tests wired into `ci.yml` and the release gates.
+  - **Docs** — `docs/release-runbook.md` §"Draft → finalizer → publish" describes the flow,
+    evidence fields, failure behavior, report retrieval, and the no-manual-duplication rule;
+    Epic 22 DoD gained a requirement → implementation/gate → test → generated-evidence
+    traceability matrix (§7). Tag-update/deletion protection remains an owner-verified
+    repository-control (not claimed by this epic).
+
+  Tests & gates: generator self-test 25/25; receipt self-test 5/5; finalizer
+  (acceptance + 19 security/reliability cases) 22/22; `verify-release-artifact.sh` self-test 17/17;
+  actionlint clean on `release.yml` + `release-finalizer.yml`.
+
 ## [0.15.0] - 2026-10-01
 
 ### Added

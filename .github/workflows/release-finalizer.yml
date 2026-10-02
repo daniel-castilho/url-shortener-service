@@ -1,0 +1,106 @@
+name: Release Finalizer
+
+on:
+  workflow_run:
+    workflows: ['Release']
+    types: [completed]
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  finalize:
+    name: Finalize Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout default branch (workflow_run sources scripts from default branch)
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Resolve originating run facts
+        id: resolve
+        env:
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+          echo "run_id=$RUN_ID"
+          echo "head_sha=$HEAD_SHA"
+          echo "head_branch=$HEAD_BRANCH"
+          case "$HEAD_BRANCH" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::head branch '$HEAD_BRANCH' is not a vX.Y.Z release tag; skipping"; exit 0 ;;
+          esac
+          echo "tag=$HEAD_BRANCH" >> "$GITHUB_OUTPUT"
+          echo "sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Download receipts from originating run
+        uses: actions/download-artifact@v4
+        with:
+          name: receipt-gates
+          path: receipts
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Download receipts from originating run (k6 gate)
+        uses: actions/download-artifact@v4
+        with:
+          name: receipt-k6-gate
+          path: receipts
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Download receipts from originating run (runtime smoke)
+        uses: actions/download-artifact@v4
+        with:
+          name: receipt-runtime-smoke
+          path: receipts
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Download receipts from originating run (restore drill)
+        uses: actions/download-artifact@v4
+        with:
+          name: receipt-restore-drill
+          path: receipts
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Download receipts from originating run (release)
+        uses: actions/download-artifact@v4
+        with:
+          name: receipt-release
+          path: receipts
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Verify tag identity (annotated, peels to originating commit)
+        if: steps.resolve.outputs.tag != ''
+        run: |
+          set -euo pipefail
+          bash scripts/verify-release-artifact.sh --tag-resolves "${{ steps.resolve.outputs.tag }}" "${{ steps.resolve.outputs.sha }}"
+
+      - name: Switch to verified tag commit (finalizer scripts come from the tag)
+        if: steps.resolve.outputs.tag != ''
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.resolve.outputs.tag }}"
+          git checkout --detach "refs/tags/$TAG"
+          [ -f scripts/finalize-release-evidence.sh ] || { echo "::error::finalizer script missing from tag $TAG checkout"; exit 1; }
+
+      - name: Finalize release (validate evidence, attach, publish)
+        if: steps.resolve.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVT_WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          EVT_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+          EVT_WORKFLOW_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          EVT_ORIGIN_REPO: ${{ github.event.workflow_run.repository.full_name }}
+          EVT_ORIGIN_EVENT: ${{ github.event.workflow_run.event }}
+          EVT_ORIGIN_BRANCH: ${{ steps.resolve.outputs.tag }}
+          EVT_ORIGIN_SHA: ${{ steps.resolve.outputs.sha }}
+          EVT_ORIGIN_STATUS: completed
+          EVT_ORIGIN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          set -euo pipefail
+          bash scripts/finalize-release-evidence.sh --origin-run-id "${{ github.event.workflow_run.id }}"
+          ls -la RELEASE-EVIDENCE.json RELEASE-EVIDENCE.md
