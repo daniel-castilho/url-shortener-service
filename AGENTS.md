@@ -619,7 +619,10 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     approved per Rule 9. (f) **Jackson CVEs** ignored via `.trivyignore` (patched 3.x versions
     under `tools.jackson.core` groupId, migration deferred). All gates green: boundaries,
     living-spec (97%), metrics-frozen, security, doc-sync. Release workflow `v0.15.0` green.
-    — `resolved`
+    **Owner disposition (2026-10-01):** v0.15.0 tag is lightweight (not annotated) and was
+    force-updated multiple times — both criteria waived for this release only; not recorded
+    as passed. Tag and assets must remain unchanged. Future releases must use annotated tags
+    with repository controls preventing tag updates/deletions. — `resolved`
 
 ## 🔍 Operational Discipline & Debugging Guidelines
 
