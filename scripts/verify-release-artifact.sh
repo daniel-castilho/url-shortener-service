@@ -69,14 +69,21 @@ sha256_of() { sha256sum "$1" 2>/dev/null | awk '{print $1}'; }
 do_peel() {
   local tag="$1"
   [ -n "$tag" ] || fail "--peel requires a tag argument"
-  local peeled head_sha
+  local peeled head_sha tag_type
   peeled=$(git rev-parse "refs/tags/$tag^{commit}" 2>/dev/null) \
     || fail "tag '$tag' cannot be resolved to a commit (refs/tags/$tag^{commit})"
   head_sha=$(git rev-parse HEAD 2>/dev/null) || fail "not a git checkout (no HEAD)"
   if [ "$peeled" != "$head_sha" ]; then
     fail "tag '$tag' peels to $peeled but checkout HEAD is $head_sha — identity mismatch"
   fi
-  echo "OK: tag '$tag' peels to $head_sha == HEAD (source identity verified)"
+  # Epic 21 requirement: release tags MUST be annotated tags, not lightweight tags.
+  # Verify the ref points to an annotated tag object (type "tag"), not a commit directly.
+  tag_type=$(git cat-file -t "refs/tags/$tag" 2>/dev/null) \
+    || fail "tag '$tag' ref cannot be inspected"
+  if [ "$tag_type" != "tag" ]; then
+    fail "tag '$tag' is a lightweight tag (ref points to $tag_type); only annotated tags are accepted for release identity"
+  fi
+  echo "OK: tag '$tag' peels to $head_sha == HEAD and is an annotated tag (source identity verified)"
   exit 0
 }
 
@@ -239,6 +246,29 @@ do_self_test() {
     claim_fail "10c: unresolvable tag must be rejected"
   else
     claim_ok "10c: unresolvable tag rejected"
+  fi
+
+  # case 11: lightweight tag must be rejected (Epic 21: only annotated tags allowed)
+  git init -q "$TMP/repo-light"
+  git -C "$TMP/repo-light" config user.email self-test@example.com
+  git -C "$TMP/repo-light" config user.name self-test
+  echo one > "$TMP/repo-light/a.txt"
+  git -C "$TMP/repo-light" add a.txt
+  git -C "$TMP/repo-light" commit -qm one
+  # create a LIGHTWEIGHT tag (no -a, no -m)
+  git -C "$TMP/repo-light" tag v1.2.3
+  # peel should FAIL because tag is lightweight (ref points to commit, not tag object)
+  if ( cd "$TMP/repo-light" && do_peel v1.2.3 >/dev/null 2>&1 ); then
+    claim_fail "11: lightweight tag must be rejected"
+  else
+    claim_ok "11: lightweight tag rejected"
+  fi
+  # annotated tag must be accepted
+  git -C "$TMP/repo-light" tag -a v1.2.4 -m "release"
+  if ( cd "$TMP/repo-light" && do_peel v1.2.4 >/dev/null 2>&1 ); then
+    claim_ok "11b: annotated tag accepted"
+  else
+    claim_fail "11b: annotated tag must be accepted"
   fi
 
   echo "OK: acceptance + rejection paths all asserted."

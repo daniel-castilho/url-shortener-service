@@ -385,9 +385,9 @@ UAT compose stack when up, else staging):
 
 The CI `release.yml` pipeline produces a GitHub Release on every tag `v*`. **Artifact identity
 and single-build promotion (Epic 21, ADR 0008):** every job is pinned to the trigger tag — 
-`s scripts/verify-release-artifact.sh` resolves `refs/tags/<tag>^{commit}` and fails unless it
-equals that job's checkout HEAD, and one and only one `./mvnw verify -Drevision=<semver>` run
-produces the release candidate.
+`bash scripts/verify-release-artifact.sh --peel` resolves `refs/tags/<tag>^{commit}` and fails unless it
+equals that job's checkout HEAD, **and verifies the tag is an annotated tag (not lightweight)**,
+and one and only one `./mvnw verify -Drevision=<semver>` run produces the release candidate.
 
 1. **gates** job: full `./mvnw verify -Drevision=<semver>` (the **only** build in the pipeline)
    + all bash gates + promtool/amtool + CHANGELOG gate. Captures exactly one candidate, writes
