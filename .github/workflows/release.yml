@@ -580,11 +580,12 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release (draft — published by the finalizer)
         uses: softprops/action-gh-release@v3.0.3
         with:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
+          draft: true
           body: |
             Release ${{ github.ref_name }} — URL Shortener Service
 
