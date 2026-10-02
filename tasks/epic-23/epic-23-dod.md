@@ -45,9 +45,9 @@
 
 | Evidence | Value |
 |---|---|
-| Starting implementation commit | **To be filled from Git** |
-| Closing implementation commit | **To be filled from Git** |
-| Changed paths | **To be filled from `git diff --name-only`** |
+| Starting implementation commit | `c5402f6` (feat(epic-23): Documentation Change-Impact Gate) |
+| Closing implementation commit | `c5402f6` (single commit for map, checker, CI, docs) |
+| Changed paths | `.github/workflows/ci.yml`, `AGENTS.md`, `CHANGELOG.md`, `docs/documentation-impact-map.json`, `scripts/check-doc-impact.sh`, `scripts/doc_impact.py`, `tasks/epic-23/*` |
 | Impact-map validation output | `bash scripts/check-doc-impact.sh --base HEAD~5 --head HEAD` → `Rule triggered: RELEASE-PROCESS ... Required doc group 1: satisfied by CHANGELOG.md ... RESULT: PASS` |
 | Checker self-test output | `bash scripts/check-doc-impact.sh --self-test` → `PASS: self-test verified — gate detects violations and allows compliant changes.` (9/9 cases) |
 | Normal checker examples | Mapped doc pass (HEAD~5..HEAD): RELEASE-PROCESS satisfied by CHANGELOG.md; Missing-doc fail (tested via self-test); Valid no-impact result (tested via self-test: "Refactoring only — no behavior change") |
@@ -92,25 +92,6 @@ A green unit/self-test on a local fixture does not prove the CI workflow invokes
 - [x] `CHANGELOG.md` and directly affected documentation are synchronized per repository rules.
 - [x] All Epic 23 repository content is in English and applies only to `url-shortener-service`.
 - [x] No unrelated app, deploy, repository-settings, or frontend changes are included.
-
-## 5. Required closing evidence
-
-Paste actual outputs or stable links; never replace placeholders with expected values.
-
-| Evidence | Value |
-|---|---|
-| Starting implementation commit | **To be filled from Git** |
-| Closing implementation commit | **To be filled from Git** |
-| Changed paths | **To be filled from `git diff --name-only`** |
-| Impact-map validation output | **Command/output to be pasted** |
-| Checker self-test output | **Command/output to be pasted, including positive and negative cases** |
-| Normal checker examples | **Mapped doc pass, missing-doc fail, valid no-impact result** |
-| PR event integration result | **Exact CI run/URL and output** |
-| Push event integration result | **Exact CI run/URL and output** |
-| Regression gates | **Actual commands/results on the closing commit** |
-| Documentation review | **Changed paths and review evidence** |
-
-A green unit/self-test on a local fixture does not prove the CI workflow invokes the gate. A green workflow on a different commit is not closing evidence.
 
 ## 6. Explicit exclusions and safety
 
