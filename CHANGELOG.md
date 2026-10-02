@@ -7,6 +7,8 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-01
+
 ### Added
 
 - **Machine-generated release evidence (Epic 22)** — every release now ships a canonical,
