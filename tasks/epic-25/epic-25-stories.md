@@ -1,7 +1,9 @@
 # Epic 25 Stories: Production Metrics-Gated Blue-Green Canary
 
 **Target repository:** `daniel-castilho/url-shortener-service` only  
-**Status:** Draft. S0 is required before implementation; S1–S3 remain blocked by its decisions.
+**Status:** S0 APPROVED by owner (2026-10-02) → `docs/adr/0012-metrics-gated-blue-green-canary.md`.
+S1–S3 are ready to start pending their own authorizations (S1 host access, S3 non-production
+rehearsal).
 
 ## S0 — Approve Prometheus operating model and gate policy (architecture prerequisite)
 

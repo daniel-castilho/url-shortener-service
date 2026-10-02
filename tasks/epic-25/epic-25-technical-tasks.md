@@ -1,17 +1,19 @@
 # Epic 25 Technical Tasks: Production Metrics-Gated Blue-Green Canary
 
 **Target repository:** `daniel-castilho/url-shortener-service` only  
-**Status:** Draft; implementation tasks are not ready until S0 is approved.
+**Status:** S0 decisions APPROVED (2026-10-02) → `docs/adr/0012-metrics-gated-blue-green-canary.md`
+and `epic-25-s0-decisions.md`. Implementation tasks below are ready to start only with the
+authorizations each requires (S1 host access / S2 code / S3 rehearsal).
 
 ## S0 — Architecture decision record
 
-- [ ] Record the approved Prometheus operating model (Compose/systemd/external owner) and service lifecycle.
-- [ ] Record the actual approved runtime host, network boundary, query API address, storage path, retention, resource cap, and backup/restore expectations.
-- [ ] Confirm authorized access to the real staging metrics environment; do not infer runtime existence from repository files.
-- [ ] Choose the least-privilege credentials for Prometheus scraping and for deploy-time queries; define secret-file ownership, rotation, and logging rules.
-- [ ] Approve the per-stage metric set, thresholds, windows, freshness limit, minimum request count, bounded wait, and failure action.
-- [ ] Decide whether a bypass is permitted; default recommendation is no bypass.
-- [ ] Record any decision that remains open as an explicit blocker.
+- [x] Record the approved Prometheus operating model (Compose/systemd/external owner) and service lifecycle. — ADR 0012 D1
+- [x] Record the actual approved runtime host, network boundary, query API address, storage path, retention, resource cap, and backup/restore expectations. — ADR 0012 D2/D3 (host specifics to be evidenced at S1)
+- [ ] Confirm authorized access to the real staging metrics environment; do not infer runtime existence from repository files. — **blocked on host access authorization**
+- [x] Choose the least-privilege credentials for Prometheus scraping and for deploy-time queries; define secret-file ownership, rotation, and logging rules. — ADR 0012 D4
+- [x] Approve the per-stage metric set, thresholds, windows, freshness limit, minimum request count, bounded wait, and failure action. — ADR 0012 D5/D6/D7 (thresholds flagged for real-traffic calibration at S3)
+- [x] Decide whether a bypass is permitted; default recommendation is no bypass. — ADR 0012 D9
+- [x] Record any decision that remains open as an explicit blocker. — no blocker; pending item: numeric threshold calibration + host evidence at S1/S3
 
 ## S1 — Prometheus runtime and scrape configuration
 
