@@ -1,0 +1,63 @@
+# URL Shortener — Prometheus (deploy host metrics gate, ADR 0012 / Epic 25).
+#
+# Systemd-managed Prometheus binary on the deploy host (D1). Not in Compose:
+# Compose is reserved for Mongo/Redis only (ADR 0007), and the container ops
+# service adds a second supervision model + host Docker dependency.
+#
+# Hardening mirrors url-shortener-blue.service: NoNewPrivileges, ProtectSystem=strict,
+# ProtectHome, PrivateTmp, Restart=on-failure. TSDB lives at /var/lib/prometheus
+# (D2): retention 30d AND 8GiB size cap (whichever first), restart survives on local
+# disk; the install script's startup assert checks free disk.
+#
+# Query API (D3): loopback 127.0.0.1:9090 ONLY; admin API and lifecycle disabled
+# (config is git-owned; reload via ExecReload=/bin/kill -HUP). The deploy gate
+# (scripts/canary-gate.sh) queries https://127.0.0.1:9090 loopback with bounded
+# timeouts. Not publicly exposed.
+#
+# Scrape creds (D4): basic_auth.password_file — root-owned 0600, never inline.
+# The prometheus process runs as its own user so it can read the password + the
+# app metrics belong to the operator account; rotation = replace file + reload.
+
+[Unit]
+Description=Prometheus metrics server (URL Shortener deploy gate, ADR 0012)
+Documentation=https://github.com/daniel-castilho/url-shortener-service
+After=network-online.target url-shortener-blue.service url-shortener-green.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=prometheus
+Group=prometheus
+WorkingDirectory=/var/lib/prometheus
+EnvironmentFile=-/etc/url-shortener/prometheus.env
+ExecStart=/usr/local/bin/prometheus \
+    --config.file=/etc/prometheus/prometheus.yml \
+    --storage.tsdb.path=/var/lib/prometheus \
+    --storage.tsdb.retention.time=30d \
+    --storage.tsdb.retention.size=8GiB \
+    --web.listen-address=127.0.0.1:9090 \
+    --web.enable-admin-api=false \
+    --web.enable-lifecycle=false
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=10
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+# Security hardening (mirrors url-shortener-blue.service)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/prometheus
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=prometheus
+
+[Install]
+WantedBy=multi-user.target
