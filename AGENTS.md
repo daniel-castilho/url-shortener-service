@@ -654,9 +654,12 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     function); (2) `actions/download-artifact@v4` cannot read another run's artifacts from a
     `workflow_run` without explicit `github-token` + `repository` inputs (go-swagger/go-swagger#3344;
     fixed `8605fa4`; job also now guards `conclusion == 'success'`). Neither failed attempt produced
-    a release. **Open (owner):** GitHub tag-protection ruleset (block tag update/delete) — DoD keeps
-    it exported as the only owner-verification item; the report/verifier assert current tag object
-    type/target but never historical immutability. — `resolved`
+    a release. **Tag protection (2026-10-02):** ruleset `Release tags - protected` (id `24344264`,
+    active, `refs/tags/v*`, creation/update/deletion, owner bypass) now enforces item 36's future
+    criterion. **Residual owner verification:** the repo has no auto admin bypass — the owner account
+    is the sole explicit bypass actor; the owner should confirm in Settings that no org/enterprise
+    ruleset loosens this one. The evidence report/verifier assert current tag object type/target but
+    never historical immutability. — `resolved`
 
 ## 🔍 Operational Discipline & Debugging Guidelines
 
