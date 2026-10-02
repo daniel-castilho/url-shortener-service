@@ -60,9 +60,10 @@ Paste real output or stable workflow links/identifiers for:
 | SBOM subject identity, if applicable | CycloneDX SBOM `sbom-url-shortener-0.15.0.json` subject = `pkg:docker/url-shortener@sha256:934eaddae616010de4d9d19108b309891dd8ebbd59aa0705d3d857384dd2b1eb` |
 | Documentation and governance review | Changed paths: `AGENTS.md` (item 36), `CHANGELOG.md` (0.15.0 promotion), `README.md` (Current State v0.15.0), `docs/release-runbook.md` (identity flow + governance), `docs/release-engineering.md` (flow + §3), ADR 0008 (reconciled note); commits `e2c762f` (docs) + this fix |
 
-**Deviation — lightweight tag (not annotated):** The published `v0.15.0` tag is a lightweight tag (ref points directly to commit `19dfbfac57424bc33c36dc0caf3e443642fa3c69`; `git cat-file -t v0.15.0` returns `commit`). Epic 21 requires annotated tags for release identity. The verifier has been updated to reject lightweight tags (`scripts/verify-release-artifact.sh --peel` now checks `git cat-file -t refs/tags/<tag>` == `tag`). v0.15.0 remains unchanged per instructions; owner disposition required for Epic 21 annotated-tag criterion closure.
-
-**Deviation — tag force-updated:** The `v0.15.0` tag was force-pushed multiple times during CI fixes (from `6a6e88d` → `2b26f15` → `6a6e88d` → `19dfbfa`). The release-runbook states tags are immutable once published. This is recorded as a deviation; owner disposition required. Future releases will enforce immutable tags via the updated verifier and release process.
+**Owner disposition (2026-10-01):** For v0.15.0 only, the deviations are waived:
+- **Lightweight tag:** v0.15.0 is a lightweight tag (not annotated). This criterion is waived for this release; not recorded as passed.
+- **Tag force-updated:** v0.15.0 was force-pushed multiple times. The release-runbook's immutable-tag rule is waived for this release.
+The published tag and release assets must remain unchanged and must not be moved, deleted, or recreated. Future releases must use annotated tags, and tag updates/deletions must be prevented through verified repository controls. **Epic 21 is closed with this explicit exception.**
 
 Never replace placeholders with estimates. If a gate or artifact cannot provide evidence, the epic is not Done.
 
