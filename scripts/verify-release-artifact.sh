@@ -199,7 +199,9 @@ echo "OK: candidate $(basename "$jar") sha256=$real_sha matches manifest (repo=$
 # Writes the validated JAR to $OUTPUT_JAR (optional but required --output-jar semantics with
 # --validate-release). All precondition checks run BEFORE the copy: the destination must not
 # exist (never overwrite), its parent directory must exist, and a path must actually be given.
-# On any rejection nothing is written — no partial output, no clobbering.
+# The write is fail-closed: content goes to a unique temp file in the destination directory;
+# on any failure the temp is removed and no partial final destination remains. Publication
+# uses a no-clobber move.
 write_output_jar() { # $1 = validated source JAR (absolute path)
     local jar="$1"
     [ -n "$jar" ] || fail "--output-jar: no validated JAR source given"
@@ -208,7 +210,11 @@ write_output_jar() { # $1 = validated source JAR (absolute path)
     local out_dir
     out_dir="$(dirname "$OUTPUT_JAR")"
     [ -d "$out_dir" ] || fail "--output-jar parent directory '$out_dir' does not exist"
-    cp "$jar" "$OUTPUT_JAR" || fail "--output-jar failed to copy '$jar' to '$OUTPUT_JAR'"
+    local tmp
+    tmp="$(mktemp -p "$out_dir" .validated.XXXXXX.jar)" || fail "--output-jar: failed to create temp file in '$out_dir'"
+    cp "$jar" "$tmp" || { rm -f "$tmp"; fail "--output-jar failed to copy '$jar' to temp '$tmp'"; }
+    # No-clobber move: fail if destination somehow appeared (should not, we checked above)
+    mv -n "$tmp" "$OUTPUT_JAR" || { rm -f "$tmp"; [ -e "$OUTPUT_JAR" ] && fail "--output-jar destination '$OUTPUT_JAR' appeared during move"; fail "--output-jar failed to publish temp to '$OUTPUT_JAR'"; }
     note "validate-release: copied validated JAR to $OUTPUT_JAR"
 }
 
@@ -574,6 +580,31 @@ do_self_test() {
     claim_fail "17: --output-jar outside --validate-release must be rejected"
   fi
   claim_ok "17: --output-jar missing-path + incompatible-mode rejected before any download"
+
+  # case 18: copy failure after partial write leaves no partial final destination
+  # and no stray temp file. Simulate by using a copier named 'cp' that writes
+  # partial data then exits non-zero.
+  mkdir -p "$TMP/copyfail"
+  local fail_copier_dir="$TMP/copyfail/bin"
+  mkdir -p "$fail_copier_dir"
+  cat > "$fail_copier_dir/cp" <<'EOF'
+#!/usr/bin/env bash
+# Writes 16 bytes then fails
+head -c 16 /dev/urandom > "$2" || true
+exit 1
+EOF
+  chmod +x "$fail_copier_dir/cp"
+  local dst="$TMP/copyfail/out.jar"
+  # Prepend failing copier to PATH so the function's 'cp' call uses it
+  if ( PATH="$fail_copier_dir:$PATH" OUTPUT_JAR="$dst" write_output_jar "$TMP/candidate.jar" ) >/dev/null 2>&1; then
+    claim_fail "18: copy failure must be rejected"
+  fi
+  [ ! -e "$dst" ] || claim_fail "18: final destination must not exist after copy failure"
+  # No temp file should remain in the output directory
+  local leftovers
+  leftovers=$(find "$TMP/copyfail" -name '.validated.*.jar' 2>/dev/null | wc -l)
+  [ "$leftovers" -eq 0 ] || claim_fail "18: stray temp file(s) remain after copy failure"
+  claim_ok "18: copy failure leaves no partial destination and no stray temp file"
 
   echo "OK: acceptance + rejection paths all asserted (incl. --output-jar interface)."
   echo "PASS: self-test verified — gate detects violations."
