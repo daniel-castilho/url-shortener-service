@@ -116,6 +116,24 @@ jobs:
             --expect-semver "${{ steps.extract-tag.outputs.semver }}"
           ( cd "$(dirname "$CANDIDATE")" && sha256sum -c "$GITHUB_WORKSPACE/SHA256SUMS" )
 
+      - name: Emit producer receipt (Epic 22 — observed candidate hash)
+        run: |
+          CANDIDATE="${{ steps.candidate.outputs.candidate }}"
+          bash scripts/write-release-receipt.sh \
+            --job gates \
+            --out receipt-gates.json \
+            --commit "${{ steps.extract-tag.outputs.source_commit }}" \
+            --filename "$(basename "$CANDIDATE")" \
+            --sha256 "$(sha256sum "$CANDIDATE" | awk '{print $1}')"
+
+      - name: Upload producer receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: receipt-gates
+          path: receipt-gates.json
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Stage release candidate at workspace root
         run: |
           cp "target/url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar" \
@@ -197,6 +215,23 @@ jobs:
             --expect-run-id "${{ github.run_id }}" \
             --expect-semver "${{ steps.extract-tag.outputs.semver }}"
           ( cd release-candidate && sha256sum -c SHA256SUMS )
+
+      - name: Emit consumer receipt (k6 gate)
+        run: |
+          bash scripts/write-release-receipt.sh \
+            --job k6-gate \
+            --out receipt-k6-gate.json \
+            --commit "${{ needs.gates.outputs.source_commit }}" \
+            --filename "url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar" \
+            --sha256 "$(sha256sum "release-candidate/url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar" | awk '{print $1}')"
+
+      - name: Upload consumer receipt (k6 gate)
+        uses: actions/upload-artifact@v4
+        with:
+          name: receipt-k6-gate
+          path: receipt-k6-gate.json
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Start app (relaxed rate limits)
         run: |
@@ -289,6 +324,23 @@ jobs:
             --expect-semver "${{ steps.extract-tag.outputs.semver }}"
           ( cd release-candidate && sha256sum -c SHA256SUMS )
 
+      - name: Emit consumer receipt (runtime smoke)
+        run: |
+          bash scripts/write-release-receipt.sh \
+            --job runtime-smoke \
+            --out receipt-runtime-smoke.json \
+            --commit "${{ needs.gates.outputs.source_commit }}" \
+            --filename "url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar" \
+            --sha256 "$(sha256sum "release-candidate/url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar" | awk '{print $1}')"
+
+      - name: Upload consumer receipt (runtime smoke)
+        uses: actions/upload-artifact@v4
+        with:
+          name: receipt-runtime-smoke
+          path: receipt-runtime-smoke.json
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Start app
         run: |
           JAR=release-candidate/url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar
@@ -357,6 +409,23 @@ jobs:
             --expect-run-id "${{ github.run_id }}" \
             --expect-semver "${{ steps.extract-tag.outputs.semver }}"
           ( cd release-candidate && sha256sum -c SHA256SUMS )
+
+      - name: Emit consumer receipt (restore drill)
+        run: |
+          bash scripts/write-release-receipt.sh \
+            --job restore-drill \
+            --out receipt-restore-drill.json \
+            --commit "${{ needs.gates.outputs.source_commit }}" \
+            --filename "url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar" \
+            --sha256 "$(sha256sum "release-candidate/url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar" | awk '{print $1}')"
+
+      - name: Upload consumer receipt (restore drill)
+        uses: actions/upload-artifact@v4
+        with:
+          name: receipt-restore-drill
+          path: receipt-restore-drill.json
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Run ci-restore-drill.sh
         run: bash scripts/ci-restore-drill.sh
@@ -489,6 +558,27 @@ jobs:
           cat RELEASE-PROVENANCE.txt
           echo "--- SHA256SUMS (published asset, consume via sha256sum -c or deploy.sh grep) ---"
           cat release-candidate/SHA256SUMS
+
+      - name: Emit release receipt (image + sbom identity, Epic 22)
+        run: |
+          bash scripts/write-release-receipt.sh \
+            --job release \
+            --out receipt-release.json \
+            --commit "${{ needs.gates.outputs.source_commit }}" \
+            --filename "url-shortener-service-${{ steps.extract-tag.outputs.semver }}.jar" \
+            --sha256 "${{ steps.asset-hashes.outputs.jar_sha }}" \
+            --image-id "${{ steps.image-id.outputs.image_id }}" \
+            --embedded-jar-sha256 "$(sha256sum extracted-app.jar | awk '{print $1}')" \
+            --sbom "sbom-url-shortener-${{ steps.extract-tag.outputs.semver }}.json" \
+            --sbom-sha256 "$(sha256sum "sbom-url-shortener-${{ steps.extract-tag.outputs.semver }}.json" | awk '{print $1}')"
+
+      - name: Upload release receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: receipt-release
+          path: receipt-release.json
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3.0.3
