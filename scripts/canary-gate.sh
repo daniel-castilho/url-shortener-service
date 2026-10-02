@@ -91,16 +91,6 @@ is_num() {
 lt() { awk -v a="$1" -v b="$2" 'BEGIN{exit !(a<b)}'; }
 ge() { awk -v a="$1" -v b="$2" 'BEGIN{exit !(a>=b)}'; }
 
-now_ms() {
-  local t
-  t=$(date +%s%3N 2>/dev/null)
-  if [[ "$t" =~ ^[0-9]{12,13}$ ]]; then
-    printf '%s\n' "$t"
-  else
-    printf '%s\n' "$(( $(date +%s) * 1000 ))"
-  fi
-}
-
 # --- Prometheus HTTP --------------------------------------------------------
 
 # Prometheus instant query. Writes the JSON body to $2 and echoes the HTTP status
@@ -139,8 +129,11 @@ set_indet() { eval_state="INDET"; eval_msg="$1"; }
 set_fail()  { eval_state="FAIL"; eval_msg="$1"; }
 
 # signal 1+3: up == 1, exactly one series, sample younger than freshness.
+# Prometheus sample timestamps in an instant vector are unix SECONDS (float, e.g.
+# 1790965152.964). Compare in seconds with float-safe arithmetic (awk), never bash
+# $((...)) integer subtraction on a fractional value.
 check_up() {
-  local body code vec len ts val now
+  local body code vec len ts val now age
   code=$(http_query "$tmp/up.json" "up{job=\"url-shortener-$COLOR\"}")
   if [[ "$code" != "200" ]]; then
     set_indet "up query HTTP $code"; return 1
@@ -151,9 +144,12 @@ check_up() {
   [[ "$len" == "1" ]] || { set_indet "up must be exactly 1 series, got ${len:-0}"; return 1; }
   is_num "$val" || { set_indet "up value not numeric"; return 1; }
   is_num "$ts"  || { set_indet "up sample timestamp missing"; return 1; }
-  now=$(now_ms)
-  if ! ge "$now" "$ts" || ! lt "$((now - ts))" "$((FRESHNESS * 1000))"; then
-    set_indet "up sample older than freshness ${FRESHNESS}s"; return 1
+  now=$(date +%s)
+  age=$(awk -v n="$now" -v t="$ts" 'BEGIN{if (t<=0) {print "err"} else {printf "%.6f", n - t}}' 2>/dev/null)
+  # Allow up to 2s clock skew (sample timestamp slightly in future relative to now).
+  # Freshness: -2s <= age < FRESHNESS.
+  if [[ "$age" == "err" ]] || ! lt "$age" "$FRESHNESS" || ! lt "-2" "$age"; then
+    set_indet "up sample older than freshness ${FRESHNESS}s (age=${age}s)"; return 1
   fi
   if [[ "$val" != "1" ]]; then
     [[ "$val" == "0" ]] && { set_indet "up{...} == 0 (target down or not yet scraped)"; return 1; }
@@ -178,7 +174,7 @@ check_scrape_count() {
 
 # signal 3: source samples (the request counters) are fresh, not just `up`.
 check_source_freshness() {
-  local body code vec len ts val now
+  local body code vec len ts val now now_s age
   code=$(http_query "$tmp/source.json" \
     "max(timestamp(http_server_requests_seconds_count{job=\"url-shortener-$COLOR\"}))")
   [[ "$code" == "200" ]] || { set_indet "source-freshness query HTTP $code"; return 1; }
@@ -187,9 +183,11 @@ check_source_freshness() {
   IFS=$'\t' read -r len ts val <<<"$vec"
   [[ "$len" == "1" ]] || { set_indet "source-freshness must be exactly 1 series, got ${len:-0}"; return 1; }
   is_num "$val" || { set_indet "source-freshness not numeric"; return 1; }
-  now=$(now_ms)
-  # value[1] is max(timestamp(...)) in unix SECONDS.
-  if ! ge "$(($(date +%s)))" "$val" || ! lt "$(( $(date +%s) - val ))" "$FRESHNESS"; then
+  # value[1] is max(timestamp(...)) in unix SECONDS (may carry a fractional part);
+  # compare in seconds with float-safe arithmetic.
+  now_s=$(date +%s)
+  age=$(awk -v n="$now_s" -v v="$val" 'BEGIN{if (v<=0) {print "err"} else {printf "%.6f", n - v}}' 2>/dev/null)
+  if [[ "$age" == "err" ]] || ! lt "$age" "$FRESHNESS" || ! lt "$((0))" "$age"; then
     set_indet "source samples older than freshness ${FRESHNESS}s"; return 1
   fi
   return 0
@@ -432,20 +430,26 @@ case "$Q" in
 esac
 
 NOW=$(date +%s)
-NOW_MS=$(date +%s%3N 2>/dev/null); [[ "$NOW_MS" =~ ^[0-9]{12,13}$ ]] || NOW_MS=$(( NOW * 1000 ))
 JOB="url-shortener-blue"
 
-vec() { # ts_ms value
-  printf '{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"up","job":"%s","instance":"127.0.0.1:8080","color":"blue"},"value":["%s","%s"]}]}}' "$JOB" "$1" "$2"
+# Self-test mock: emit timestamps the way a real Prometheus instant vector does —
+# unix SECONDS with a fractional part (e.g. "1790965152.964"). This regresses the
+# fresh/up + source checks against float-safe arithmetic (bash $((..)) cannot parse
+# the fraction, and comparing ms to s would be wrong).
+SEC_FRAC=".964"
+nowf() { printf '%s%s' "$(( NOW - $1 ))" "$SEC_FRAC"; }
+
+vec() { # ts_seconds_ago value
+  printf '{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"up","job":"%s","instance":"127.0.0.1:8080","color":"blue"},"value":["%s","%s"]}]}}' "$JOB" "$(nowf "$1")" "$2"
 }
 vec_empty() {
   printf '{"status":"success","data":{"resultType":"vector","result":[]}}'
 }
 vec_multi() {
-  printf '{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"up","job":"%s","instance":"127.0.0.1:8080","color":"blue"},"value":["%s","1"]},{"metric":{"__name__":"up","job":"%s","instance":"127.0.0.1:8081","color":"green"},"value":["%s","1"]}]}}' "$JOB" "$(( NOW_MS - 2000 ))" "$JOB" "$(( NOW_MS - 2000 ))"
+  printf '{"status":"success","data":{"resultType":"vector","result":[{"metric":{"__name__":"up","job":"%s","instance":"127.0.0.1:8080","color":"blue"},"value":["%s","1"]},{"metric":{"__name__":"up","job":"%s","instance":"127.0.0.1:8081","color":"green"},"value":["%s","1"]}]}}' "$JOB" "$(nowf 2)" "$JOB" "$(nowf 2)"
 }
-scalar_one() { # value
-  printf '{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":["%s","%s"]}]}}' "$NOW_MS" "$1"
+scalar_one() { # seconds_ago value
+  printf '{"status":"success","data":{"resultType":"vector","result":[{"metric":{},"value":["%s","%s"]}]}}' "$(nowf "$1")" "$2"
 }
 scalar_none() {
   printf '{"status":"success","data":{"resultType":"vector","result":[]}}'
@@ -453,24 +457,24 @@ scalar_none() {
 
 # Default PASS bodies per query.
 case "$CASE" in
-  up)      BODY=$(vec "$(( NOW_MS - 2000 ))" "1") ;;
-  count)   BODY=$(scalar_one "6") ;;
-  source)  BODY=$(scalar_one "$(( NOW - 15 ))") ;;
-  error)   BODY=$(scalar_one "0.0005") ;;
-  latency) BODY=$(scalar_one "0.995") ;;
-  volume)  BODY=$(scalar_one "800") ;;
+  up)      BODY=$(vec 2 "1") ;;
+  count)   BODY=$(scalar_one 1 "6") ;;
+  source)  BODY=$(scalar_one 3 "$(( NOW - 15 ))") ;;
+  error)   BODY=$(scalar_one 1 "0.0005") ;;
+  latency) BODY=$(scalar_one 1 "0.995") ;;
+  volume)  BODY=$(scalar_one 1 "800") ;;
 esac
 
 # Per-scenario single-signal overrides (everything else passes).
 case "$SC:$CASE" in
-  stale-up:up)        BODY=$(vec "$(( NOW_MS - 120000 ))" "1") ;; # 2 min old -> stale
-  up-down:up)         BODY=$(vec "$(( NOW_MS - 2000 ))" "0") ;;
+  stale-up:up)        BODY=$(vec 120 "1") ;; # 2 min old -> stale
+  up-down:up)         BODY=$(vec 2 "0") ;;
   multi-up:up)        BODY=$(vec_multi) ;;
-  stale-up:source)    BODY=$(scalar_one "$(( NOW - 300 ))") ;;    # source older than freshness
-  5xx:error)          BODY=$(scalar_one "0.01") ;;
-  nan:error)          BODY=$(scalar_one "NaN") ;;
-  latency:latency)    BODY=$(scalar_one "0.5") ;;
-  low-volume:volume)  BODY=$(scalar_one "30") ;;
+  stale-up:source)    BODY=$(scalar_one 300 "$(( NOW - 300 ))") ;; # source older than freshness
+  5xx:error)          BODY=$(scalar_one 1 "0.01") ;;
+  nan:error)          BODY=$(scalar_one 1 "NaN") ;;
+  latency:latency)    BODY=$(scalar_one 1 "0.5") ;;
+  low-volume:volume)  BODY=$(scalar_one 1 "30") ;;
   missing:*)          BODY=$(vec_empty) ;;
   aparams:*)          BODY=$(scalar_none) ;;
 esac
