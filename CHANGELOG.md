@@ -7,6 +7,15 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ## [Unreleased]
 
+### Added
+
+- **Documentation Change-Impact Gate (Epic 23)** — CI now enforces that changes to high-impact areas (HTTP API, runtime configuration, MongoDB persistence, release process) must either update the expected documentation or declare an explicit, reviewable no-impact rationale:
+  - **Impact map**: `docs/documentation-impact-map.json` (versioned, JSON) maps source globs to required documentation targets for four areas.
+  - **Checker**: `scripts/check-doc-impact.sh` (thin wrapper) + `scripts/doc_impact.py` (Python 3 stdlib engine) evaluates Git changes against the map using NUL-delimited diffs, handles renames/deletions, validates rationale syntax.
+  - **Rationale contract**: `Docs-Impact: none - <specific reason>` in PR body or commit trailer; generic/empty values rejected; rationale surfaced as exception, not documentation update.
+  - **CI integration**: runs on both pull_request and push events; zero `before` SHA skips cleanly; required gate (not advisory).
+  - **Self-test**: `--self-test` plants violations in temp fixtures and proves missing-doc fail, valid-doc pass, valid-rationale exception, invalid-rationale fail, docs-only no-op, rename/delete handling, multi-rule evaluation, unmapped in-scope path detection, map coverage validation.
+
 ## [0.16.0] - 2026-10-01
 
 ### Added

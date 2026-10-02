@@ -1,0 +1,78 @@
+{
+  "scope_roots": [
+    "src/main/java/**/infra/adapter/input/rest/**",
+    "src/main/resources/application.yaml",
+    "src/main/java/**/infra/config/properties/*Properties.java",
+    "src/main/java/**/infra/adapter/output/persistence/**",
+    ".github/workflows/release*.yml",
+    "scripts/verify-release-artifact.sh",
+    "scripts/finalize-release-evidence.sh",
+    "scripts/write-release-receipt.sh",
+    "scripts/release_evidence.py",
+    "scripts/deploy.sh",
+    "scripts/rollback.sh",
+    "scripts/smoke.sh",
+    "scripts/backup-mongodb.sh",
+    "scripts/restore-mongodb.sh",
+    "scripts/ci-restore-drill.sh",
+    "scripts/performance-baseline.sh",
+    "scripts/verify-graceful-shutdown.sh",
+    "Dockerfile.release"
+  ],
+  "rules": [
+    {
+      "id": "API-CONTRACT",
+      "source": ["src/main/java/**/infra/adapter/input/rest/**"],
+      "requires": [
+        {
+          "any_of": ["README.md"]
+        }
+      ]
+    },
+    {
+      "id": "RUNTIME-CONFIG",
+      "source": [
+        "src/main/resources/application.yaml",
+        "src/main/java/**/infra/config/properties/*Properties.java"
+      ],
+      "requires": [
+        {
+          "any_of": ["README.md", "docs/release-runbook.md", "docs/release-engineering.md"]
+        }
+      ]
+    },
+    {
+      "id": "PERSISTENCE",
+      "source": ["src/main/java/**/infra/adapter/output/persistence/**"],
+      "requires": [
+        {
+          "any_of": ["MONGODB_ARCHITECTURE.md", "docs/data-model-decisions.md"]
+        }
+      ]
+    },
+    {
+      "id": "RELEASE-PROCESS",
+      "source": [
+        ".github/workflows/release*.yml",
+        "scripts/verify-release-artifact.sh",
+        "scripts/finalize-release-evidence.sh",
+        "scripts/write-release-receipt.sh",
+        "scripts/release_evidence.py",
+        "scripts/deploy.sh",
+        "scripts/rollback.sh",
+        "scripts/smoke.sh",
+        "scripts/backup-mongodb.sh",
+        "scripts/restore-mongodb.sh",
+        "scripts/ci-restore-drill.sh",
+        "scripts/performance-baseline.sh",
+        "scripts/verify-graceful-shutdown.sh",
+        "Dockerfile.release"
+      ],
+      "requires": [
+        {
+          "any_of": ["docs/release-runbook.md", "docs/release-engineering.md", "CHANGELOG.md"]
+        }
+      ]
+    }
+  ]
+}

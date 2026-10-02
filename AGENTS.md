@@ -80,7 +80,19 @@ Sources of truth: `README.md`, `pom.xml`, `src/main/resources/application.yaml`,
     - Update the audit/roadmap files in `/home/user` when a roadmap item is completed.
     _Work is NOT done while documentation describes a stale state._
 
-11. **Test Suite Integrity:** the full gate `./mvnw verify` (unit + `*IT` integration + E2E with
+11. **Documentation Change-Impact Gate (Epic 23):** when changes touch high-impact areas
+    (HTTP API, runtime configuration, MongoDB persistence, release process), CI requires
+    either updated documentation or an explicit no-impact rationale.
+    - **Map:** `docs/documentation-impact-map.json` defines source globs → required doc targets.
+    - **Local check:** `bash scripts/check-doc-impact.sh --base <sha> --head <sha> [--rationale "..." | --rationale-file <file>]`
+    - **No-impact rationale** (PR body or commit trailer):
+      `Docs-Impact: none - <specific reason>` — must be non-generic; empty/"none"/"N/A" rejected.
+    - **Rationale is a reviewable exception**, not automatic approval; human reviewers adjudicate.
+    - **Zero `before` SHA** (initial push) → SKIP with message, CI succeeds.
+    - **Gate is required** on both PR and push; not advisory.
+    - **Self-test:** `bash scripts/check-doc-impact.sh --self-test`
+
+12. **Test Suite Integrity:** the full gate `./mvnw verify` (unit + `*IT` integration + E2E with
     Testcontainers) must pass before declaring a turn or commit done. Run the targeted unit tests with
     `./mvnw test` for fast iteration.
 
@@ -102,6 +114,7 @@ Sources of truth: `README.md`, `pom.xml`, `src/main/resources/application.yaml`,
 | **Static analysis gate** | `./mvnw verify` (SpotBugs runs at `verify`; effort Max, threshold High) | Root |
 | **Architecture boundary check** | `bash scripts/check-boundaries.sh` (+ `--self-test`) | Root |
 | **Living-spec traceability check** | `bash scripts/check-living-spec.sh` (+ `--self-test`) | Root |
+| **Documentation change-impact gate** | `bash scripts/check-doc-impact.sh` (+ `--self-test`) | Root |
 
 ---
 

@@ -45,6 +45,31 @@ jobs:
       - name: Release evidence finalizer self-test
         run: bash scripts/finalize-release-evidence.sh --self-test
 
+      # Epic 23: Documentation Change-Impact Gate
+      - name: Doc-impact gate (pull_request)
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          echo '${{ github.event.pull_request.body }}' > /tmp/pr-body.txt
+          bash scripts/check-doc-impact.sh \
+            --base ${{ github.event.pull_request.base.sha }} \
+            --head ${{ github.event.pull_request.head.sha }} \
+            --rationale-file /tmp/pr-body.txt
+
+      - name: Doc-impact gate (push)
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          TRAILER=$(git log --format='%(trailers:key=Docs-Impact)' ${{ github.event.before }}..${{ github.event.after }} 2>/dev/null | grep -E '^none - .+$' | head -1 || true)
+          if [ -n "$TRAILER" ]; then
+            bash scripts/check-doc-impact.sh --base ${{ github.event.before }} --head ${{ github.event.after }} --rationale "$TRAILER"
+          else
+            bash scripts/check-doc-impact.sh --base ${{ github.event.before }} --head ${{ github.event.after }}
+          fi
+
+      - name: Doc-impact gate self-test
+        run: bash scripts/check-doc-impact.sh --self-test
+
   observability:
     name: Observability Gate (Epic 3)
     runs-on: ubuntu-latest
