@@ -7,6 +7,8 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-02
+
 ### Added
 
 - **Documentation Change-Impact Gate (Epic 23)** — CI now enforces that changes to high-impact areas (HTTP API, runtime configuration, MongoDB persistence, release process) must either update the expected documentation or declare an explicit, reviewable no-impact rationale:
@@ -15,6 +17,11 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
   - **Rationale contract**: `Docs-Impact: none - <specific reason>` in PR body or commit trailer; generic/empty values rejected; rationale surfaced as exception, not documentation update.
   - **CI integration**: runs on both pull_request and push events; zero `before` SHA skips cleanly; required gate (not advisory).
   - **Self-test**: `--self-test` plants violations in temp fixtures and proves missing-doc fail, valid-doc pass, valid-rationale exception, invalid-rationale fail, docs-only no-op, rename/delete handling, multi-rule evaluation, unmapped in-scope path detection, map coverage validation.
+
+- **Production Deploy Hardening (Epic 24)** — release artifact validation gate integrated into the deploy path, canary argument safety, runbook reconciliation:
+  - **verify-release-artifact.sh --validate-release**: full artifact chain validation from GitHub Release before any host mutation — exact JAR filename (`url-shortener-service-<semver>.jar`), SHA256SUMS with `sha256sum -c`, RELEASE-PROVENANCE.txt, RELEASE-EVIDENCE.json against committed schema, cross-checks repository/tag/source_commit/JAR filename/JAR SHA-256/image hash/SBOM subject; `--check` plan-only mode.
+  - **deploy.sh**: canary argument validation (comma-separated integers 1–100, strictly increasing, final=100), unknown/malformed args rejected before any host mutation, `--self-test` extended with CLI-path negative cases; precondition 1 calls `verify-release-artifact.sh --validate-release`.
+  - **Runbook reconciliation**: `scripts/deploy.sh <tag>` documented as sole production deployment path; local Maven builds / `target/*.jar` marked development-only; manual canary instructions in §12.2 deprecated and clearly distinguished from release deployment.
 
 ## [0.16.0] - 2026-10-01
 
