@@ -68,6 +68,20 @@ Paste raw outputs or stable links. Replace placeholders only with observed resul
 
 A placeholder, expected value, or static workflow inspection is not completion evidence.
 
+## 7. Traceability (requirement → implementation/gate → test → generated evidence)
+
+| Requirement | Implementation / gate | Test | Generated evidence produced |
+|---|---|---|---|
+| Canonical evidence record & versioned schema (rel. 22.1) | `schemas/release-evidence.schema.json`; generator `scripts/release_evidence.py` (generate/validate/render) | `python3 scripts/release_evidence.py self-test` (25 cases incl. negative) | `RELEASE-EVIDENCE.json` validates against the schema at generate time and standalone (`validate --json`) |
+| Observed-facts, UTC `Z`, no self-hash, authoritative completion (rel. 22.1) | `release_evidence.py` + finalizer facts assembly (`completion_time_source = actions jobs api max(completed_at)`, finalizer-run id never reused as run identity) | `python3 scripts/release_evidence.py self-test`; finalizer `--self-test` P1/P1c | `workflow.completion_time_utc`, `generated_by.finalizer_run_id/attempt` in `RELEASE-EVIDENCE.json` |
+| Same-run candidate receipts, no latest-run lookup (rel. 22.2) | `scripts/write-release-receipt.sh`; `release.yml` emit/upload in all 5 jobs (90-day retention) | `bash scripts/write-release-receipt.sh --self-test` (5 cases) | `receipts.producer`/`receipts.consumers` bound to one `run_id` in the report |
+| Cross-artifact identity: jar, sha256sums, provenance, SBOM subject, embedded JAR (rel. 22.2) | finalizer python pipeline (EV-ASSET/EV-CHECKSUM/EV-PROVENANCE/EV-SBOM/EV-IMAGE) | finalizer `--self-test` T12–T16, T19 | `published_assets` hashes, `image.embedded_jar_sha256`, `sbom.subject_*` in the report |
+| Annotated tag peels to originating commit (rel. 22.2/22.3) | `scripts/verify-release-artifact.sh --tag-resolves` | `verify-release-artifact.sh --self-test` cases 12–14 | `tag_object_type: "tag"` + resolved `source_commit` in the report |
+| Draft-first; publish only after validation; fail-closed on any EV-* (rel. 22.3) | `release.yml` `draft: true`; `.github/workflows/release-finalizer.yml`; `scripts/finalize-release-evidence.sh` Phase G (publish last) | finalizer `--self-test` P1 (dry-run), T1–T11, T17–T18; actionlint on both workflows | published `RELEASE-EVIDENCE.json`/`.md` assets on the release; released body = rendered report |
+| Rehearsal on a real tag (rel. 22.3, §5) | annotated tag `v0.16.0` on this branch set (owner-authorized) | originating `Release` run + finalizer run | DoD §5 rows: run URLs, generated assets, sha comparisons |
+| Auditable record without manual duplication (rel. 22.4) | `docs/release-runbook.md` §Draft → finalizer → publish; DoD §1–§7; `CHANGELOG.md` | `bash scripts/check-doc-sync.sh` (+ `--self-test`); actionlint | release `RELEASE-EVIDENCE.md` (rendered summary) that epics/reviews cite |
+| Does not claim historical immutability; tag protection = owner-verified (rel. 22.4) | runbook tag-immutability note; DoD §5 "Future-tag repository controls" | review of this matrix | DoD §5 row is filled only from separate owner-verified evidence or left explicitly pending |
+
 ## 6. Explicit exclusions and safety
 
 - No changes to, recreation, deletion, or republishing of `v0.15.0` or its assets.

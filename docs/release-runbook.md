@@ -350,6 +350,8 @@ failures" are non-issues: that collection was never dropped, so existing `_id`s 
 - [ ] Previous artifact retained for rollback.
 - [ ] Secrets never appear in logs or Git.
 - [ ] Tag is annotated (`git tag -a vX.Y.Z -m "..."`); `## [Unreleased]` in `CHANGELOG.md` is **empty** at the tag commit (promoted in the same commit).
+- [ ] `Release Finalizer` ran and the release is **published** with `RELEASE-EVIDENCE.json` + `RELEASE-EVIDENCE.md` attached (if only a draft exists, the finalizer failed or is still running — investigate before using the tag).
+- [ ] DoD for the release cites the evidence report and originating run URL instead of manually copied hashes/timestamps/image IDs.
 - [ ] Schema migrations since the tag recorded in `last-deploy.txt` are **expand-only** (no destructive drops/renames) — the migrator is fail-fast, but a destructive migration would break the old color still serving during the cutover.
 - [ ] MongoDB backup is recent (< 26h); restore drill (`scripts/ci-restore-drill.sh`) passed in the release pipeline.
 
@@ -405,7 +407,7 @@ and one and only one `./mvnw verify -Drevision=<semver>` run produces the releas
    via the single-stage `Dockerfile.release` (copies the candidate as `app.jar`; no Maven), proves
    the image-embedded JAR SHA-256 equals the candidate's (extract + hash-compare, fail-closed),
    non-root gate + Trivy HIGH/CRITICAL SHA-pinned + CycloneDX SBOM on that image, records the
-   image digest/id, and creates the GitHub Release with assets:
+   image digest/id, and creates the GitHub Release **as a draft** with assets:
    - `url-shortener-service-<semver>.jar` (the exact tested candidate; the only JAR ever published)
    - `SHA256SUMS` (sha256 of the jar, relative-path format for `sha256sum -c` and `deploy.sh` grep)
    - `RELEASE-PROVENANCE.txt` (full provenance: tag, semver, source commit, run id/attempt, jar, sha256)
@@ -417,6 +419,43 @@ and exercise, and each hop cross-checks repository, tag, source commit, run id, 
 and SHA-256. There is never a fallback build. `deploy.sh <tag>` downloads the jar from the
 Release, verifies the sha256 against `SHA256SUMS`, and stages it — a local rebuild is never a
 deploy source.
+
+### Draft → finalizer → publish (Epic 22 — machine-generated release evidence)
+
+The Create Release step makes the release **a draft only**; publication is owned by the
+**Release Finalizer** workflow (`release-finalizer.yml`, triggered by `workflow_run` when the
+`Release` workflow completes successfully, resolved from the default branch):
+
+1. Downloads the five **same-run receipts** (`receipt-{gates,k6-gate,runtime-smoke,restore-drill,
+   release}`, 90-day retention) by the originating run id into `receipts/`.
+2. Verifies the annotated tag peels to the originating commit
+   (`scripts/verify-release-artifact.sh --tag-resolves`), then checks out the tag so the finalizer
+   scripts run **from the tag commit**.
+3. Runs `scripts/finalize-release-evidence.sh --origin-run-id <id>`, which:
+   - rejects non-`Release`/non-push/in-progress/failed/cross-run/mismatched-repo events (`EV-TRIGGER`);
+   - re-fetches the run and job list from the Actions API and requires **5/5 jobs success**;
+   - validates the release is still a draft, the 5 receipts bind to one tag/commit/run and agree on
+     the candidate SHA-256, and the draft assets match the receipts (jar, `sha256sum -c`
+     `SHA256SUMS`, `RELEASE-PROVENANCE.txt`, CycloneDX SBOM whose subject = the recorded image id
+     and embedded JAR = the candidate);
+   - generates and validates `RELEASE-EVIDENCE.json` (canonical) + `RELEASE-EVIDENCE.md`
+     (rendered) **from observed facts only**;
+   - attaches both evidence files to the draft, then publishes (`--draft=false`) — publish is the
+     **last** action; the automated draft body is replaced by the rendered evidence report.
+   Failures exit non-zero with named `EV-*` codes and leave the release published nowhere.
+   Already-finalized publishing is idempotent (no-op, exit 0).
+
+**Release lifecycle:** a tag push leaves a draft behind until the finalizer has re-verified all
+evidence. Any `EV-*` failure means the tag did not produce a verified release — fix forward with a
+new tag (the old release stays a draft, never visible). Do **not** manually flip a draft release to
+published: the empty/promotional body and unreported asset state would make the next finalizer run
+fail-closed.
+
+**Retrieving the report:** every published release carries `RELEASE-EVIDENCE.json` (machine record)
+and `RELEASE-EVIDENCE.md` (rendered summary) as assets, naming the originating run and its jobs.
+When closing an epic review or a release, cite the evidence report and the originating run URL
+(`<repo>/actions/runs/<run-id>`); do **not** copy per-release hashes, timestamps, image IDs, or job
+outcomes into narrative text — the report is generated from observed facts and is the source of truth.
 
 Tag immutability: a bad release is fixed forward with `vX.Y.Z+1`; a tag is never moved or deleted
 (moving a tag invalidates every recorded sha256, the `commit` provenance field, and the Release

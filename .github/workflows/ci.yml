@@ -36,6 +36,14 @@ jobs:
       # Epic 21: release-artifact identity gate — plant/reject planted violations.
       - name: Release-artifact identity gate self-test
         run: bash scripts/verify-release-artifact.sh --self-test
+      # Epic 22: machine-generated release evidence — schema/generator, per-job
+      # receipts, and the draft-finalizer. Each gate plants violations and must reject them.
+      - name: Release-evidence generator self-test
+        run: python3 scripts/release_evidence.py self-test
+      - name: Release receipt writer self-test
+        run: bash scripts/write-release-receipt.sh --self-test
+      - name: Release evidence finalizer self-test
+        run: bash scripts/finalize-release-evidence.sh --self-test
 
   observability:
     name: Observability Gate (Epic 3)

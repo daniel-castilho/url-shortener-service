@@ -58,6 +58,9 @@ jobs:
           bash scripts/check-metrics-frozen.sh && bash scripts/check-metrics-frozen.sh --self-test
           bash scripts/check-living-spec.sh && bash scripts/check-living-spec.sh --self-test
           bash scripts/verify-release-artifact.sh --self-test
+          python3 scripts/release_evidence.py self-test
+          bash scripts/write-release-receipt.sh --self-test
+          bash scripts/finalize-release-evidence.sh --self-test
 
       - name: Promtool/amtool checks
         run: |
