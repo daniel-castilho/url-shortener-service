@@ -17,6 +17,13 @@
 #       unresolvable/mismatched. The release workflow pins every job to the
 #       trigger tag's peeled commit.
 #
+#   bash scripts/verify-release-artifact.sh --tag-resolves <tag> <expect-sha>
+#       Assert the current `<tag>` ref is an ANNOTATED tag peeling exactly to
+#       <expect-sha>. Used by the release finalizer (Epic 22) to re-verify the
+#       tag at finalization time — detects a tag moved/repointed between the
+#       originating run and evidence generation. Does not require HEAD to be
+#       the tag (the finalizer checks it after a default-branch checkout).
+#
 #   bash scripts/verify-release-artifact.sh --strict-single <filename>
 #       Print the single file matching <filename>; exit 1 if none or more than
 #       one matches (ambiguous candidate).
@@ -84,6 +91,23 @@ do_peel() {
     fail "tag '$tag' is a lightweight tag (ref points to $tag_type); only annotated tags are accepted for release identity"
   fi
   echo "OK: tag '$tag' peels to $head_sha == HEAD and is an annotated tag (source identity verified)"
+  exit 0
+}
+
+# ---------------------------------------------------------------- tag-resolves mode
+do_tag_resolves() {
+  local tag="$1" expect="$2"
+  [ -n "$tag" ] || fail "--tag-resolves requires a tag and an expected commit"
+  [ -n "$expect" ] || fail "--tag-resolves requires a tag and an expected commit"
+  echo "$expect" | grep -q '^[0-9a-f]\{40\}$' || fail "--tag-resolves expected commit '$expect' is not a 40-hex SHA"
+  local tag_type peeled
+  tag_type=$(git cat-file -t "refs/tags/$tag" 2>/dev/null) \
+    || fail "tag '$tag' ref cannot be inspected"
+  [ "$tag_type" = "tag" ] || fail "tag '$tag' is a lightweight tag (ref points to $tag_type); only annotated tags are accepted for release identity"
+  peeled=$(git rev-parse "refs/tags/$tag^{commit}" 2>/dev/null) \
+    || fail "cannot resolve refs/tags/$tag^{commit}"
+  [ "$peeled" = "$expect" ] || fail "tag '$tag' currently peels to $peeled but expected $expect — tag was moved/repointed"
+  echo "OK: annotated tag '$tag' resolves to expected commit $expect (release identity at finalization time)"
   exit 0
 }
 
@@ -271,6 +295,41 @@ do_self_test() {
     claim_fail "11b: annotated tag must be accepted"
   fi
 
+  # case 12: tag-resolves — annotated tag at the expected commit -> accepted
+  git init -q "$TMP/repo-resolve"
+  git -C "$TMP/repo-resolve" config user.email self-test@example.com
+  git -C "$TMP/repo-resolve" config user.name self-test
+  echo one > "$TMP/repo-resolve/a.txt"
+  git -C "$TMP/repo-resolve" add a.txt
+  git -C "$TMP/repo-resolve" commit -qm one
+  git -C "$TMP/repo-resolve" tag -a v1.2.3 -m "release"
+  local RESOLVE_SHA
+  RESOLVE_SHA="$(git -C "$TMP/repo-resolve" rev-parse refs/tags/v1.2.3^{commit})"
+  if ( cd "$TMP/repo-resolve" && do_tag_resolves v1.2.3 "$RESOLVE_SHA" >/dev/null 2>&1 ); then
+    claim_ok "12: annotated tag at expected commit accepted"
+  else
+    claim_fail "12: annotated tag at expected commit must be accepted"
+  fi
+  # case 13: lightweight tag rejected by tag-resolves
+  git -C "$TMP/repo-resolve" tag v1.2.5
+  LIGHT_SHA="$(git -C "$TMP/repo-resolve" rev-parse refs/tags/v1.2.5^{commit})"
+  if ( cd "$TMP/repo-resolve" && do_tag_resolves v1.2.5 "$LIGHT_SHA" >/dev/null 2>&1 ); then
+    claim_fail "13: lightweight tag must be rejected by tag-resolves"
+  else
+    claim_ok "13: lightweight tag rejected by tag-resolves"
+  fi
+  # case 14: moved tag (expected commit mismatch) rejected — the Epic 22
+  # finalizer's guard against the tag being repointed after the run completed.
+  echo two > "$TMP/repo-resolve/b.txt"
+  git -C "$TMP/repo-resolve" add b.txt
+  git -C "$TMP/repo-resolve" commit -qm two
+  git -C "$TMP/repo-resolve" tag -f -a v1.2.3 -m "moved" >/dev/null 2>&1
+  if ( cd "$TMP/repo-resolve" && do_tag_resolves v1.2.3 "$RESOLVE_SHA" >/dev/null 2>&1 ); then
+    claim_fail "14: moved tag must be rejected by tag-resolves"
+  else
+    claim_ok "14: moved tag rejected by tag-resolves"
+  fi
+
   echo "OK: acceptance + rejection paths all asserted."
   echo "PASS: self-test verified — gate detects violations."
   exit 0
@@ -285,10 +344,12 @@ EXPECT_TAG=""
 EXPECT_COMMIT=""
 EXPECT_RUN_ID=""
 EXPECT_SEMVER=""
+RESOLVE_SHA=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --peel)           shift; MODE=peel; PEEL_TAG="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
+    --tag-resolves)   shift; MODE=tag-resolves; PEEL_TAG="${1:-}"; RESOLVE_SHA="${2:-}"; shift 2 ;;
     --strict-single)  shift; MODE=strict-single; SINGLE_FILE="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
     --jar)            shift; JAR="${1:-}"; MODE=verify; if [ $# -ge 1 ]; then shift; fi ;;
     --manifest)       shift; MANIFEST="${1:-}"; MODE=verify; if [ $# -ge 1 ]; then shift; fi ;;
@@ -304,8 +365,9 @@ done
 
 case "$MODE" in
   peel)          do_peel "$PEEL_TAG" ;;
+  tag-resolves)  do_tag_resolves "$PEEL_TAG" "$RESOLVE_SHA" ;;
   strict-single) do_strict_single "$SINGLE_FILE" ;;
   self-test)     do_self_test ;;
   verify)        do_verify "$JAR" "$MANIFEST" ;;
-  *)             fail "no mode given (--peel, --strict-single, --jar/--manifest, or --self-test)" ;;
+  *)             fail "no mode given (--peel, --strict-single, --tag-resolves, --jar/--manifest, or --self-test)" ;;
 esac

@@ -65,3 +65,7 @@ target/
 # Blue-green deploy runtime (Epic 8, ADR 0007): rendered nginx conf + last-deploy.txt
 # are host state, never committed
 deploy/runtime/
+
+# Python tooling (Epic 22 self-test harness; stdlib only)
+__pycache__/
+*.pyc
