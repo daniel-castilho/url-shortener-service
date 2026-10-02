@@ -51,14 +51,18 @@ Paste real output or stable workflow links/identifiers for:
 | Evidence | Value |
 |---|---|
 | Starting implementation commit | `1de78a2` (docs: add Epic 21 task specification) |
-| Release tag and full commit SHA | `v0.15.0` = `19dfbfa5b2a8e3c8f9e2d5c7a1b8f4e6d7c9e0a1b` (forced update from `6a6e88d` after fix) |
-| Successful release workflow run ID | `36941664931` (completed 2026-10-01 23:56 UTC) |
-| Candidate JAR filename and SHA-256 | `url-shortener-service-0.15.0.jar` / `b89e0faf070cad92db94f25dc24ba37468ac6d7d108f67280ede33d6d7665e41` |
-| k6/runtime-smoke/restore-drill SHA-256 values | All three jobs verified identical candidate SHA-256 (`b89e0faf070cad92db94f25dc24ba37468ac6d7d108f67280ede33d6d7665e41`) against provenance manifest |
-| Published JAR SHA-256 and `SHA256SUMS` verification | Release asset `url-shortener-service-0.15.0.jar` matches `SHA256SUMS`; `sha256sum -c` passes |
-| Image digest and embedded JAR SHA-256, if applicable | Image `url-shortener:0.15.0` ID `sha256:8ab9ff4ac4aba872d9e82a6bdc104414a71079d7d6e1c074e491d902c45d5ed0`; embedded JAR hash-proven identical to candidate |
-| SBOM subject identity, if applicable | CycloneDX SBOM `sbom-url-shortener-0.15.0.json` subject = `pkg:docker/url-shortener@sha256:8ab9ff4ac4aba872d9e82a6bdc104414a71079d7d6e1c074e491d902c45d5ed0` |
-| Documentation and governance review | Changed paths: `AGENTS.md` (item 36), `CHANGELOG.md` (0.15.0 promotion), `README.md` (Current State v0.15.0), `docs/release-runbook.md` (identity flow + governance), `docs/release-engineering.md` (flow + §3), ADR 0008 (reconciled note); commit `e2c762f` |
+| Release tag and full commit SHA | `v0.15.0` = `19dfbfac57424bc33c36dc0caf3e443642fa3c69` (lightweight tag, not annotated — see deviation note below) |
+| Successful release workflow run ID | `36941664931` (completed 2026-10-01T23:45:56Z) |
+| Candidate JAR filename and SHA-256 | `url-shortener-service-0.15.0.jar` / `20dc7c4eb7a506a4e73334e32fcbaeee4adb08b9dcc55326d72e5b541d8174c7` (verified from RELEASE-PROVENANCE.txt, SHA256SUMS, and GitHub Release asset digest) |
+| k6/runtime-smoke/restore-drill SHA-256 values | All three jobs verified identical candidate SHA-256 (`20dc7c4eb7a506a4e73334e32fcbaeee4adb08b9dcc55326d72e5b541d8174c7`) against provenance manifest (run 36941664931, jobs 110632417788, 110632417825, 110632417844) |
+| Published JAR SHA-256 and `SHA256SUMS` verification | Release asset `url-shortener-service-0.15.0.jar` matches `SHA256SUMS`; `sha256sum -c` passes (asset digest `sha256:20dc7c4eb7a506a4e73334e32fcbaeee4adb08b9dcc55326d72e5b541d8174c7`) |
+| Image digest and embedded JAR SHA-256, if applicable | Image `url-shortener:0.15.0` ID `sha256:934eaddae616010de4d9d19108b309891dd8ebbd59aa0705d3d857384dd2b1eb` (from CycloneDX SBOM `aquasecurity:trivy:ImageID`); embedded JAR hash-proven identical to candidate (release job step "Prove image-embedded JAR == release candidate" passed) |
+| SBOM subject identity, if applicable | CycloneDX SBOM `sbom-url-shortener-0.15.0.json` subject = `pkg:docker/url-shortener@sha256:934eaddae616010de4d9d19108b309891dd8ebbd59aa0705d3d857384dd2b1eb` |
+| Documentation and governance review | Changed paths: `AGENTS.md` (item 36), `CHANGELOG.md` (0.15.0 promotion), `README.md` (Current State v0.15.0), `docs/release-runbook.md` (identity flow + governance), `docs/release-engineering.md` (flow + §3), ADR 0008 (reconciled note); commits `e2c762f` (docs) + this fix |
+
+**Deviation — lightweight tag (not annotated):** The published `v0.15.0` tag is a lightweight tag (ref points directly to commit `19dfbfac57424bc33c36dc0caf3e443642fa3c69`; `git cat-file -t v0.15.0` returns `commit`). Epic 21 requires annotated tags for release identity. The verifier has been updated to reject lightweight tags (`scripts/verify-release-artifact.sh --peel` now checks `git cat-file -t refs/tags/<tag>` == `tag`). v0.15.0 remains unchanged per instructions; owner disposition required for Epic 21 annotated-tag criterion closure.
+
+**Deviation — tag force-updated:** The `v0.15.0` tag was force-pushed multiple times during CI fixes (from `6a6e88d` → `2b26f15` → `6a6e88d` → `19dfbfa`). The release-runbook states tags are immutable once published. This is recorded as a deviation; owner disposition required. Future releases will enforce immutable tags via the updated verifier and release process.
 
 Never replace placeholders with estimates. If a gate or artifact cannot provide evidence, the epic is not Done.
 
