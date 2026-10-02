@@ -6,7 +6,10 @@
 ## S0 — Approve Prometheus operating model and gate policy (architecture prerequisite)
 
 **Owner:** System Architect / environment owner  
-**Implementation:** None. This is a decision record, not permission to access or modify a host.
+**Implementation:** None. This is a decision record, not permission to access or modify a host.  
+**Draft proposal for review:** `epic-25-s0-decisions.md` (D1–D9 with evidence, alternatives,
+owner verification checklist and approval block). It is a PROPOSAL pending owner approval, not
+a decision.
 
 ### Decisions to record
 
