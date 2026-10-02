@@ -42,6 +42,24 @@ NGINX_CMD="${NGINX_CMD:-nginx}"
 SMOKE_BASE="${SMOKE_BASE:-http://127.0.0.1:80}"
 
 DWELL_SECONDS="${DWELL_SECONDS:-30}"
+# Metrics-gated canary (Epic 25 / ADR 0012). METRICS_WINDOW_SECONDS is the TOTAL
+# per-stage wait AFTER a weight change and is the Prometheus evaluation window; the
+# former standalone 30s dwell is CONTAINED in it (NOT additive — ~4.5 min for the
+# default 3-stage 10/30/100 sequence). After the window elapses, the stage runs the
+# post-bump smoke probe and then canary-gate.sh; any non-zero gate result aborts the
+# deploy (fail-closed) naming the step. Thresholds are provisional until the staging
+# rehearsal calibrates them (see tasks/epic-25/epic-25-s0-decisions.md D7).
+PROMETHEUS_URL="${PROMETHEUS_URL:-http://127.0.0.1:9090}"
+METRICS_WINDOW_SECONDS="${METRICS_WINDOW_SECONDS:-90}"
+METRICS_FRESHNESS_SECONDS="${METRICS_FRESHNESS_SECONDS:-45}"
+METRICS_MIN_REQUESTS="${METRICS_MIN_REQUESTS:-300}"
+METRICS_ERROR_RATIO_MAX="${METRICS_ERROR_RATIO_MAX:-0.001}"
+METRICS_LATENCY_OK_MIN="${METRICS_LATENCY_OK_MIN:-0.99}"
+# Retry budget: the evaluation window IS the bounded wait, so deploy requests a
+# SINGLE evaluation (no wait beyond the 90s stage budget). Operators may raise this but
+# that lengthens the stage, violating ADR 0012's stage budget — do not without review.
+METRICS_MAX_EVALS="${METRICS_MAX_EVALS:-1}"
+METRICS_EVALS_SPACING="${METRICS_EVALS_SPACING:-0}"
 # Readiness budget (named, per story 8.3): the Dockerfile HEALTHCHEK uses start-period 40s
 # for a cold JVM boot; 90s covers a prod boot (bigger heap init) plus the Mongo schema
 # migrator's fail-fast index checks before readiness turns green.
@@ -223,7 +241,7 @@ do_check() {
     else
         echo "  last deploy   : (none recorded)"
     fi
-    echo "  canary        : 10,30,100 (dwell ${DWELL_SECONDS}s, smoke after each bump)"
+    echo "  canary        : 10,30,100 (metrics window ${METRICS_WINDOW_SECONDS}s, smoke + ADR-0012 gate after each bump)"
     echo "  readiness     : budget ${READY_BUDGET_SECONDS}s per color"
     echo "CHECK: nothing touched by this mode"
 }
@@ -476,7 +494,19 @@ echo "\$*" >> "$calls_dir/smoke"
 echo "STUB smoke \$* (simulated success)" >&2
 exit 0
 EOF
-    chmod +x "$ok_scripts/verify-release-artifact.sh" "$ok_scripts/smoke.sh"
+    cat > "$ok_scripts/canary-gate.sh" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "$calls_dir/canary-gate"
+echo "STUB canary-gate \$* (simulated PASS)" >&2
+COLOR=""; prev=""
+for a in "\$@"; do
+    [ "\$prev" = "--color" ] && COLOR="\$a"
+    prev="\$a"
+done
+echo "STUB canary-gate passed for color=\$COLOR" >&2
+exit 0
+EOF
+    chmod +x "$ok_scripts/verify-release-artifact.sh" "$ok_scripts/smoke.sh" "$ok_scripts/canary-gate.sh"
 
     calls_clear
     rc=0
@@ -486,6 +516,7 @@ EOF
     # (b) plain (unexported) assignments would never reach CHILD processes — wait_ready's
     # curl is the stub script itself, which must see CURL_STUB_CODE=200 to report ready.
     ( export SCRIPT_DIR="$ok_scripts" CURL_STUB_CODE=200 DWELL_SECONDS=0 \
+            METRICS_WINDOW_SECONDS=0 \
             READY_BUDGET_SECONDS=5 \
             NGINX_RUNTIME_CONF="$tmp/deploy/runtime/nginx.conf" \
             LAST_DEPLOY_FILE="$tmp/deploy/runtime/last-deploy.txt" \
@@ -502,9 +533,13 @@ EOF
     grep -q "DEPLOY OK" "$tmp/err" || die "self-test: mocked deploy did not report DEPLOY OK"
     # systemctl is ALWAYS invoked through `sudo systemctl`, so the sudo stub absorbs it
     # (only the `sudo` marker is written); nginx is invoked directly via $NGINX_CMD.
-    for cmd in verify sudo nginx curl smoke; do
+    for cmd in verify sudo nginx curl smoke canary-gate; do
         [ -f "$calls_dir/$cmd" ] || die "self-test: mocked deploy never invoked stub '$cmd'"
     done
+    [ "$(cat "$calls_dir/canary-gate" | grep -c -- '--color green')" -ge 1 ] \
+        || die "self-test: metrics gate stub was not called for the idle color green"
+    grep -q "metrics gate passed at weight=100" "$tmp/err" \
+        || die "self-test: final 100% stage did not run (and pass) the metrics gate"
 
     # --- validation failure leaves runtime config + deploy state untouched ---
     echo "self-test: validation failure leaves runtime config + deploy state untouched"
@@ -615,12 +650,21 @@ deploy() {
         render_runtime_conf "$runtime" "$(color_port "$idle")" "$(color_port "$active")" "$weight"
         nginx_test "$runtime" || abort "$idle" "$active" "step nginx -t: failed at weight=$weight (step $step_total)" "$runtime"
         nginx_reload || abort "$idle" "$active" "step nginx reload: failed at weight=$weight (step $step_total)" "$runtime"
-        note "dwell ${DWELL_SECONDS}s"
-        sleep "$DWELL_SECONDS"
+        note "metrics window ${METRICS_WINDOW_SECONDS}s (contains former ${DWELL_SECONDS}s dwell; ADR 0012)"
+        sleep "$METRICS_WINDOW_SECONDS"
         note "post-bump smoke probe"
         if ! bash "$SCRIPT_DIR/smoke.sh" "$SMOKE_BASE"; then
             abort "$idle" "$active" "step smoke: FAIL at weight=$weight (step $step_total)" "$runtime"
         fi
+        note "metrics gate (ADR 0012) for color=$idle via $PROMETHEUS_URL"
+        if ! bash "$SCRIPT_DIR/canary-gate.sh" --color "$idle" --prometheus-url "$PROMETHEUS_URL" \
+            --window "$METRICS_WINDOW_SECONDS" --freshness "$METRICS_FRESHNESS_SECONDS" \
+            --min-requests "$METRICS_MIN_REQUESTS" --error-ratio-max "$METRICS_ERROR_RATIO_MAX" \
+            --latency-ok-min "$METRICS_LATENCY_OK_MIN" --max-evals "$METRICS_MAX_EVALS" \
+            --evals-spacing "$METRICS_EVALS_SPACING"; then
+            abort "$idle" "$active" "step metrics-gate: FAIL at weight=$weight (step $step_total)" "$runtime"
+        fi
+        note "metrics gate passed at weight=$weight"
     done
 
     note "cutover complete (100% on $idle) — draining old color $active (graceful 30s)"
