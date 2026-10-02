@@ -1,13 +1,14 @@
-# Epic 25 S0 — Proposed Decision Record (D1–D9): Production Metrics-Gated Blue-Green Canary
+# Epic 25 S0 — Decision Record (D1–D9): Production Metrics-Gated Blue-Green Canary
 
-- **Status:** PROPOSAL for architecture review — NOT approved. No implementation, host
-  access, or deployment is authorized by this document.
+- **Status:** APPROVED by owner (2026-10-02). Promoted to `docs/adr/0012-metrics-gated-blue-green-canary.md`.
+  No implementation, host access, or deployment is authorized by this record alone; S1–S3 require
+  their own authorizations and the S3 non-production rehearsal.
 - **Date:** 2026-10-02
 - **Reference:** `tasks/epic-25/epic-25-overview.md` (D1–D9), `epic-25-stories.md` S0
-  acceptance criteria 1–5, `epic-25-technical-tasks.md` S0.
+  acceptance criteria 1–5, `epic-25-technical-tasks.md` S0, `docs/adr/0012-metrics-gated-blue-green-canary.md`.
 - **Target repository:** `daniel-castilho/url-shortener-service` only.
-- **Owner of this proposal:** Software Engineer (draft). **Deciding owner:** System
-  Architect / environment owner.
+- **Owners:** System Architect / environment owner (decisions) — **approval recorded 2026-10-02**;
+  Software Engineer (implementation drafts).
 
 Each decision lists a proposed answer, the evidence/constraint it rests on, and the
 alternatives rejected. Numeric thresholds are **placeholders pending owner ratification**
@@ -206,17 +207,23 @@ stays green):
 
 ## Approval block
 
+**All D1–D9 APPROVED by the owner on 2026-10-02.** Approved values are recorded in
+`docs/adr/0012-metrics-gated-blue-green-canary.md`. Numeric thresholds remain flagged as
+placeholder values subject to real-traffic calibration during the S3 authorized rehearsal
+before production use.
+
 | Decision | Proposed | Approved (owner) | Notes |
 |---|---|---|---|
-| D1 systemd binary | ✓ | ☐ | |
-| D2 storage/retention/backup | ✓ | ☐ | |
-| D3 loopback only | ✓ | ☐ | |
-| D4 operator scrape + password file | ✓ | ☐ | |
-| D5 signals + placeholder thresholds | ✓ | ☐ | requires real-traffic calibration |
-| D6 window/freshness/volume | ✓ | ☐ | |
-| D7 fail-closed + bounded retry → abort | ✓ | ☐ | |
-| D8 abort/drain timing | ✓ | ☐ | |
-| D9 no bypass in v1 | ✓ | ☐ | |
+| D1 systemd binary | ✓ | ✓ | date 2026-10-02 |
+| D2 storage/retention/backup | ✓ | ✓ | date 2026-10-02 |
+| D3 loopback only | ✓ | ✓ | date 2026-10-02 |
+| D4 operator scrape + password file | ✓ | ✓ | date 2026-10-02 |
+| D5 signals + placeholder thresholds | ✓ | ✓ | real-traffic calibration at S3 |
+| D6 window/freshness/volume | ✓ | ✓ | date 2026-10-02 |
+| D7 fail-closed + bounded retry → abort | ✓ | ✓ | date 2026-10-02 |
+| D8 abort/drain timing | ✓ | ✓ | date 2026-10-02 |
+| D9 no bypass in v1 | ✓ | ✓ | date 2026-10-02 |
 
-*This is a decision record proposal. Implementation (S1–S3) requires S0 approval; production
-operation requires separate authorization.*
+*Approved decisions live in `docs/adr/0012-metrics-gated-blue-green-canary.md`. Implementation
+(S1–S3) requires S0 approval-clearance, which is now granted; production operation requires
+separate authorization.*
