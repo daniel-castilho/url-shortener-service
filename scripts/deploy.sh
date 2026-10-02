@@ -170,20 +170,9 @@ wait_ready() {
 # ---------------------------------------------------------------- release artifact
 # ADR 0008: the jar is downloaded from the GitHub Release and the sha256 is verified
 # against the published SHA256SUMS asset. No Release, no deploy (fail-closed).
-download_release_jar() {
-    local tag="$1" out="$2"
-    gh release download "$tag" --repo "$GH_REPO" \
-        --pattern "url-shortener-service-*.jar" --pattern "SHA256SUMS" --dir "$out" \
-        || die "step download: could not download assets for $tag from $GH_REPO (Release missing or gh not authed)"
-    local jar sums
-    jar=$(ls "$out"/url-shortener-service-*.jar 2>/dev/null | head -1)
-    [ -n "$jar" ] || die "step download: no jar asset matched for $tag"
-    [ -f "$out/SHA256SUMS" ] || die "step sha256: SHA256SUMS asset missing from Release $tag"
-    sums=$(sha256sum "$jar" | awk '{print $1}')
-    grep -qi "$sums" "$out/SHA256SUMS" \
-        || die "step sha256: jar digest does not match Release SHA256SUMS for $tag"
-    echo "$jar"
-}
+# The download + full chain validation happens ONCE, up front (precondition 0), and the
+# SAME validated bytes are then staged into the idle color (no second download, no
+# wildcard re-selection) via verify-release-artifact.sh --validate-release --output-jar.
 
 # ---------------------------------------------------------------- abort (fail-closed)
 abort() {
@@ -239,7 +228,8 @@ do_check() {
 #   2. the abort path: readiness against a DEAD port with READY_BUDGET_SECONDS=1 aborts,
 #      renders the old color back at 100%, exits non-zero NAMING the step
 #   3. validate_canary rejects invalid sequences and accepts valid ones
-#   4. deploy argument parsing rejects unknown args before any host mutation
+#   4. deploy argument parsing (the real CLI parser) rejects invalid invocations
+#      before any network request or host mutation
 SELF_TMP=""
 self_cleanup() { [ -n "$SELF_TMP" ] && rm -rf "$SELF_TMP"; return 0; }
 do_self_test() {
@@ -248,6 +238,29 @@ do_self_test() {
     trap self_cleanup EXIT
     local tmp="$SELF_TMP"
     local runtime="$tmp/nginx.conf"
+
+    # --- create stub commands to intercept external calls ---
+    # Each stub records its invocation to $tmp/calls/<name> (so the test can prove
+    # which commands a code path attempted) and fails hard. No real host command,
+    # no network, no systemd, no nginx is ever reached.
+    local stub_bin="$tmp/stub_bin" calls_dir="$tmp/calls"
+    mkdir -p "$stub_bin" "$calls_dir"
+    mk_stub() { # $1 = command name
+        cat > "$stub_bin/$1" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "$calls_dir/$1"
+echo "STUB $1 called with: \$*" >&2
+exit 1
+EOF
+        chmod +x "$stub_bin/$1"
+    }
+    mk_stub gh
+    mk_stub systemctl
+    mk_stub nginx
+    mk_stub curl
+    mk_stub sudo
+    # Prepend stub_bin to PATH so stubs are used instead of real commands
+    PATH="$stub_bin:$PATH"
 
     # --- render weight assertions ---
     render_runtime_conf "$runtime" "$BLUE_PORT" "$GREEN_PORT" 100
@@ -311,15 +324,88 @@ do_self_test() {
     # invalid: spaces
     if validate_canary "10, 30,100" 2>/dev/null; then die "self-test: spaces in canary accepted"; fi
 
-    # --- deploy argument parsing: reject unknown args ---
-    local deploy_args=("$tmp/deploy_dummy.sh")
-    # We test the argument parsing logic by sourcing just the parsing part
-    # Simulate: deploy() parses --canary then rejects unknown
-    # Since we can't easily test the full deploy() without host, we test the
-    # validate_canary and the documented invocation syntax via dry-run
-    note "self-test: deploy argument validation logic asserted via validate_canary"
+    # --- deploy argument parsing: exercise the REAL CLI parser ---
+    # We call deploy() itself (the function behind the dispatch) in subshells.
+    # die() exits the subshell only, so the self-test keeps running.
+    # A fake SCRIPT_DIR carries a stub verify-release-artifact.sh that records the
+    # invocation and fails, so a VALID invocation provably reaches the
 
-    echo "OK: render weights, abort render, validate_canary (valid/invalid), argument parsing — all asserted"
+    # release-validation gate (precondition 0) but never a host mutation.
+    local val_scripts="$tmp/val_scripts"
+    mkdir -p "$val_scripts" "$calls_dir"
+    cat > "$val_scripts/verify-release-artifact.sh" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "$calls_dir/verify"
+echo "STUB verify-release-artifact.sh invoked: \$*" >&2
+exit 1
+EOF
+    chmod +x "$val_scripts/verify-release-artifact.sh"
+
+    local rc
+    calls_clear() { rm -f "$calls_dir"/*; }
+    # The abort-proof wait_ready above already left a curl marker; reset before
+    # the parser assertions so each one proves its own "no external call" claim.
+    calls_clear
+    # Expects: substring to grep in stderr, then the deploy args.
+    parser_must_die() {
+        local expect="$1"; shift
+        rc=0
+        ( SCRIPT_DIR="$val_scripts" deploy "$@" ) 2>"$tmp/err" >/dev/null || rc=$?
+        [ "$rc" -ne 0 ] || die "self-test: CLI parser ACCEPTED: deploy $* (expected rejection: $expect)"
+        grep -qF -- "$expect" "$tmp/err" || {
+            echo "side:<$(grep -o 'ABORT:.*' "$tmp/err" | head -1)>" >&2
+            die "self-test: CLI rejection message missing '$expect' for: deploy $*"
+        }
+    }
+
+    echo "self-test: parser — unknown option rejected before any external call"
+    parser_must_die "unknown argument: --bogus" v0.17.0 --bogus
+    [ -z "$(ls -A "$calls_dir")" ] || die "self-test: unknown option reached an external command before rejection"
+
+    echo "self-test: parser — missing --canary value rejected before any external call"
+    calls_clear
+    parser_must_die "--canary requires a value" v0.17.0 --canary
+    [ -z "$(ls -A "$calls_dir")" ] || die "self-test: missing --canary value reached an external command before rejection"
+
+    echo "self-test: parser — malformed canary rejected before any external call"
+    calls_clear
+    parser_must_die "invalid canary syntax: '10,foo,100' (comma-separated integers only, no spaces)" v0.17.0 --canary 10,foo,100
+    [ -z "$(ls -A "$calls_dir")" ] || die "self-test: malformed canary reached an external command before rejection"
+
+    echo "self-test: parser — canary not ending in 100 rejected before any external call"
+    calls_clear
+    parser_must_die "final canary weight must be 100" v0.17.0 --canary 10,30,90
+    [ -z "$(ls -A "$calls_dir")" ] || die "self-test: non-100 canary reached an external command before rejection"
+
+    echo "self-test: parser — duplicate canary weight rejected before any external call"
+    calls_clear
+    parser_must_die "strictly increasing" v0.17.0 --canary 10,30,30,100
+    [ -z "$(ls -A "$calls_dir")" ] || die "self-test: duplicate canary weight reached an external command before rejection"
+
+    echo "self-test: parser — documented <tag> --canary 10,30,100 ACCEPTED, validation gate first (no host mutation)"
+    calls_clear
+    rc=0
+    ( SCRIPT_DIR="$val_scripts" deploy v0.17.0 --canary 10,30,100 ) 2>"$tmp/err" >/dev/null || rc=$?
+    [ "$rc" -ne 0 ] || die "self-test: VALID invocation completed unexpectedly (deploy v0.17.0 --canary 10,30,100)"
+    grep -qF "step validate: release artifact validation failed for v0.17.0" "$tmp/err" \
+        || die "self-test: valid invocation did not reach the release-validation gate"
+    [ -f "$calls_dir/verify" ] || die "self-test: verify-release-artifact.sh was not invoked for a valid deploy command"
+    for cmd in gh systemctl nginx curl sudo; do
+        [ -f "$calls_dir/$cmd" ] || continue
+        cp "$calls_dir/$cmd" "$tmp/host-call-$cmd"
+    done
+    [ -z "$(ls "$tmp"/host-call-* 2>/dev/null)" ] \
+        || die "self-test: VALID invocation attempted a host mutation before validation (see $tmp/host-call-*)"
+
+    echo "self-test: parser — default canary 10,30,100 ACCEPTED, validation gate first (no host mutation)"
+    calls_clear
+    rc=0
+    ( SCRIPT_DIR="$val_scripts" deploy v0.17.0 ) 2>"$tmp/err" >/dev/null || rc=$?
+    [ "$rc" -ne 0 ] || die "self-test: VALID invocation completed unexpectedly (deploy v0.17.0)"
+    grep -qF "step validate: release artifact validation failed for v0.17.0" "$tmp/err" \
+        || die "self-test: default-canary invocation did not reach the release-validation gate"
+
+    echo "OK: render weights, abort render, validate_canary (valid/invalid), CLI argument parser (reject + accept) — all asserted"
     echo "PASS: self-test verified"
 }
 
@@ -342,10 +428,23 @@ deploy() {
     done
     validate_canary_or_die "$canary"
 
+    # Read-only preflight checks (no host mutation)
+    [ -f "$NGINX_TEMPLATE" ] || die "nginx template missing: $NGINX_TEMPLATE"
+
+    # PRECONDITION 0: Validate release artifact BEFORE any host mutation
+    # This includes downloading and fully validating the artifact chain.
+    # On failure, no host state has been modified.
+    note "precondition 0/4: validate full release artifact chain for $tag"
+    local validated_jar; validated_jar="$(mktemp --suffix=.jar)"
+    trap 'rm -f "$validated_jar"' EXIT
+    bash "$SCRIPT_DIR/verify-release-artifact.sh" --validate-release "$tag" --output-jar "$validated_jar" \
+        || die "step validate: release artifact validation failed for $tag"
+    note "validated JAR staged at $validated_jar"
+
+    # Now safe to proceed with host mutation (runtime conf, services, nginx)
     local runtime="${NGINX_RUNTIME_CONF:-$NGINX_RUNTIME_CONF_DEFAULT}"
     local last_deploy="${LAST_DEPLOY_FILE:-$LAST_DEPLOY_FILE_DEFAULT}"
 
-    [ -f "$NGINX_TEMPLATE" ] || die "nginx template missing: $NGINX_TEMPLATE"
     [ -f "$runtime" ] || { note "runtime conf missing — running --init"; do_init; }
 
     local active idle
@@ -355,21 +454,13 @@ deploy() {
     if [ "$active" = "blue" ]; then idle="green"; else idle="blue"; fi
     note "active=$active idle=$idle"
 
-    # precondition 1/4: the Release exists (ADR 0008 — no Release, no deploy)
-    note "precondition 1/4: validate full release artifact chain for $tag"
-    bash "$SCRIPT_DIR/verify-release-artifact.sh" --validate-release "$tag" \
-        || abort "$idle" "$active" "step validate: release artifact validation failed for $tag" "$runtime"
-
-    # precondition 2/4: stage the jar into the idle color (no restart yet)
-    note "precondition 2/4: stage jar into $URLS_HOME/$idle"
-    local stage; stage=$(mktemp -d)
-    local jar
-    jar=$(download_release_jar "$tag" "$stage")
-    sudo install -D -o urlshortener -g urlshortener -m 0644 "$jar" "$URLS_HOME/$idle/url-shortener.jar" \
+    # precondition 1/4: stage the validated JAR into the idle color (no restart yet)
+    note "precondition 1/4: stage validated JAR into $URLS_HOME/$idle"
+    sudo install -D -o urlshortener -g urlshortener -m 0644 "$validated_jar" "$URLS_HOME/$idle/url-shortener.jar" \
         || abort "$idle" "$active" "step stage: could not install jar into $URLS_HOME/$idle" "$runtime"
 
-    # precondition 3/4: start the idle color and wait readiness (named budget)
-    note "precondition 3/4: start url-shortener-$idle + wait readiness (budget ${READY_BUDGET_SECONDS}s)"
+    # precondition 2/4: start the idle color and wait readiness (named budget)
+    note "precondition 2/4: start url-shortener-$idle + wait readiness (budget ${READY_BUDGET_SECONDS}s)"
     sudo systemctl restart "url-shortener-$idle.service" \
         || abort "$idle" "$active" "step systemctl: url-shortener-$idle.service failed to (re)start" "$runtime"
     wait_ready "$(color_port "$idle")" \
@@ -379,8 +470,8 @@ deploy() {
     # record deploy intent BEFORE the first weight flip (rollback.sh reads this)
     { echo "previous $active"; echo "current $idle"; echo "tag $tag"; echo "at $(date -u +%Y-%m-%dT%H:%M:%SZ)"; } > "$last_deploy"
 
-    # precondition 4/4 + canary bumps: nginx -t BEFORE every reload, smoke after every bump
-    note "precondition 4/4: nginx -t on the initial render"
+    # precondition 3/4 + canary bumps: nginx -t BEFORE every reload, smoke after every bump
+    note "precondition 3/4: nginx -t on the initial render"
     render_runtime_conf "$runtime" "$(color_port "$idle")" "$(color_port "$active")" 10
     nginx_test "$runtime" || abort "$idle" "$active" "step nginx -t: test failed for the canary render" "$runtime"
 

@@ -46,6 +46,10 @@
 #       Cross-checks repository, tag, source commit, JAR filename, JAR SHA-256.
 #       Fail-closed on missing/invalid/mismatched/ambiguous evidence.
 #
+#   bash scripts/verify-release-artifact.sh --validate-release <tag> --output-jar <path>
+#       Same as --validate-release, but copies the validated JAR to <path> on success.
+#       The destination must not exist; the parent directory must exist.
+#
 #   bash scripts/verify-release-artifact.sh --check <tag>
 #       Plan-only: prints what --validate-release would validate without executing.
 #
@@ -347,6 +351,17 @@ print('OK: all cross-checks passed')
     note "  JAR: $expected_jar (sha256=$jar_sha)"
     note "  provenance: commit=$prov_commit run_id=$prov_run_id#$prov_run_attempt"
     note "  evidence: schema v1, jobs=${evidence_jobs:-5}, assets=4, image+sbom verified"
+
+    # Copy validated JAR to output path if requested
+    if [ -n "$OUTPUT_JAR" ]; then
+        [ -e "$OUTPUT_JAR" ] && fail "--output-jar destination '$OUTPUT_JAR' already exists"
+        local out_dir
+        out_dir="$(dirname "$OUTPUT_JAR")"
+        [ -d "$out_dir" ] || fail "--output-jar parent directory '$out_dir' does not exist"
+        cp "$jar" "$OUTPUT_JAR"
+        note "validate-release: copied validated JAR to $OUTPUT_JAR"
+    fi
+
     exit 0
 }
 
@@ -530,6 +545,7 @@ EXPECT_RUN_ID=""
 EXPECT_SEMVER=""
 RESOLVE_SHA=""
 VALIDATE_TAG=""
+OUTPUT_JAR=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -544,11 +560,17 @@ while [ $# -gt 0 ]; do
     --expect-run-id)   shift; EXPECT_RUN_ID="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
     --expect-semver)   shift; EXPECT_SEMVER="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
     --validate-release) shift; MODE=validate-release; VALIDATE_TAG="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
+    --output-jar)      shift; OUTPUT_JAR="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
     --check)           shift; MODE=check; CHECK_TAG="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
     --self-test)       MODE=self-test; shift ;;
     *) fail "unknown argument: $1" ;;
   esac
 done
+
+# Validate that --output-jar is only used with --validate-release
+if [ -n "$OUTPUT_JAR" ] && [ "$MODE" != "validate-release" ]; then
+    fail "--output-jar can only be used with --validate-release"
+fi
 
 case "$MODE" in
   peel)              do_peel "$PEEL_TAG" ;;
