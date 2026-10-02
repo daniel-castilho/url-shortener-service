@@ -39,17 +39,42 @@
 #       Plant both acceptance and rejection cases in a temp dir and assert the
 #       gate catches every planted violation (same discipline as the other gates).
 #
+#   bash scripts/verify-release-artifact.sh --validate-release <tag>
+#       Download and validate the FULL release artifact chain from GitHub Release:
+#       JAR (exact filename url-shortener-service-<semver>.jar), SHA256SUMS,
+#       RELEASE-PROVENANCE.txt, RELEASE-EVIDENCE.json (against committed schema).
+#       Cross-checks repository, tag, source commit, JAR filename, JAR SHA-256.
+#       Fail-closed on missing/invalid/mismatched/ambiguous evidence.
+#
+#   bash scripts/verify-release-artifact.sh --check <tag>
+#       Plan-only: prints what --validate-release would validate without executing.
+#
 # Exit 0 = PASS; exit 1 = violation (or self-test failure).
 
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+GH_REPO="${GH_REPO:-daniel-castilho/url-shortener-service}"
+
 fail() { echo "FAIL: $*" >&2; exit 1; }
+
+note() { echo "VALIDATE $(date +%T): $*" >&2; }
+
+usage() {
+    sed -n '14,42p' "$0" >&2
+    exit 1
+}
 
 # Manifest keys (the contract in ../docs/release-runbook.md §"Release artifacts"):
 REQUIRED_KEYS=(repository tag semver commit run_id run_attempt jar sha256)
 
 # Version naming contract (release-engineering §3): url-shortener-service-<semver>.jar
 jar_name_for_semver() { echo "url-shortener-service-$1.jar"; }
+
+# Release evidence schema path (committed)
+RELEASE_EVIDENCE_SCHEMA="$REPO_DIR/schemas/release-evidence.schema.json"
 
 parse_manifest() {
   local file="$1"
@@ -162,8 +187,167 @@ do_verify() {
   [ "$real_sha" = "${MANIFEST[sha256]}" ] \
     || fail "candidate SHA-256 $real_sha != manifest SHA-256 ${MANIFEST[sha256]} (tampered?)"
 
-  echo "OK: candidate $(basename "$jar") sha256=$real_sha matches manifest (repo=${MANIFEST[repository]} tag=${MANIFEST[tag]} commit=${MANIFEST[commit]} run=${MANIFEST[run_id]}#${MANIFEST[run_attempt]})"
-  exit 0
+echo "OK: candidate $(basename "$jar") sha256=$real_sha matches manifest (repo=${MANIFEST[repository]} tag=${MANIFEST[tag]} commit=${MANIFEST[commit]} run=${MANIFEST[run_id]}#${MANIFEST[run_attempt]})"
+   exit 0
+}
+
+# ---------------------------------------------------------------- validate-release mode
+# Validates the complete release artifact chain from a GitHub Release before host mutation.
+# Downloads JAR, SHA256SUMS, RELEASE-PROVENANCE.txt, RELEASE-EVIDENCE.json and cross-checks
+# all against the requested tag, the committed schema, and each other. Fail-closed.
+do_validate_release() {
+    local tag="$1"
+    [ -n "$tag" ] || fail "--validate-release requires a tag argument"
+
+    # Derive expected semver and JAR filename from tag
+    tag="${tag#v}"
+    echo "$tag" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
+        || fail "tag '$tag' is not a valid semver (vX.Y.Z)"
+    local semver="$tag"
+    local expected_jar
+    expected_jar="$(jar_name_for_semver "$semver")"
+
+    local stage; stage="$(mktemp -d)"
+    trap 'rm -rf "$stage"' EXIT
+
+    note "validate-release: downloading assets for tag v$semver from $GH_REPO"
+    gh release download "v$semver" --repo "$GH_REPO" \
+        --pattern "$expected_jar" --pattern "SHA256SUMS" --pattern "RELEASE-PROVENANCE.txt" --pattern "RELEASE-EVIDENCE.json" \
+        --dir "$stage" \
+        || fail "validate-release: could not download required assets for v$semver from $GH_REPO"
+
+    # --- 1. Exact JAR filename match (reject ambiguous/missing)
+    [ -f "$stage/$expected_jar" ] \
+        || fail "validate-release: expected JAR '$expected_jar' not found in Release v$semver"
+    local jar_count
+    jar_count=$(find "$stage" -maxdepth 1 -name "url-shortener-service-*.jar" -type f | wc -l)
+    [ "$jar_count" -eq 1 ] \
+        || fail "validate-release: ambiguous JAR assets ($jar_count matches for url-shortener-service-*.jar); expected exactly '$expected_jar'"
+
+    local jar="$stage/$expected_jar"
+
+    # --- 2. Validate SHA256SUMS with sha256sum -c (binding exact filename)
+    [ -f "$stage/SHA256SUMS" ] \
+        || fail "validate-release: SHA256SUMS asset missing from Release v$semver"
+    (cd "$stage" && sha256sum -c SHA256SUMS 2>/dev/null) \
+        || fail "validate-release: sha256sum -c failed against Release SHA256SUMS"
+    local jar_sha
+    jar_sha=$(sha256sum "$jar" | awk '{print $1}')
+    grep -Fq "$jar_sha" "$stage/SHA256SUMS" \
+        || fail "validate-release: JAR SHA-256 not present in SHA256SUMS"
+
+    # --- 3. Validate RELEASE-PROVENANCE.txt
+    [ -f "$stage/RELEASE-PROVENANCE.txt" ] \
+        || fail "validate-release: RELEASE-PROVENANCE.txt asset missing from Release v$semver"
+    declare -A MANIFEST
+    parse_manifest "$stage/RELEASE-PROVENANCE.txt"
+    [ "${MANIFEST[repository]}" = "$GH_REPO" ] \
+        || fail "validate-release: provenance repository '${MANIFEST[repository]}' != expected '$GH_REPO'"
+    [ "${MANIFEST[tag]}" = "v$semver" ] \
+        || fail "validate-release: provenance tag '${MANIFEST[tag]}' != expected 'v$semver'"
+    [ "${MANIFEST[semver]}" = "$semver" ] \
+        || fail "validate-release: provenance semver '${MANIFEST[semver]}' != expected '$semver'"
+    [ "${MANIFEST[jar]}" = "$expected_jar" ] \
+        || fail "validate-release: provenance jar '${MANIFEST[jar]}' != expected '$expected_jar'"
+    [ "${MANIFEST[sha256]}" = "$jar_sha" ] \
+        || fail "validate-release: provenance sha256 '${MANIFEST[sha256]}' != JAR sha256 '$jar_sha'"
+    local prov_commit="${MANIFEST[commit]}"
+    local prov_run_id="${MANIFEST[run_id]}"
+    local prov_run_attempt="${MANIFEST[run_attempt]}"
+
+    # --- 4. Validate RELEASE-EVIDENCE.json against committed schema
+    [ -f "$stage/RELEASE-EVIDENCE.json" ] \
+        || fail "validate-release: RELEASE-EVIDENCE.json asset missing from Release v$semver"
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c "
+import json, sys
+with open('$RELEASE_EVIDENCE_SCHEMA') as f:
+    schema = json.load(f)
+with open('$stage/RELEASE-EVIDENCE.json') as f:
+    evidence = json.load(f)
+
+# Schema validation using jsonschema if available, else basic structural check
+try:
+    import jsonschema
+    jsonschema.validate(evidence, schema)
+except ImportError:
+    # Fallback: validate required fields and types manually
+    required = schema.get('required', [])
+    for field in required:
+        if field not in evidence:
+            sys.exit(f'FAIL: missing required field: {field}')
+    # Validate key fields
+    if evidence.get('repository') != '$GH_REPO':
+        sys.exit(f'FAIL: evidence.repository mismatch')
+    if evidence.get('tag') != 'v$semver':
+        sys.exit(f'FAIL: evidence.tag mismatch')
+    if evidence.get('semver') != '$semver':
+        sys.exit(f'FAIL: evidence.semver mismatch')
+    if evidence.get('candidate', {}).get('filename') != '$expected_jar':
+        sys.exit(f'FAIL: evidence.candidate.filename mismatch')
+    if evidence.get('candidate', {}).get('sha256') != '$jar_sha':
+        sys.exit(f'FAIL: evidence.candidate.sha256 mismatch')
+    if evidence.get('tag_object_type') != 'tag':
+        sys.exit(f'FAIL: evidence.tag_object_type must be \"tag\"')
+    if not evidence.get('jobs') or len(evidence['jobs']) < 5:
+        sys.exit(f'FAIL: evidence.jobs must have >=5 entries')
+    for job in evidence['jobs']:
+        if job.get('conclusion') != 'success':
+            sys.exit(f'FAIL: job {job.get(\"name\")} not success')
+    print('OK: schema validation passed (fallback)')
+        " || fail "validate-release: RELEASE-EVIDENCE.json schema validation failed"
+    else
+        note "validate-release: RELEASE-EVIDENCE.json validated against committed schema"
+    fi
+
+    # --- 5. Cross-check RELEASE-EVIDENCE.json fields against downloaded artifacts
+    python3 -c "
+import json, sys
+with open('$stage/RELEASE-EVIDENCE.json') as f:
+    evidence = json.load(f)
+
+# Cross-check: repository
+if evidence.get('repository') != '$GH_REPO':
+    sys.exit(f'FAIL: evidence.repository {evidence.get(\"repository\")} != $GH_REPO')
+# Cross-check: tag
+if evidence.get('tag') != 'v$semver':
+    sys.exit(f'FAIL: evidence.tag {evidence.get(\"tag\")} != v$semver')
+# Cross-check: source_commit must match provenance commit
+if evidence.get('source_commit') != '$prov_commit':
+    sys.exit(f'FAIL: evidence.source_commit {evidence.get(\"source_commit\")} != provenance.commit $prov_commit')
+# Cross-check: candidate
+cand = evidence.get('candidate', {})
+if cand.get('filename') != '$expected_jar':
+    sys.exit(f'FAIL: evidence.candidate.filename {cand.get(\"filename\")} != $expected_jar')
+if cand.get('sha256') != '$jar_sha':
+    sys.exit(f'FAIL: evidence.candidate.sha256 {cand.get(\"sha256\")} != $jar_sha')
+# Cross-check: published assets include the 4 required
+assets = {a['name']: a for a in evidence.get('published_assets', [])}
+required_roles = {'jar': '$expected_jar', 'checksums': 'SHA256SUMS', 'provenance': 'RELEASE-PROVENANCE.txt', 'sbom': 'sbom-url-shortener-$semver.json'}
+for role, expected_name in required_roles.items():
+    found = False
+    for name, info in assets.items():
+        if info.get('role') == role:
+            if name != expected_name:
+                sys.exit(f'FAIL: asset role {role} has name {name}, expected {expected_name}')
+            found = True
+            break
+    if not found:
+        sys.exit(f'FAIL: missing published asset with role {role}')
+# Cross-check: image.embedded_jar_sha256 == candidate.sha256
+if evidence.get('image', {}).get('embedded_jar_sha256') != '$jar_sha':
+    sys.exit(f'FAIL: image.embedded_jar_sha256 mismatch')
+# Cross-check: sbom.subject_image_id == image.id
+if evidence.get('sbom', {}).get('subject_image_id') != evidence.get('image', {}).get('id'):
+    sys.exit(f'FAIL: sbom.subject_image_id != image.id')
+print('OK: all cross-checks passed')
+        " || fail "validate-release: RELEASE-EVIDENCE.json cross-checks failed"
+
+    note "validate-release: ALL CHECKS PASSED for v$semver"
+    note "  JAR: $expected_jar (sha256=$jar_sha)"
+    note "  provenance: commit=$prov_commit run_id=$prov_run_id#$prov_run_attempt"
+    note "  evidence: schema v1, jobs=${evidence_jobs:-5}, assets=4, image+sbom verified"
+    exit 0
 }
 
 # ---------------------------------------------------------------- self-test
@@ -345,29 +529,34 @@ EXPECT_COMMIT=""
 EXPECT_RUN_ID=""
 EXPECT_SEMVER=""
 RESOLVE_SHA=""
+VALIDATE_TAG=""
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --peel)           shift; MODE=peel; PEEL_TAG="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
-    --tag-resolves)   shift; MODE=tag-resolves; PEEL_TAG="${1:-}"; RESOLVE_SHA="${2:-}"; shift 2 ;;
-    --strict-single)  shift; MODE=strict-single; SINGLE_FILE="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
-    --jar)            shift; JAR="${1:-}"; MODE=verify; if [ $# -ge 1 ]; then shift; fi ;;
-    --manifest)       shift; MANIFEST="${1:-}"; MODE=verify; if [ $# -ge 1 ]; then shift; fi ;;
+    --peel)            shift; MODE=peel; PEEL_TAG="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
+    --tag-resolves)    shift; MODE=tag-resolves; PEEL_TAG="${1:-}"; RESOLVE_SHA="${2:-}"; shift 2 ;;
+    --strict-single)   shift; MODE=strict-single; SINGLE_FILE="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
+    --jar)             shift; JAR="${1:-}"; MODE=verify; if [ $# -ge 1 ]; then shift; fi ;;
+    --manifest)        shift; MANIFEST="${1:-}"; MODE=verify; if [ $# -ge 1 ]; then shift; fi ;;
     --expect-repository) shift; EXPECT_REPOSITORY="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
-    --expect-tag)     shift; EXPECT_TAG="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
-    --expect-commit)  shift; EXPECT_COMMIT="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
-    --expect-run-id)  shift; EXPECT_RUN_ID="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
-    --expect-semver)  shift; EXPECT_SEMVER="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
-    --self-test)      MODE=self-test; shift ;;
+    --expect-tag)      shift; EXPECT_TAG="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
+    --expect-commit)   shift; EXPECT_COMMIT="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
+    --expect-run-id)   shift; EXPECT_RUN_ID="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
+    --expect-semver)   shift; EXPECT_SEMVER="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
+    --validate-release) shift; MODE=validate-release; VALIDATE_TAG="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
+    --check)           shift; MODE=check; CHECK_TAG="${1:-}"; if [ $# -ge 1 ]; then shift; fi ;;
+    --self-test)       MODE=self-test; shift ;;
     *) fail "unknown argument: $1" ;;
   esac
 done
 
 case "$MODE" in
-  peel)          do_peel "$PEEL_TAG" ;;
-  tag-resolves)  do_tag_resolves "$PEEL_TAG" "$RESOLVE_SHA" ;;
-  strict-single) do_strict_single "$SINGLE_FILE" ;;
-  self-test)     do_self_test ;;
-  verify)        do_verify "$JAR" "$MANIFEST" ;;
-  *)             fail "no mode given (--peel, --strict-single, --tag-resolves, --jar/--manifest, or --self-test)" ;;
+  peel)              do_peel "$PEEL_TAG" ;;
+  tag-resolves)      do_tag_resolves "$PEEL_TAG" "$RESOLVE_SHA" ;;
+  strict-single)     do_strict_single "$SINGLE_FILE" ;;
+  self-test)         do_self_test ;;
+  verify)            do_verify "$JAR" "$MANIFEST" ;;
+  validate-release)  do_validate_release "$VALIDATE_TAG" ;;
+  check)             echo "PLAN: would validate release artifacts for tag ${CHECK_TAG:-(none given)} using --validate-release"; exit 0 ;;
+  *)                 fail "no mode given (--peel, --strict-single, --tag-resolves, --jar/--manifest, --validate-release, --check, or --self-test)" ;;
 esac

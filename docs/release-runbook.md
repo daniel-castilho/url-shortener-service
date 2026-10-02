@@ -35,43 +35,43 @@ client ──► [NGINX/Caddy :443] ──► url-shortener instances (HTTP, no 
 
 ---
 
-## 1. Deploy a new version
+## 1. Deploy a new version (production)
 
-### 1a. Build
-
-```sh
-./mvnw clean package                 # JVM jar  -> target/url-shortener-service-<semver>.jar
-./mvnw clean package -Pnative        # GraalVM native image (requires GraalVM + native-image)
-```
-
-### 1b. Start the backing services (once, or if not running)
-
-```sh
-docker-compose up -d       # mongo + redis
-```
-
-### 1c. Deploy via blue-green (recommended for bare metal)
-
-The blue-green deploy script (`scripts/deploy.sh`) orchestrates a zero-downtime cutover:
-canary weights `10 -> 30 -> 100` with 30s dwell, smoke probe after each bump,
-fail-closed abort (old color restored to 100%, new color drained, exit non-zero
-naming the offending step).
+The **sole supported production deployment path** is the blue-green deploy script
+which downloads the exact tested artifact from the GitHub Release, validates the
+full artifact chain (JAR, SHA256SUMS, RELEASE-PROVENANCE.txt, RELEASE-EVIDENCE.json
+against the committed schema), and performs a canary cutover.
 
 ```sh
 # 1. Ensure backing services are up
 docker-compose up -d       # mongo + redis
 
 # 2. Deploy (blue-green, canary 10/30/100, 30s dwell)
-#    - downloads jar from GitHub Release, verifies sha256
+#    - downloads JAR from GitHub Release, validates full artifact chain
 #    - stages idle color, waits readiness (90s budget)
 #    - canary bumps: render → nginx -t → reload → smoke → dwell
 #    - success: last-deploy.txt + drain old color + one-liner
 sudo bash scripts/deploy.sh vX.Y.Z
 ```
 
-### 1d. Run / deploy the application (legacy single-instance)
+Custom canary weights (must be strictly increasing integers 1–100 ending at 100):
+```sh
+sudo bash scripts/deploy.sh vX.Y.Z --canary 5,25,50,100
+```
 
-**As a systemd service (recommended for bare metal):**
+**Local Maven builds and `target/*.jar` are NOT valid for production release deployment.**
+They are for development/testing only. Production deployments MUST use artifacts
+from the GitHub Release created by the CI pipeline (single-build, identity-verified
+per ADR 0008 / Epic 21).
+
+---
+
+### Legacy single-instance deployment (development / testing only)
+
+These methods are for local development, testing, or non-production environments.
+They do NOT perform artifact validation, canary cutover, or traffic shifting.
+
+**As a systemd service (bare metal dev):**
 
 ```sh
 # 1. Copy the jar
@@ -102,7 +102,7 @@ docker run -d --name urls \
   url-shortener-service:VNEW
 ```
 
-Post-deploy verification:
+Post-deploy verification (applies to both paths):
 
 ```sh
 curl -s http://localhost:8080/actuator/health/liveness          # 200 {"status":"UP"}
@@ -574,14 +574,19 @@ curl -s http://localhost:8081/actuator/health/liveness
 sudo journalctl -u url-shortener@2 -f --no-pager | head
 ```
 
-### 12.2 Canary release via weight flip (zero downtime)
+### 12.2 Canary release via weight flip (legacy / development only)
 
-Deploy the new jar to **one** instance, then shift traffic gradually — `10 -> 30 -> 100`:
+> **This section describes a manual development/testing workflow.**
+> For production releases, use `scripts/deploy.sh <tag>` (see §1) which
+> automates artifact validation, staging, health checks, and traffic shifting.
+
+This method deploys a locally-built JAR to one instance and shifts traffic
+manually — useful for local testing or non-production environments.
 
 ```sh
 # 1. Roll instance 2 to the NEW artifact (instance 1 keeps serving old)
 sudo systemctl stop url-shortener@2
-sudo cp target/url-shortener-service-*.jar /opt/url-shortener/url-shortener.jar   # new
+sudo cp target/url-shortener-service-*.jar /opt/url-shortener/url-shortener.jar   # local build
 sudo systemctl start url-shortener@2
 curl -s http://localhost:8081/actuator/health/readiness    # wait UP
 
@@ -596,6 +601,12 @@ sudo systemctl stop url-shortener@1 && sudo cp ... && sudo systemctl start url-s
 
 An unhealthy peer is dropped automatically after 2 failures in 10s
 (`max_fails=2 fail_timeout=10s`) — a down instance never blocks the flip.
+
+**Key differences from production `deploy.sh`:**
+- Uses local `target/*.jar` (no Release artifact validation, no SHA256 check)
+- No automated readiness wait with budget, no smoke probe, no dwell enforcement
+- No `last-deploy.txt` record for rollback automation
+- Manual nginx weight editing instead of `deploy.sh` render/reload/smoke automation
 
 ### 12.3 Docker image artifact
 
@@ -633,5 +644,6 @@ matching the identity chain in §"Release artifacts & promotion".
 
 ---
 
-*Last updated: 2026-10-01 (Epic 21 — artifact identity & single-build promotion: peel gate,
-  provenance manifest, candidate artifact, Dockerfile.release, governance reference)*
+*Last updated: 2026-10-02 (Epic 24 — production deploy hardening: artifact validation gate,
+  canary argument safety, runbook reconciliation; deploy.sh validate-release integration,
+  canary arg constraints, runbook §1/§12.2 updated)*
