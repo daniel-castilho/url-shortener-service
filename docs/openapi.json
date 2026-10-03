@@ -1,0 +1,1810 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "url-shortener-native API",
+    "description": "High-performance URL Shortener API with rate limiting, analytics, and SSRF protection.\n\nAuthentication (ADR 0010): either a JWT `Authorization: Bearer` header or the `access_token` cookie is accepted; Bearer wins when both are present. Cookie-mode clients MUST be same-origin (no CORS). See `docs/backend-frontend-contract.md` §3.1 and §6 for the full contract. Endpoints are annotated individually with the required scheme; schema definitions live here for client generation.",
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    },
+    "version": "v1"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "Generated server url"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Admin",
+      "description": "Product administration (ADMIN role only)"
+    },
+    {
+      "name": "URL Shortener",
+      "description": "High-performance URL shortening and redirection API"
+    },
+    {
+      "name": "Links",
+      "description": "Manage short links (authenticated, owner-scoped)"
+    },
+    {
+      "name": "Custom Domains",
+      "description": "Claim and manage branded domains (authenticated, owner-scoped)"
+    },
+    {
+      "name": "Edge",
+      "description": "TLS-edge integration (not for browsers; shared-token gated)"
+    },
+    {
+      "name": "Authentication",
+      "description": "API for user registration and login"
+    }
+  ],
+  "paths": {
+    "/api/v1/urls": {
+      "get": {
+        "tags": [
+          "Links"
+        ],
+        "summary": "List authenticated user's links",
+        "description": "Returns a cursor-paginated list of the caller's short links, newest first.",
+        "operationId": "list",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (max 100)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20
+            },
+            "example": 20
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque cursor for pagination",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "eyJjcmVhdGVkQXQiOjE3MDAwMDAwMDAwMDB9"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of links",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed cursor",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "URL Shortener"
+        ],
+        "summary": "Shorten a URL",
+        "description": "Creates a short URL code. Supports anonymous usage and authenticated usage with custom aliases (vanity URLs).",
+        "operationId": "shorten",
+        "requestBody": {
+          "description": "URL to be shortened",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShortenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "URL successfully shortened",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShortenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid URL or custom alias"
+          },
+          "409": {
+            "description": "Custom alias already exists"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        }
+      }
+    },
+    "/api/v1/domains": {
+      "get": {
+        "tags": [
+          "Custom Domains"
+        ],
+        "summary": "List claimed domains",
+        "description": "Returns the caller's custom domains with their verification status.",
+        "operationId": "list_1",
+        "responses": {
+          "200": {
+            "description": "List of claimed domains",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Custom Domains"
+        ],
+        "summary": "Claim a custom domain",
+        "description": "Claims a host for the caller (PENDING) and returns the DNS verification token to publish as a TXT record.",
+        "operationId": "claim",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimDomainRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Domain claimed, token issued",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid host",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Host already claimed",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domains/{host}/verify": {
+      "post": {
+        "tags": [
+          "Custom Domains"
+        ],
+        "summary": "Re-trigger DNS verification",
+        "description": "Issues a fresh token, resets the domain to PENDING and runs an immediate DNS check against it.",
+        "operationId": "verify",
+        "parameters": [
+          {
+            "name": "host",
+            "in": "path",
+            "description": "Claimed host",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "links.example.com"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verification re-triggered, result returned",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid host",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not the owner",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Domain not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Register a new user",
+        "description": "Creates a new user account and returns a JWT token. On success also sets two HttpOnly cookies carrying the same JWTs: access_token (Path=/, Max-Age=access TTL) and refresh_token (Path=/api/v1/auth/refresh, Max-Age=refresh TTL). Both are Secure, SameSite=Lax, HttpOnly. Cache-Control: no-store.",
+        "operationId": "register",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "User registered, tokens issued",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Email already registered",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Refresh Token",
+        "description": "Refreshes the access token using a valid refresh token. The refresh token is read from the request body (refreshToken field) when present, otherwise from the refresh_token cookie — never both. A request with neither a body token nor the cookie returns 401. On success sets a new access_token cookie and re-sets the refresh_token cookie with the same value (sliding Max-Age). Cache-Control: no-store.",
+        "operationId": "refresh",
+        "parameters": [
+          {
+            "name": "refresh_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token refreshed, new access token issued",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid refresh token",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Account blocked",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (AUTH scope)",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Logout",
+        "description": "Clears both auth cookies (access_token and refresh_token) with their exact paths. Idempotent — works with no cookies present and requires no authentication. Returns 204 with no body. Cache-Control: no-store.",
+        "operationId": "logout",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Login",
+        "description": "Authenticates a user and returns a JWT token. On success also sets two HttpOnly cookies carrying the same JWTs: access_token (Path=/, Max-Age=access TTL) and refresh_token (Path=/api/v1/auth/refresh, Max-Age=refresh TTL). Both are Secure, SameSite=Lax, HttpOnly. Cache-Control: no-store.",
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful, tokens issued",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Account blocked",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded (AUTH scope)",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{userId}/unblock": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Unblock a user account",
+        "description": "Clears the blocked flag (expand-only). Idempotent — unblocking an unblocked user answers the same 204 and restores login/refresh immediately.",
+        "operationId": "unblockUser",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "description": "User id to unblock",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "User unblocked"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden (not an ADMIN)"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{userId}/block": {
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Block a user account",
+        "description": "Writes blocked=true (expand-only). Idempotent (blocking a blocked user answers the same 204). Blocked users lose login and refresh (403 \"Account blocked.\"). Self-block is rejected with 400.",
+        "operationId": "blockUser",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "description": "User id to block",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "User blocked"
+          },
+          "400": {
+            "description": "Self-block is not allowed"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden (not an ADMIN)"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      }
+    },
+    "/api/v1/urls/{id}": {
+      "get": {
+        "tags": [
+          "Links"
+        ],
+        "summary": "Get link details",
+        "description": "Returns the link details with metadata and summary stats. Owner only.",
+        "operationId": "get",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Short URL code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "abc123"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Link details",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShortUrlResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShortUrlResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not the owner",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShortUrlResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Link not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShortUrlResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Links"
+        ],
+        "summary": "Archive a link",
+        "description": "Soft-deletes the link (sets deletedAt). The redirect will return 404. Idempotent. Owner only.",
+        "operationId": "archive",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Short URL code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "abc123"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Link archived"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Not the owner"
+          },
+          "404": {
+            "description": "Link not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Links"
+        ],
+        "summary": "Update a link",
+        "description": "Partially updates a link's destination, title, tags, UTM params, or expiresAt. Only supplied fields change. Owner only. Archived links are immutable.",
+        "operationId": "update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Short URL code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "abc123"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Link updated",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShortUrlResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input (e.g., malformed URL, too many tags)",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShortUrlResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShortUrlResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not the owner",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShortUrlResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Link not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShortUrlResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Link is archived (immutable)",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShortUrlResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/{id}": {
+      "get": {
+        "tags": [
+          "URL Shortener"
+        ],
+        "summary": "Redirect to original URL",
+        "description": "Retrieves the original URL and redirects (HTTP 302). Rate limited per IP as an anti-enumeration control.",
+        "operationId": "redirect",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Short URL code (e.g., vE1GpYK)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "vE1GpYK"
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to original URL"
+          },
+          "404": {
+            "description": "Short URL not found"
+          },
+          "410": {
+            "description": "Short URL has expired"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        }
+      }
+    },
+    "/internal/edge/domain-ask": {
+      "get": {
+        "tags": [
+          "Edge"
+        ],
+        "summary": "May the edge provision/serve TLS for this host?",
+        "description": "Caddy on-demand TLS ask endpoint: 200 = host is servable (the configured public host or an ACTIVE custom domain), 404 = not ours, 401 = missing/wrong shared token. Fails closed when EDGE_ASK_TOKEN is unset.",
+        "operationId": "ask",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "query",
+            "description": "Host from the TLS SNI (Caddy sends 'domain')",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "host",
+            "in": "query",
+            "description": "Alias of 'domain' for operators/curl",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Host is servable by this deployment"
+          },
+          "401": {
+            "description": "Missing or wrong shared token"
+          },
+          "404": {
+            "description": "Host is not served by this deployment"
+          }
+        }
+      }
+    },
+    "/api/v1/urls/{id}/clicks": {
+      "get": {
+        "tags": [
+          "Links"
+        ],
+        "summary": "Get link click analytics",
+        "description": "Returns the click time series (unit=day from the daily rollup, or a bounded hourly series) plus a device/geo/referrer breakdown. Owner only.",
+        "operationId": "getClicks",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Short URL code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "abc123"
+          },
+          {
+            "name": "unit",
+            "in": "query",
+            "description": "Granularity: day (rollup) or hour (bounded raw series, max 30 days)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "day"
+            },
+            "example": "day"
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Range start (UTC date, yyyy-MM-dd); defaults to 29 days before 'to'",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Range end (UTC date, yyyy-MM-dd); defaults to today",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Click time series + breakdown",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClickAnalyticsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid unit or range",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClickAnalyticsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClickAnalyticsResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not the owner",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClickAnalyticsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Link not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClickAnalyticsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Get current user identity",
+        "description": "Returns the identity {userId, email, role, name} of the authenticated user. The role is resolved from the configured admin email list (ADR 0011 D1), mirroring the role claim: ADMIN when the email is listed, USER otherwise. Authentication via the Authorization Bearer header or the access_token cookie. Cache-Control: no-store.",
+        "operationId": "me",
+        "responses": {
+          "200": {
+            "description": "Authenticated user identity",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "List users",
+        "description": "Cursor-paginated list of users (newest first), optionally filtered by an email prefix via `q`. role on each item is the live env-list truth and blocked mirrors the account flag.",
+        "operationId": "listUsers",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Optional email prefix filter",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "example": "joa"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (max 100)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20
+            },
+            "example": 20
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque cursor for pagination",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated user list",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed cursor",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden (not an ADMIN)",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{userId}/urls": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "List a user's links",
+        "description": "Cursor-paginated list of the given user's short links, newest first — the owner list contract, including archived links (deletedAt visible). Read-only.",
+        "operationId": "listUserUrls",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "description": "User id whose links are inspected",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size (max 100)",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20
+            },
+            "example": 20
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque cursor for pagination",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of the user's links",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed cursor",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden (not an ADMIN)",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkListResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/urls": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Look up a short URL by code",
+        "description": "Resolves any short code globally (any owner, including archived). The code is the document id. Returns the standard link view plus ownerUserId and ownerEmail (ownerEmail is null when the owner document no longer exists). Read-only.",
+        "operationId": "lookupUrl",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "description": "Short URL code (document id)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "vE1GpYK"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resolved short URL with ownership",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUrlLookupResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing code parameter",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUrlLookupResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUrlLookupResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden (not an ADMIN)",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUrlLookupResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Short URL not found",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUrlLookupResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/domains/{host}": {
+      "delete": {
+        "tags": [
+          "Custom Domains"
+        ],
+        "summary": "Remove a custom domain",
+        "description": "Drops the caller's claim; links configured with the host fall back to the default-host branch.",
+        "operationId": "delete",
+        "parameters": [
+          {
+            "name": "host",
+            "in": "path",
+            "description": "Claimed host",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "links.example.com"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Domain removed"
+          },
+          "400": {
+            "description": "Invalid host"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Not the owner"
+          },
+          "404": {
+            "description": "Domain not found"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/urls/{id}": {
+      "delete": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Force-archive a short URL",
+        "description": "Soft-deletes any link by its code (deletedAt semantics identical to the owner archive) and evicts the cache. Idempotent — archiving an already-archived link answers the same 204. After: the public redirect answers 404 while the link stays visible to its owner with deletedAt set.",
+        "operationId": "forceArchiveLink",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Short URL code (document id)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "vE1GpYK"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Link archived"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Forbidden (not an ADMIN)"
+          },
+          "404": {
+            "description": "Link not found"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ShortenRequest": {
+        "type": "object",
+        "properties": {
+          "originalUrl": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^https?://.*"
+          },
+          "customAlias": {
+            "type": "string",
+            "description": "Optional custom alias (vanity URL). Letters, numbers, hyphens and underscores.",
+            "maxLength": 64,
+            "minLength": 0,
+            "pattern": "^[a-zA-Z0-9-_]*$"
+          },
+          "ttlSeconds": {
+            "type": "integer",
+            "format": "int64",
+            "exclusiveMinimum": 0
+          },
+          "domain": {
+            "type": "string",
+            "pattern": "^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$"
+          }
+        },
+        "required": [
+          "originalUrl"
+        ]
+      },
+      "ShortenResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "shortUrl": {
+            "type": "string"
+          }
+        }
+      },
+      "ClaimDomainRequest": {
+        "type": "object",
+        "properties": {
+          "host": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "host"
+        ]
+      },
+      "DomainResponse": {
+        "type": "object",
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "VERIFIED",
+              "ACTIVE",
+              "FAILED"
+            ]
+          },
+          "verificationToken": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "minLength": 1
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 2147483647,
+            "minLength": 6
+          }
+        },
+        "required": [
+          "email",
+          "name",
+          "password"
+        ]
+      },
+      "AuthResponse": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "Access token (JWT)",
+            "example": "eyJhbGciOiJIUzI1NiJ9..."
+          },
+          "refreshToken": {
+            "type": "string",
+            "description": "Refresh token (JWT)",
+            "example": "eyJhbGciOiJIUzI1NiJ9..."
+          },
+          "userId": {
+            "type": "string",
+            "description": "Unique user identifier",
+            "example": "abc123"
+          },
+          "email": {
+            "type": "string",
+            "description": "User email",
+            "example": "user@example.com"
+          },
+          "role": {
+            "type": "string",
+            "description": "Resolved role: ADMIN or USER",
+            "enum": [
+              "USER",
+              "ADMIN"
+            ],
+            "example": "USER"
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name",
+            "example": "John Doe"
+          }
+        }
+      },
+      "RefreshTokenRequest": {
+        "type": "object",
+        "properties": {
+          "refreshToken": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "refreshToken"
+        ]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "minLength": 1
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
+      },
+      "UpdateLinkRequest": {
+        "type": "object",
+        "properties": {
+          "originalUrl": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 50,
+              "minLength": 1,
+              "pattern": "[a-z0-9_-]+"
+            }
+          },
+          "utm": {
+            "$ref": "#/components/schemas/UtmParamsRequest"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "domain": {
+            "type": "string"
+          }
+        }
+      },
+      "UtmParamsRequest": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "medium": {
+            "type": "string"
+          },
+          "campaign": {
+            "type": "string"
+          },
+          "term": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        }
+      },
+      "ShortUrlResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "originalUrl": {
+            "type": "string"
+          },
+          "shortUrl": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "isCustomAlias": {
+            "type": "boolean"
+          },
+          "clickCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "title": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "utm": {
+            "$ref": "#/components/schemas/UtmParamsResponse"
+          },
+          "deletedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "domain": {
+            "type": "string"
+          }
+        }
+      },
+      "UtmParamsResponse": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "medium": {
+            "type": "string"
+          },
+          "campaign": {
+            "type": "string"
+          },
+          "term": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        }
+      },
+      "LinkListResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShortUrlResponse"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ClickAnalyticsResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "totalClicks": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ClickSeriesPoint"
+            }
+          },
+          "breakdown": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          },
+          "uniquePerBucket": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        }
+      },
+      "ClickSeriesPoint": {
+        "type": "object",
+        "properties": {
+          "time": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "clicks": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "DomainListResponse": {
+        "type": "object",
+        "properties": {
+          "domains": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DomainResponse"
+            }
+          }
+        }
+      },
+      "MeResponse": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "AdminUserItem": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "blocked": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AdminUserListResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminUserItem"
+            }
+          },
+          "nextCursor": {
+            "type": "string"
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AdminUrlLookupResponse": {
+        "type": "object",
+        "properties": {
+          "item": {
+            "$ref": "#/components/schemas/ShortUrlResponse"
+          },
+          "ownerUserId": {
+            "type": "string"
+          },
+          "ownerEmail": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "description": "JWT access token. Optional when the access_token cookie is present.",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "cookieAuth": {
+        "type": "apiKey",
+        "description": "HttpOnly JWT cookie set by register/login/refresh. Same-origin only.",
+        "name": "access_token",
+        "in": "cookie"
+      }
+    }
+  }
+}

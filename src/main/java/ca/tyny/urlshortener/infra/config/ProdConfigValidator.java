@@ -103,6 +103,16 @@ public class ProdConfigValidator {
       errors.add("security.operator.password must be at least 16 characters");
     }
 
+    // Swagger/OpenAPI is a dev/staging-only surface: prod must never expose it, even when an
+    // operator force-enables it via APP_SECURITY_SWAGGER_ENABLED=true (fail-closed).
+    boolean swaggerEnabled =
+        Boolean.TRUE.equals(environment.getProperty("app.security.swagger.enabled", Boolean.class));
+    if (swaggerEnabled) {
+      errors.add(
+          "app.security.swagger.enabled must be false in production — the OpenAPI/UI surface "
+              + "is dev/staging only (override it with APP_SECURITY_SWAGGER_ENABLED=false)");
+    }
+
     if (!errors.isEmpty()) {
       String msg =
           "Production configuration validation failed:\n  - " + String.join("\n  - ", errors);
