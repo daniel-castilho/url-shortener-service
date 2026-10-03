@@ -55,9 +55,13 @@ jobs:
       # Epic 23: Documentation Change-Impact Gate
       - name: Doc-impact gate (pull_request)
         if: github.event_name == 'pull_request'
+        env:
+          # Passed via env, never interpolated into the shell: PR bodies may contain
+          # quotes/apostrophes that would break a literal `echo '${{ }}'` line.
+          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           set -euo pipefail
-          echo '${{ github.event.pull_request.body }}' > /tmp/pr-body.txt
+          printf '%s' "$PR_BODY" > /tmp/pr-body.txt
           bash scripts/check-doc-impact.sh \
             --base ${{ github.event.pull_request.base.sha }} \
             --head ${{ github.event.pull_request.head.sha }} \
@@ -103,6 +107,20 @@ jobs:
         run: promtool test rules deploy/monitoring/rules_tests.yml
       - name: promtool check config
         run: promtool check config deploy/monitoring/prometheus.yml
+      # Epic 25 (ADR 0012 D4/D5): the runtime config is the RENDERED form — the
+      # installer substitutes the ${PROM_*} tokens because Prometheus does NOT expand
+      # env vars in basic_auth.username/password_file. Validate the rendered artifact
+      # too, so a render regression can never ship a syntactically broken config.
+      # Rule files are copied alongside: the config references them by relative path,
+      # exactly as installed into /etc/prometheus.
+      - name: promtool check config (rendered form)
+        run: |
+          set -euo pipefail
+          tmpd="$(mktemp -d)"
+          cp deploy/monitoring/recording-rules.yml deploy/monitoring/alerts.yml "$tmpd/"
+          bash scripts/install-prometheus.sh --render-config \
+            --username ci-render-check --environment staging --output "$tmpd/prometheus.yml"
+          promtool check config "$tmpd/prometheus.yml"
       - name: amtool check-config
         run: amtool check-config deploy/monitoring/alertmanager.yml
       # Epic 3 story 3.2: registered Micrometer meters are a frozen contract (docs/slos.md §2).
@@ -110,6 +128,31 @@ jobs:
         run: bash scripts/check-metrics-frozen.sh
       - name: Metrics freeze gate self-test
         run: bash scripts/check-metrics-frozen.sh --self-test
+
+  canary-gate-e2e:
+    name: Canary Gate E2E (Epic 25)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # Same pin as the observability job's promtool and scripts/install-prometheus.sh:
+      # the gate's wire contract (query API, float-second timestamps) is validated
+      # against the exact Prometheus version the deploy host runs.
+      - name: Pull pinned images
+        run: docker pull prom/prometheus:v3.3.0 && docker pull python:3-alpine
+      # Offline gates first (fast feedback): stubbed-curl contract of the gate itself,
+      # the installer's render contract (incl. the dockerized promtool fixture, which
+      # now finds the pulled image), and the e2e fixture syntax checks.
+      - name: Canary gate self-test (offline mock)
+        run: bash scripts/canary-gate.sh --self-test
+      - name: Install-prometheus self-test (render contract)
+        run: bash scripts/install-prometheus.sh --self-test
+      - name: E2E self-test (offline fixtures)
+        run: bash scripts/canary-prometheus-e2e.sh --self-test
+      # Real runtime proof: ephemeral pinned Prometheus + mock /actuator endpoints on
+      # the host network; asserts gate decisions (pass / measured 5xx breach / color
+      # independence / auth'd vs anonymous scrape semantics) against the live query API.
+      - name: Real ephemeral Prometheus e2e
+        run: bash scripts/canary-prometheus-e2e.sh e2e
 
   integration-tests:
     name: Integration Tests
