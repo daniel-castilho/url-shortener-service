@@ -104,6 +104,13 @@ app:
     dns-verify-timeout-ms: ${APP_DOMAIN_DNS_VERIFY_TIMEOUT_MS:3000}
     # Prefix of the TXT record used for ownership verification.
     verification-prefix: ${APP_DOMAIN_VERIFICATION_PREFIX:url-shortener-verify=}
+  # TLS-edge integration (Caddy on-demand TLS for custom domains — deploy/proxy/Caddyfile).
+  # The edge presents this shared token on every ask call to /internal/edge/domain-ask;
+  # the endpoint answers whether a host (default host or an ACTIVE custom domain) may be
+  # served. Empty = the endpoint fails CLOSED and no custom-domain certificate can be
+  # provisioned — set it only when the on-demand TLS edge is deployed.
+  edge:
+    ask-token: ${EDGE_ASK_TOKEN:}
 
 # ========================================
 # Observability & Monitoring
@@ -114,6 +121,11 @@ management:
       exposure:
         include: health, info, metrics, prometheus, circuitbreakers
       base-path: /actuator
+  info:
+    build:
+      enabled: true
+    env:
+      enabled: false
   endpoint:
     health:
       show-details: ${HEALTH_SHOW_DETAILS:when-authorized}

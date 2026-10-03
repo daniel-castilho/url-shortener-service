@@ -26,7 +26,11 @@ for the same link.
 
 1. **Custom-domain binding wins:** a link created with a verified `domain` resolves to
    `https://<domain>/<id>` — always HTTPS, regardless of configuration (short links are
-   HTTPS-only by product rule).
+   HTTPS-only by product rule). The edge that makes these URLs actually servable is part of the
+   contract: **Caddy on-demand TLS gated by the app's ACTIVE-domain registry**
+   (`/internal/edge/domain-ask`, `EDGE_ASK_TOKEN`) provisions and renews one certificate per
+   customer domain automatically — lifecycle, revocation semantics and the NGINX/Caddy decision
+   are specified in `docs/custom-domain-edge.md`.
 2. **Configured public origin:** `app.shortener.public-base-url` (env `APP_PUBLIC_BASE_URL`),
    e.g. `https://short.example.com` → `shortUrl = https://short.example.com/<id>`.
    This is the **required** setting in production (`ProdConfigValidator` aborts boot without it,
@@ -109,7 +113,7 @@ bean-validation failures add a `validationErrors: { <field>: <message> }` map (4
 | :--- | :--- | :--- |
 | `POST /register` | `200` + token pair + cookies | `400` e-mail in use / weak input; `429` AUTH rate limit |
 | `POST /login` | `200` + token pair + cookies | `401` bad credentials; `403 "Account blocked."` (after credential validation); `429` |
-| `POST /refresh` | `200` + **new access** token/cookie; refresh value **unchanged**, Max-Age slid | `401` neither body nor cookie token; `403` blocked; `429` |
+| `POST /refresh` | `200` + **new access** token/cookie; refresh value **unchanged**, Max-Age slid | `401` missing, invalid or expired refresh token (cookies cleared, Max-Age=0); `403` blocked; `429` |
 | `GET /me` | `200 {userId, email, role, name}` | `401` anonymous |
 | `POST /logout` | `204` always (idempotent, clears both cookies) | — |
 
@@ -205,15 +209,24 @@ Every 429 carries (single egress, both in `UrlController` and `AuthController`):
   cookies.
 - `POST /refresh` with neither a body token nor the cookie is **401** (not 400). On success the
   access token rotates; the refresh token value is **unchanged** (sliding Max-Age only).
+- **Refresh failure is terminal and clears the session:** any `401` from `POST /api/v1/auth/refresh`
+  (missing, invalid, expired or malformed refresh token — body or cookie) answers `Set-Cookie` for
+  **both** cookies with `Max-Age=0` and the exact original paths, mirroring `logout`. This is
+  **scoped to the refresh path only** — a `401` from `login` or `me` never touches cookies, so an
+  isolated expired access token on `/me` is not a logout signal. Cookie-mode frontends should treat
+  a refresh `401` as "hard logout" (clear local state, navigate to `/login`) and retry the original
+  request once after a successful refresh. The contract keeps `200` + dual-write (JSON + cookies)
+  on success — there is no `204` no-body variant.
 - `POST /logout` is idempotent and needs no authentication: it always clears both cookies with
   `Max-Age=0` and the exact original paths, answering `204`.
 
 **Session cycle (cookie mode):** login → cookies set → call APIs (cookies attached automatically)
-→ on 401, try `POST /api/v1/auth/refresh` (no body needed) → on 401 again, re-login →
+→ on 401 or from `/me`, try `POST /api/v1/auth/refresh` (no body needed, cookie attached
+automatically) → on 401 again, **hard logout** (server cleared the cookies) → re-login →
 `POST /logout` to end.
 
-**Tests:** `AuthCookieIT` (15 cases: exact attributes, Bearer-wins, refresh rotation, logout
-idempotency, minimized path, Secure flag, no-store).
+**Tests:** `AuthCookieIT` (exact attributes, Bearer-wins, refresh rotation, refresh-failure clears
+both cookies, logout idempotency, minimized path, Secure flag, no-store).
 
 ---
 
@@ -252,6 +265,22 @@ idempotency, minimized path, Secure flag, no-store).
 - No CORS is configured — the API is **same-origin**. If a cross-origin frontend is ever
   required, CORS must be added (with `Access-Control-Expose-Headers` for `Retry-After` and
   `RateLimit-*`, otherwise browsers hide them from JS).
+
+### 8.1 Build / version endpoint
+
+`GET /actuator/info` is **public** and exposes the release identity (Request 3):
+
+```json
+"build": { "artifact": "url-shortener-service", "name": "url-shortener-service",
+           "version": "0.X.Y", "time": "2026-10-03T21:11:30.425Z" }
+```
+
+- Populated by `spring-boot-maven-plugin:build-info` at build time; `version` reflects the
+  `<revision>` resolved by the Maven wrapper. In the release image the version equals the tagged
+  semver (`release.yml` passes `-Drevision=<semver>`).
+- The frontend can read `build.version` to decide whether feature flags / API expectations match
+  the running backend during staging checks. No other actuator endpoint is public (see
+  `docs/security-notes.md` / `ProductionLockdownIT`).
 
 ---
 

@@ -3,6 +3,7 @@ package ca.tyny.urlshortener;
 import static io.restassured.RestAssured.given;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.notNullValue;
 
 import ca.tyny.urlshortener.config.BaseIntegrationTest;
 import io.restassured.RestAssured;
@@ -87,9 +88,15 @@ class ProductionLockdownIT extends BaseIntegrationTest {
   }
 
   @Test
-  @DisplayName("info is public")
+  @DisplayName("info is public and exposes build version (Request 3)")
   void infoIsPublic() {
-    given().when().get("/actuator/info").then().statusCode(200);
+    given()
+        .when()
+        .get("/actuator/info")
+        .then()
+        .statusCode(200)
+        .body("build.version", notNullValue())
+        .body("build.artifact", equalTo("url-shortener-service"));
   }
 
   @Test

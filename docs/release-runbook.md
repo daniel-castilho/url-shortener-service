@@ -368,6 +368,10 @@ failures" are non-issues: that collection was never dropped, so existing `_id`s 
 - [ ] `APP_PUBLIC_BASE_URL` is set to the canonical public origin (e.g. `https://short.example.com`) — boot aborts in `prod` without it.
 - [ ] `APP_DOMAIN_DEFAULT_HOST` equals the host of `APP_PUBLIC_BASE_URL` — the redirect serves
       default-host links only for that host (a mismatch serves `404` on every redirect).
+- [ ] If custom domains are served: the **Caddy edge** (`deploy/proxy/Caddyfile`) is deployed and
+      `EDGE_ASK_TOKEN` is set to the same value on the edge (rendered into the ask URL) and on
+      the app — it gates on-demand TLS issuance per customer domain (unset = fail closed, no
+      custom-domain certificate can be provisioned). See `docs/custom-domain-edge.md`.
 - [ ] `MONGODB_URI` / `REDIS_HOST` / `REDIS_PORT` point at the real services.
 - [ ] `rate-limiter.trusted-proxy-cidrs` matches the reverse proxy network CIDR.
 - [ ] `management.otlp.tracing.endpoint` points at the OTel Collector.

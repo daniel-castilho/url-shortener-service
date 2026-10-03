@@ -1,5 +1,6 @@
 package ca.tyny.urlshortener.infra.adapter.input.rest;
 
+import ca.tyny.urlshortener.core.exception.InvalidRefreshTokenException;
 import ca.tyny.urlshortener.core.model.RateLimitVerdict;
 import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.RateLimitScope;
@@ -152,13 +153,22 @@ public class AuthController {
       refreshToken = refreshCookie;
     }
     if (refreshToken == null) {
+      clearAuthCookies(response);
       return ResponseEntity.status(401).header(HttpHeaders.CACHE_CONTROL, "no-store").build();
     }
-    UserService.AuthResult result = userService.refreshToken(refreshToken);
-    setAuthCookies(response, result.token(), result.refreshToken());
-    return ResponseEntity.ok()
-        .header(HttpHeaders.CACHE_CONTROL, "no-store")
-        .body(toAuthResponse(result));
+    try {
+      UserService.AuthResult result = userService.refreshToken(refreshToken);
+      setAuthCookies(response, result.token(), result.refreshToken());
+      return ResponseEntity.ok()
+          .header(HttpHeaders.CACHE_CONTROL, "no-store")
+          .body(toAuthResponse(result));
+    } catch (InvalidRefreshTokenException ex) {
+      // Scoped to refresh only: a terminal refresh failure clears both auth cookies
+      // (Max-Age=0, exact paths) so the frontend's single-flight coordinator can
+      // hard-logout. Never reach the global 401 handler (login/me) with cookie side effects.
+      clearAuthCookies(response);
+      throw ex;
+    }
   }
 
   @GetMapping("/me")
