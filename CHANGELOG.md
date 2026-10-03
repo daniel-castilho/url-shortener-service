@@ -17,6 +17,11 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
   synced.
 
 ### Added
+- **Swagger on by default in dev/staging, disabled only in `prod`** — base `application.yaml`
+  enables it (`${APP_SECURITY_SWAGGER_ENABLED:true}`), the new `application-prod.yaml` sets the
+  prod default to `false`, and `ProdConfigValidator` makes prod boot **fail-closed** if Swagger is
+  ever enabled there (even via env). Fixed an Ant matcher bug where the exact `/v3/api-docs` path
+  fell through to the authenticated default instead of the Swagger authorization manager.
 - **Public `build.version` on `GET /actuator/info` (Epic 14 Request 3)** — `spring-boot-maven-plugin`
   `build-info` goal bakes `<revision>` + build time into the jar; frontends/staging can read
   `build.version` to match the running backend (`ProductionLockdownIT` asserts artifact + version).

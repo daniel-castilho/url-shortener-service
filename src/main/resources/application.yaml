@@ -175,7 +175,10 @@ app.security:
       - health/readiness
       - info
   swagger:
-    enabled: false
+    # Enabled by default in dev/staging (base file). The prod profile explicitly disables it
+    # (application-prod.yaml), and ProdConfigValidator makes prod boot FAIL if it is ever
+    # enabled there — even via env. Override anywhere with APP_SECURITY_SWAGGER_ENABLED.
+    enabled: ${APP_SECURITY_SWAGGER_ENABLED:true}
     allowed-ips: []
   # Infrastructure operator (debt 26): grants ROLE_OPERATOR over the actuator
   # tiers (health, metrics, prometheus, circuitbreakers) via HTTP Basic.

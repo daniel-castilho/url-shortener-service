@@ -251,17 +251,26 @@ both cookies, logout idempotency, minimized path, Secure flag, no-store).
 - The full contract is annotated with OpenAPI 3 (`@Operation`, `@ApiResponse`, `@Schema`) —
   including `customAlias` with `maxLength: 64` **[fixed here]** and the nullable `nextCursor`
   semantics.
-- **Swagger UI and the raw spec are disabled by default** (`app.security.swagger.enabled: false`,
-  gated in `SecurityConfig`). Enable in dev with:
+- **Swagger UI and the raw spec are enabled by default in dev/staging and disabled only in the
+  `prod` profile** (`app.security.swagger.enabled`; base default `true`, `application-prod.yaml`
+  default `false`). Override with `APP_SECURITY_SWAGGER_ENABLED`. Prod boots **fail-closed**:
+  `ProdConfigValidator` aborts if Swagger is ever enabled there, even via env. Explicit toggle:
 
   ```sh
-  APP_SECURITY_SWAGGER_ENABLED=true ./mvnw spring-boot:run
+  ./mvnw spring-boot:run        # base profile -> Swagger ON at :8080
   # UI:   http://localhost:8080/swagger-ui.html
   # Spec: http://localhost:8080/v3/api-docs
+  APP_SECURITY_SWAGGER_ENABLED=false ./mvnw spring-boot:run   # force off anywhere
   ```
 
 - **Keep it disabled in production.** The workflow is: generate `openapi.json` from
   `GET /v3/api-docs` in dev, commit it with the frontend, generate the typed client from it.
+  The backend repo keeps the authoritative `docs/openapi.json` (OpenAPI 3.1.0, 19 endpoints) —
+  regenerate it the same way and commit the delta with any contract change.
+- The spec declares both auth schemes in `components.securitySchemes` (`bearerAuth` HTTP/Bearer
+  and `cookieAuth` API-key `access_token`) so client generators can name them; they are **not**
+  applied globally because public endpoints (redirect, actuator, auth) are unauthenticated. Use
+  the `security` blocks from §3.1/§4 when attaching credentials in the generated client.
 - No CORS is configured — the API is **same-origin**. If a cross-origin frontend is ever
   required, CORS must be added (with `Access-Control-Expose-Headers` for `Retry-After` and
   `RateLimit-*`, otherwise browsers hide them from JS).

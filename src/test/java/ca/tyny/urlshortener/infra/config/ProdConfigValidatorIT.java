@@ -135,6 +135,19 @@ class ProdConfigValidatorIT {
         .hasMessageContaining("app.shortener.public-base-url must start with https://");
   }
 
+  @Test
+  @DisplayName("Prod profile with Swagger force-enabled via env fails fast")
+  void failsWhenSwaggerForceEnabledInProd() {
+    MockEnvironment env =
+        currentProdEnv("this-is-a-strong-32-char-plus-production-secret!")
+            .withProperty("app.security.swagger.enabled", "true");
+    ProdConfigValidator validator = new ProdConfigValidator(env);
+
+    assertThatThrownBy(validator::validate)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("app.security.swagger.enabled must be false in production");
+  }
+
   private MockEnvironment currentProdEnv(String jwtSecret) {
     MockEnvironment env =
         new MockEnvironment()
@@ -145,7 +158,8 @@ class ProdConfigValidatorIT {
             .withProperty("app.analytics.retention-days", "90")
             .withProperty("app.security.operator.username", "ops-oncall")
             .withProperty("app.security.operator.password", "a-strong-16-char-pass!")
-            .withProperty("app.shortener.public-base-url", "https://short.example.com");
+            .withProperty("app.shortener.public-base-url", "https://short.example.com")
+            .withProperty("app.security.swagger.enabled", "false");
     if (jwtSecret != null) {
       env.withProperty("app.jwt.secret", jwtSecret);
     }
