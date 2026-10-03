@@ -8,6 +8,26 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 ## [Unreleased]
 
 ### Added
+- **Canonical public `shortUrl` (frontend-integration fix)** — every API response that carries a
+  `shortUrl` (shorten, list, detail, PATCH, admin) now resolves through a single
+  `ShortLinkBaseUrlResolver`:
+  - A custom-domain binding always wins → `https://<domain>/<id>` (short links are HTTPS-only).
+  - Otherwise the new `app.shortener.public-base-url` (`APP_PUBLIC_BASE_URL`) origin — **required
+    with `https://` in the `prod` profile** (`ProdConfigValidator` fails fast). Before this fix,
+    list/detail/PATCH and admin hardcoded `http://localhost` and shorten leaked the bind origin
+    (`http://127.0.0.1:8080/...`) behind a proxy.
+  - `X-Forwarded-*` headers are never trusted implicitly; the trusted-proxy recipe
+    (`server.forward-headers-strategy: native` + Tomcat internal-proxies restricted to the edge)
+    is documented for operators who prefer request-derived origins.
+- **Custom alias cap of 64 characters** — enforced at the DTO (`@Size` → 400), the business layer
+  (`AliasPolicy` in the shorten use case, traced to REQ-SHORT-002) and the OpenAPI schema
+  (`maxLength: 64`); tests cover 64 accepted / 65 rejected end-to-end. The same cap must be
+  mirrored by the frontend and the edge (documented).
+- **`docs/backend-frontend-contract.md`** — the backend↔frontend integration contract
+  (canonical URLs, alias rules, endpoints/statuses, nullable `nextCursor`, 429 semantics,
+  cookie behavior incl. the dual-transport JSON tokens, trusted proxies, Swagger access), now a
+  required target of the `API-CONTRACT` documentation change-impact rule.
+
 - **Metrics-gated blue-green canary (Epic 25 / ADR 0012)** — production canary deployments
   now run a Prometheus-backed gate per stage (10→30→100) instead of fixed dwell:
   - Per-color Prometheus scrape config (`deploy/monitoring/prometheus.yml`) with
@@ -46,6 +66,9 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 - **Prometheus 3.x flag syntax fix** — `--web.enable-admin-api=false` crashes;
   replaced with `--no-web.enable-admin-api` / `--no-web.enable-lifecycle` in systemd
   unit and install script self-test.
+- `GET /api/v1/auth/me` documentation now reflects the actual payload
+  (`{userId, email, role, name}`) and `POST /api/v1/urls` rows document the alias cap and the
+  canonical `shortUrl` semantics.
 
 ## [0.17.0] - 2026-10-02
 

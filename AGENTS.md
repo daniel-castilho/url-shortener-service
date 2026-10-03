@@ -690,6 +690,22 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     wiring), CHANGELOG. **Remaining:** S3 staging rehearsal (threshold calibration, owner
     authorization required) and production wiring on the deploy host. — `in-progress`
 
+39. **Canonical shortUrl / alias cap (frontend-integration audit findings)** — list/detail/PATCH
+    and admin responses hardcoded `shortUrl` base as `http://localhost` (`LinkController.getBaseUrl`,
+    `AdminController.BASE_URL`), and the shorten response derived the origin from the bind request
+    (`ServletUriComponentsBuilder` with no forwarded-header processing → `http://127.0.0.1:8080/...`
+    behind an edge); custom aliases had **no maximum length** (only plan minimums). **Fixed:**
+    single `ShortLinkBaseUrlResolver` (infra rest) — custom-domain binding → `https://<domain>`;
+    else `app.shortener.public-base-url` (`APP_PUBLIC_BASE_URL`, required with `https://` in prod
+    via `ProdConfigValidator`); else request-derived fallback. `X-Forwarded-*` is never trusted
+    implicitly (explicit native+internal-proxies recipe documented). Alias cap **64** enforced at
+    DTO (`@Size`), business layer (`AliasPolicy`, REQ-SHORT-002 refined) and OpenAPI
+    (`maxLength`); tests assert full scheme+host (`PublicBaseUrlIT` 6, `ShortenFlowIT`,
+    `LinkResourceIT`, `UrlControllerTest` +3, `UrlShortenerServiceTest` +2,
+    `ShortLinkBaseUrlResolverTest` 6, `ProdConfigValidatorIT` +2). New
+    `docs/backend-frontend-contract.md` is a required target of the API-CONTRACT doc-impact rule.
+    — `resolved`
+
 ## 🔍 Operational Discipline & Debugging Guidelines
 
 - **Investigate before trial-and-error:** when a compile or test fails, read the full stack trace and
