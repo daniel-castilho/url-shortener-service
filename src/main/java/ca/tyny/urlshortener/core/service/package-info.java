@@ -17,9 +17,10 @@
  *
  * ### REQ-SHORT-002
  * **When** a client shortens a URL with a custom alias,
- * **the Business Component shall** validate the alias (format, reserved words, quota, plan
- * length rules) and persist it atomically so concurrent creators cannot both win; validation
- * failures reject without persisting, and quota usage increments atomically.
+ * **the Business Component shall** validate the alias (format, bounded length of at most 64
+ * characters, reserved words, quota, plan length rules) and persist it atomically so concurrent
+ * creators cannot both win; validation failures reject without persisting, and quota usage
+ * increments atomically.
  *
  * ### REQ-SHORT-003
  * **When** a client shortens a URL,

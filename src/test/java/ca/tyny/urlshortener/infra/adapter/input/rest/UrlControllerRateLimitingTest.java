@@ -45,6 +45,8 @@ class UrlControllerRateLimitingTest {
 
   @MockitoBean private ClientAddressResolver clientAddressResolver;
 
+  @MockitoBean private ShortLinkBaseUrlResolver baseUrlResolver;
+
   @MockitoBean
   private ca.tyny.urlshortener.infra.config.properties.ShortenerProperties shortenerProperties;
 

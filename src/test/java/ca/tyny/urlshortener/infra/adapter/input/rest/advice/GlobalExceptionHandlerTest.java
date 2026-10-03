@@ -58,9 +58,14 @@ class GlobalExceptionHandlerTest {
   @MockitoBean
   private ca.tyny.urlshortener.infra.adapter.input.rest.ClientAddressResolver clientAddressResolver;
 
+  @MockitoBean
+  private ca.tyny.urlshortener.infra.adapter.input.rest.ShortLinkBaseUrlResolver baseUrlResolver;
+
   @org.junit.jupiter.api.BeforeEach
   void setUpResolver() {
     when(clientAddressResolver.resolve(org.mockito.ArgumentMatchers.any())).thenReturn("127.0.0.1");
+    when(baseUrlResolver.baseFor(org.mockito.ArgumentMatchers.any()))
+        .thenReturn("https://short.example.com");
   }
 
   @Test

@@ -1,12 +1,22 @@
 package ca.tyny.urlshortener.infra.adapter.input.rest.dto;
 
+import ca.tyny.urlshortener.core.validation.AliasPolicy;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 
 public record ShortenRequest(
     @NotBlank(message = "URL cannot be empty") @Pattern(regexp = "^https?://.*", message = "URL must start with http:// or https://") String originalUrl,
-    @Pattern(
+    @Schema(
+            maxLength = AliasPolicy.MAX_LENGTH,
+            description =
+                "Optional custom alias (vanity URL). Letters, numbers, hyphens and underscores.")
+        @Size(
+            max = AliasPolicy.MAX_LENGTH,
+            message = "Custom alias must be at most " + AliasPolicy.MAX_LENGTH + " characters")
+        @Pattern(
             regexp = "^[a-zA-Z0-9-_]*$",
             message = "Custom alias must contain only letters, numbers, hyphens and underscores")
         String customAlias,

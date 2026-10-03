@@ -21,6 +21,7 @@ import ca.tyny.urlshortener.core.ports.outgoing.MetricsPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlCachePort;
 import ca.tyny.urlshortener.core.ports.outgoing.UrlRepositoryPort;
 import ca.tyny.urlshortener.core.ports.outgoing.UserRepositoryPort;
+import ca.tyny.urlshortener.core.validation.AliasPolicy;
 import ca.tyny.urlshortener.core.validation.DomainBindingValidator;
 import ca.tyny.urlshortener.core.validation.Hostnames;
 import ca.tyny.urlshortener.core.validation.ReservedWordsValidator;
@@ -184,8 +185,8 @@ public class UrlShortenerService implements ShortenUrlUseCase, GetUrlUseCase {
 
     boolean isCustomAlias = false;
     if (customAlias != null && !customAlias.isBlank()) {
+      AliasPolicy.validateMaxLength(customAlias);
       reservedWordsValidator.validate(customAlias);
-
       if (userId != null) {
         userRepository
             .findById(userId)

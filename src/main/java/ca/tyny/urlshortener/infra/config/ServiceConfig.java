@@ -49,6 +49,7 @@ import ca.tyny.urlshortener.core.service.UrlShortenerService;
 import ca.tyny.urlshortener.core.service.UserService;
 import ca.tyny.urlshortener.core.validation.ReservedWordsValidator;
 import ca.tyny.urlshortener.core.validation.UrlValidator;
+import ca.tyny.urlshortener.infra.adapter.input.rest.ShortLinkBaseUrlResolver;
 import ca.tyny.urlshortener.infra.adapter.input.rest.mapper.LinkMapper;
 import ca.tyny.urlshortener.infra.adapter.output.analytics.GeoIpCountryResolver;
 import ca.tyny.urlshortener.infra.adapter.output.validation.DefaultUrlValidator;
@@ -173,6 +174,11 @@ public class ServiceConfig {
   @Bean
   public LinkMapper linkMapper() {
     return new LinkMapper();
+  }
+
+  @Bean
+  public ShortLinkBaseUrlResolver shortLinkBaseUrlResolver(ShortenerProperties properties) {
+    return new ShortLinkBaseUrlResolver(properties);
   }
 
   @Bean

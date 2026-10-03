@@ -12,6 +12,7 @@ import ca.tyny.urlshortener.core.ports.incoming.admin.AdminListUserUrlsUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.admin.AdminListUsersUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.admin.AdminLookupUrlUseCase;
 import ca.tyny.urlshortener.core.ports.incoming.admin.AdminUnblockUserUseCase;
+import ca.tyny.urlshortener.infra.adapter.input.rest.ShortLinkBaseUrlResolver;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.LinkListResponse;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.ShortUrlResponse;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.admin.AdminUrlLookupResponse;
@@ -53,6 +54,7 @@ public class AdminController {
   private final AdminLookupUrlUseCase lookupUrlUseCase;
   private final AdminForceArchiveLinkUseCase forceArchiveLinkUseCase;
   private final LinkMapper linkMapper;
+  private final ShortLinkBaseUrlResolver baseUrlResolver;
 
   public AdminController(
       AdminListUsersUseCase listUsersUseCase,
@@ -61,7 +63,8 @@ public class AdminController {
       AdminListUserUrlsUseCase listUserUrlsUseCase,
       AdminLookupUrlUseCase lookupUrlUseCase,
       AdminForceArchiveLinkUseCase forceArchiveLinkUseCase,
-      LinkMapper linkMapper) {
+      LinkMapper linkMapper,
+      ShortLinkBaseUrlResolver baseUrlResolver) {
     this.listUsersUseCase = listUsersUseCase;
     this.blockUserUseCase = blockUserUseCase;
     this.unblockUserUseCase = unblockUserUseCase;
@@ -69,6 +72,7 @@ public class AdminController {
     this.lookupUrlUseCase = lookupUrlUseCase;
     this.forceArchiveLinkUseCase = forceArchiveLinkUseCase;
     this.linkMapper = linkMapper;
+    this.baseUrlResolver = baseUrlResolver;
   }
 
   @GetMapping("/users")
@@ -184,7 +188,7 @@ public class AdminController {
 
     LinkListResponse response =
         new LinkListResponse(
-            linkMapper.toResponseList(page.items(), BASE_URL),
+            linkMapper.toResponseList(page.items(), baseUrlResolver),
             page.nextCursor() != null ? page.nextCursor().value() : null,
             page.hasMore());
     return ResponseEntity.ok(response);
@@ -212,11 +216,9 @@ public class AdminController {
       Authentication authentication) {
 
     AdminUrlLookup lookup = lookupUrlUseCase.lookup(callerRole(authentication), code);
-    ShortUrlResponse item = linkMapper.toResponse(lookup.shortUrl(), BASE_URL);
+    ShortUrlResponse item = linkMapper.toResponse(lookup.shortUrl(), baseUrlResolver);
     return ResponseEntity.ok(new AdminUrlLookupResponse(item, item.userId(), lookup.ownerEmail()));
   }
-
-  private static final String BASE_URL = "http://localhost"; // mirrors LinkController.getBaseUrl()
 
   @DeleteMapping("/urls/{id}")
   @Operation(
