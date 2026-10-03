@@ -538,6 +538,18 @@ EOF
     done
     [ "$(cat "$calls_dir/canary-gate" | grep -c -- '--color green')" -ge 1 ] \
         || die "self-test: metrics gate stub was not called for the idle color green"
+    # D7 policy: deploy drives the gate with a SINGLE evaluation inside the approved
+    # 90s total window. The mocked run overrides the window to 0s for speed, so we
+    # assert (a) the gate call carries a --window flag through (whatever its value),
+    # (b) the gate call carries --max-evals 1 (default; multi-eval is a standalone
+    # gate capability, never used from deploy), and (c) the script's window DEFAULT
+    # is the approved 90s.
+    grep -q -- '--window' "$calls_dir/canary-gate" \
+        || die "self-test: metrics gate stub did not receive a --window flag"
+    grep -q -- '--max-evals 1' "$calls_dir/canary-gate" \
+        || die "self-test: metrics gate stub did not receive --max-evals 1 (D7: single eval per stage)"
+    grep -q 'METRICS_WINDOW_SECONDS="${METRICS_WINDOW_SECONDS:-90}"' "$0" \
+        || die "self-test: deploy window default is not the approved 90s (D7)"
     grep -q "metrics gate passed at weight=100" "$tmp/err" \
         || die "self-test: final 100% stage did not run (and pass) the metrics gate"
 

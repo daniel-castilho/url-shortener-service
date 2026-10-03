@@ -14,9 +14,10 @@
 # (scripts/canary-gate.sh) queries https://127.0.0.1:9090 loopback with bounded
 # timeouts. Not publicly exposed.
 #
-# Scrape creds (D4): basic_auth.password_file — root-owned 0600, never inline.
-# The prometheus process runs as its own user so it can read the password + the
-# app metrics belong to the operator account; rotation = replace file + reload.
+# Scrape creds (D4): basic_auth.password_file — root:prometheus 0640 (group-readable
+# by the service account only, never inline). The prometheus process runs as its own
+# user; the username is rendered into the config by scripts/install-prometheus.sh
+# (rendered config, not committed). Rotation = replace file + systemctl reload.
 
 [Unit]
 Description=Prometheus metrics server (URL Shortener deploy gate, ADR 0012)
@@ -29,7 +30,6 @@ Type=simple
 User=prometheus
 Group=prometheus
 WorkingDirectory=/var/lib/prometheus
-EnvironmentFile=-/etc/url-shortener/prometheus.env
 ExecStart=/usr/local/bin/prometheus \
     --config.file=/etc/prometheus/prometheus.yml \
     --storage.tsdb.path=/var/lib/prometheus \

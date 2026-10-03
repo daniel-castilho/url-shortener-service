@@ -44,10 +44,9 @@ PROM_PORT=$((BASE + 0))
 BLUE_NOAUTH=$((BASE + 1))   # healthy, no auth
 GREEN_NOAUTH=$((BASE + 2))  # broken (5xx + bad latency), no auth
 BLUE_AUTH=$((BASE + 3))     # healthy, REQUIRES Authorization header
-PROM_TSDB="localhost:9090"
 
-MOCKS_CT="urlishortener-canary-mocks"
-PROM_CT="urlishortener-canary-prom"
+MOCKS_CT="url-shortener-canary-mocks"
+PROM_CT="url-shortener-canary-prom"
 KEEP="${KEEP_E2E:-0}"
 
 MOCK_SERVER='#!/usr/bin/env python3
@@ -215,7 +214,6 @@ e2e() {
     make_test_config "$tmp/promA.yml" "$BLUE_NOAUTH" "$GREEN_NOAUTH" 1
     docker run -d --name "$PROM_CT" --network host \
         -v "$tmp:/mon:ro" \
-        -p "$PROM_PORT:9090" \
         "$PROM_IMAGE" \
         --config.file=/mon/promA.yml \
         --storage.tsdb.path=/tmp/prom-tsdb-a \
@@ -246,7 +244,13 @@ e2e() {
         fi
     }
 
-    local common=(--max-evals 1 --evals-spacing 0 --window 30 --freshness 45 \
+    # Bounded retry (standalone gate capability, ADR 0012 §Amendments D7): a single
+    # transient scrape hiccup at the tail of a window must not fail the e2e — the gate
+    # re-evaluates once after 5s and the healthy color passes on the second eval. A
+    # MEASURED breach (green) still exits 1 immediately (sticky FAIL, no retry), and a
+    # persistent NO-EVIDENCE state (anonymous green in phase B) still exits 2 after the
+    # bounded retries are exhausted — the assertions below are unaffected.
+    local common=(--max-evals 2 --evals-spacing 5 --window 30 --freshness 45 \
         --min-requests 1 --error-ratio-max 0.001 --latency-ok-min 0.99 \
         --prometheus-url "http://127.0.0.1:$PROM_PORT")
 
@@ -279,7 +283,6 @@ e2e() {
     docker rm -f "$PROM_CT" >/dev/null 2>&1
     docker run -d --name "$PROM_CT" --network host \
         -v "$tmp:/mon:ro" \
-        -p "$PROM_PORT:9090" \
         "$PROM_IMAGE" \
         --config.file=/mon/promB.yml \
         --storage.tsdb.path=/tmp/prom-tsdb-b \
