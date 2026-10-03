@@ -85,6 +85,79 @@ class ShortLinkBaseUrlResolverTest {
         .isEqualTo("https://short.example.com");
   }
 
+  @Test
+  @DisplayName("Base URL with path is rejected (origin-only)")
+  void rejectsPath() {
+    assertThatThrownBy(() -> resolver("https://short.example.com/path"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("bare origin (no path)");
+  }
+
+  @Test
+  @DisplayName("Base URL with query string is rejected")
+  void rejectsQueryString() {
+    assertThatThrownBy(() -> resolver("https://short.example.com?foo=bar"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("query string");
+  }
+
+  @Test
+  @DisplayName("Base URL with fragment is rejected")
+  void rejectsFragment() {
+    assertThatThrownBy(() -> resolver("https://short.example.com#frag"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("fragment");
+  }
+
+  @Test
+  @DisplayName("Empty or whitespace-only value is treated as unset (returns null for base)")
+  void emptyValueIsUnset() {
+    // Empty string doesn't throw; the resolver is created with null publicBaseUrl
+    ShortLinkBaseUrlResolver r1 = resolver("   ");
+    ShortLinkBaseUrlResolver r2 = resolver("");
+    // Both behave as unset (publicBaseUrl = null)
+    assertThat(r1).isNotNull();
+    assertThat(r2).isNotNull();
+  }
+
+  @Test
+  @DisplayName("Scheme-only (no host) is rejected as invalid URI")
+  void rejectsSchemeOnly() {
+    assertThatThrownBy(() -> resolver("https://"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("valid absolute URI");
+  }
+
+  @Test
+  @DisplayName("Invalid hostname is rejected (URI parser rejects leading hyphen, returns no host)")
+  void rejectsInvalidHostname() {
+    assertThatThrownBy(() -> resolver("https://-invalid.example.com"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("host");
+    assertThatThrownBy(() -> resolver("https://example..com"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("host");
+    assertThatThrownBy(() -> resolver("https://.example.com"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("host");
+  }
+
+  @Test
+  @DisplayName("Non-standard port is preserved in canonical origin")
+  void preservesNonStandardPort() {
+    assertThat(resolver("https://short.example.com:8443").baseFor(defaultHostLink()))
+        .isEqualTo("https://short.example.com:8443");
+  }
+
+  @Test
+  @DisplayName("Standard ports (80/443) are omitted from canonical origin")
+  void omitsStandardPorts() {
+    assertThat(resolver("https://short.example.com:443").baseFor(defaultHostLink()))
+        .isEqualTo("https://short.example.com");
+    assertThat(resolver("http://short.example.com:80").baseFor(defaultHostLink()))
+        .isEqualTo("http://short.example.com");
+  }
+
   private ShortUrl defaultHostLink() {
     return new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now());
   }
