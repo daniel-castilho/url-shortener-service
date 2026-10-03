@@ -7,6 +7,7 @@ import static org.mockito.Mockito.*;
 
 import ca.tyny.urlshortener.core.annotation.TracesRequirement;
 import ca.tyny.urlshortener.core.exception.ForbiddenException;
+import ca.tyny.urlshortener.core.exception.InvalidRefreshTokenException;
 import ca.tyny.urlshortener.core.model.User;
 import ca.tyny.urlshortener.core.ports.outgoing.AdminEmailPort;
 import ca.tyny.urlshortener.core.ports.outgoing.AuthenticationPort;
@@ -239,7 +240,7 @@ class UserServiceTest {
 
     // When/Then
     assertThatThrownBy(() -> userService.refreshToken("invalid-token"))
-        .isInstanceOf(IllegalArgumentException.class)
+        .isInstanceOf(InvalidRefreshTokenException.class)
         .hasMessage("Invalid refresh token");
   }
 

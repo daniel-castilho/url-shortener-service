@@ -145,6 +145,18 @@ docker build -t url-shortener-service .
 docker run --network url-shortener-url-shortener-net -p 8080:8080 url-shortener-service
 ```
 
+**Disposable backend for frontend E2E / staging** (`docker-compose.e2e.yaml`): a single-command
+Mongo + Redis + API stack with no local JVM needed, plus a seed script and a readiness
+checklist:
+
+```sh
+docker compose -f docker-compose.e2e.yaml up --build
+bash scripts/seed-e2e.sh
+```
+
+See `docs/e2e-backend.md` (how it works, admin via `APP_ADMIN_EMAILS`, rate-limit knobs) and
+`docs/staging-readiness.md` (version/health/auth/cookie checks).
+
 The application is available at `http://localhost:8080` (Swagger UI, see below).
 
 > The default config in `src/main/resources/application.yaml` points MongoDB and Redis at
@@ -222,6 +234,15 @@ Security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
 
 Implemented on `main`:
 
+- **Cookie auth (ADR 0010) with terminal refresh** — Bearer and cookie transport both work
+  (Bearer wins); cookie-mode refresh answers `200` + rotates the access cookie, and any refresh
+  failure (`401`) clears both auth cookies with `Max-Age=0` (scoped to the refresh path only —
+  `login`/`me` never touch cookies), enabling the frontend's single-flight coordinator to hard
+  logout. `GET /actuator/info` is public and exposes the `build.version` baked in at build time
+  for staging/version checks. Full contract: `docs/backend-frontend-contract.md`.
+  Disposable E2E backend: `docs/e2e-backend.md` + `docker-compose.e2e.yaml` + `scripts/seed-e2e.sh`;
+  staging checklist: `docs/staging-readiness.md`.
+
 - **URL shortening & redirection** — `POST /api/v1/urls` creates a short code; `GET /{id}` performs a
   `302` redirect. URL input is validated against a value object (requires `http://`/`https://`).
   The same long URL may be shortened repeatedly; each call yields a **distinct** code.
@@ -231,6 +252,12 @@ Implemented on `main`:
   profile), falling back to the request origin when unset. `X-Forwarded-*` is never trusted
   implicitly. Full contract: `docs/backend-frontend-contract.md`. Custom aliases are capped at
   **64 characters** (DTO + business layer + OpenAPI).
+- **Custom domains with automated TLS** — claimed domains are TXT-verified, links bind to them
+  and resolve to `https://<domain>`; the supported edge is **Caddy on-demand TLS** gated by the
+  app's ACTIVE-domain registry (`/internal/edge/domain-ask`, shared `EDGE_ASK_TOKEN`) — one
+  certificate per customer domain, provisioned and renewed automatically via ACME; revoked
+  domains are refused by both the edge (ask → 404) and the app (host matching → 404). Full
+  architecture and lifecycle: `docs/custom-domain-edge.md`.
 - **ID generation (locked model)** — random **Base62** (`SecureRandom`), default length 7, bounded
   retry on `_id` collision. Generated codes and vanity aliases are namespace-isolated (length /
   alphabet / reserved words). `409` is **only** “custom alias already exists”.
@@ -342,6 +369,7 @@ Deliberately not implemented yet (candidate backlog, in priority order):
 | `CHANGELOG.md` | Release history (Keep a Changelog) |
 | `docs/data-model-decisions.md` | Locked identity model (Base62, no URL dedup, namespace isolation) |
 | `docs/backend-frontend-contract.md` | Backend ↔ frontend integration contract (canonical URLs, alias rules, pagination, 429, cookies, proxies, Swagger) |
+| `docs/custom-domain-edge.md` | Custom-domain edge: on-demand TLS provisioning/renewal, ask endpoint, domain lifecycle, revocation |
 | `docs/coding-standards.md` | Day-to-day Java/Spring conventions |
 | `docs/testing-playbook.md` | How to design, run and maintain tests |
 | `docs/twelve-factor.md` | Twelve-factor compliance |

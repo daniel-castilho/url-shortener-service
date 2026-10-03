@@ -7,7 +7,38 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ## [Unreleased]
 
+### Fixed
+- **Terminal refresh failure is a 401 that clears the session (Epic 14 Request 1)** — a refresh
+  with a missing, invalid or expired token now answers `401` (previously `400` via an
+  `IllegalArgumentException` mapper) and clears **both** auth cookies with `Max-Age=0` and their
+  exact paths — scoped to the refresh path only, so `login`/`me` 401s never touch cookies.
+  Success stays `200` + dual-write (JSON + cookies, ADR 0010). New `InvalidRefreshTokenException`
+  in `core`; `5` new `AuthCookieIT` cases; REQ-AUTH-009 and `docs/backend-frontend-contract.md`
+  synced.
+
 ### Added
+- **Public `build.version` on `GET /actuator/info` (Epic 14 Request 3)** — `spring-boot-maven-plugin`
+  `build-info` goal bakes `<revision>` + build time into the jar; frontends/staging can read
+  `build.version` to match the running backend (`ProductionLockdownIT` asserts artifact + version).
+- **Disposable E2E backend (Epic 14 Request 2)** — `docker-compose.e2e.yaml` (Mongo + Redis +
+  the app image, healthchecked), `scripts/seed-e2e.sh` (demo user + admin + sample links),
+  `docs/e2e-backend.md` and `docs/staging-readiness.md`. No reset endpoint: tear down with
+  `-v` and re-seed.
+- **Custom-domain TLS automation (Caddy on-demand TLS, architect review)** — the supported
+  production edge for custom domains provisions and renews one ACME certificate per customer
+  domain automatically, gated per issuance by the app's ACTIVE-domain registry:
+  - New edge ask endpoint `GET /internal/edge/domain-ask` (Caddy `domain` param contract): 200 =
+    the host is ours (configured public host or an ACTIVE custom domain), 404 = not ours,
+    401 = wrong/missing shared token (`EDGE_ASK_TOKEN`, constant-time compare, fail-closed
+    when unset). The token is the authentication (permitAll in the chain).
+  - `deploy/proxy/Caddyfile` extended: global `on_demand_tls { ask … }` + catch-all `https://`
+    block for custom domains; the public host keeps its static block. NGINX remains for
+    single-host deployments only (decision documented).
+  - Domain lifecycle defined and validated: unknown/PENDING hosts are refused by the edge and
+    never produce URLs; the customer DNS step (CNAME/A to the edge) is the only manual part;
+    revoked domains are refused by the edge for new issuance AND by the app for every link
+    (data-plane defense in depth — measured end-to-end). Cached certificates keep terminating
+    TLS after a deny (Caddy semantics) — documented in `docs/custom-domain-edge.md`.
 - **Canonical public `shortUrl` (frontend-integration fix)** — every API response that carries a
   `shortUrl` (shorten, list, detail, PATCH, admin) now resolves through a single
   `ShortLinkBaseUrlResolver`:
