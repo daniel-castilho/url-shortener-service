@@ -111,6 +111,30 @@ class ProdConfigValidatorIT {
         .hasMessageContaining("security.operator.username must not be a guessable default");
   }
 
+  @Test
+  @DisplayName("Prod profile without a public short-link origin fails fast")
+  void failsOnMissingPublicBaseUrl() {
+    MockEnvironment env = currentProdEnv("this-is-a-strong-32-char-plus-production-secret!");
+    env.setProperty("app.shortener.public-base-url", "");
+    ProdConfigValidator validator = new ProdConfigValidator(env);
+
+    assertThatThrownBy(validator::validate)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("app.shortener.public-base-url (APP_PUBLIC_BASE_URL) is required");
+  }
+
+  @Test
+  @DisplayName("Prod profile with a non-HTTPS public short-link origin fails fast")
+  void failsOnNonHttpsPublicBaseUrl() {
+    MockEnvironment env = currentProdEnv("this-is-a-strong-32-char-plus-production-secret!");
+    env.setProperty("app.shortener.public-base-url", "http://short.example.com");
+    ProdConfigValidator validator = new ProdConfigValidator(env);
+
+    assertThatThrownBy(validator::validate)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("app.shortener.public-base-url must start with https://");
+  }
+
   private MockEnvironment currentProdEnv(String jwtSecret) {
     MockEnvironment env =
         new MockEnvironment()
@@ -120,7 +144,8 @@ class ProdConfigValidatorIT {
             .withProperty("management.otlp.tracing.endpoint", "http://otel-collector.internal:4318")
             .withProperty("app.analytics.retention-days", "90")
             .withProperty("app.security.operator.username", "ops-oncall")
-            .withProperty("app.security.operator.password", "a-strong-16-char-pass!");
+            .withProperty("app.security.operator.password", "a-strong-16-char-pass!")
+            .withProperty("app.shortener.public-base-url", "https://short.example.com");
     if (jwtSecret != null) {
       env.withProperty("app.jwt.secret", jwtSecret);
     }

@@ -41,6 +41,7 @@ public class UrlController {
   private final MetricsPort metricsPort;
   private final UserRepositoryPort userRepository;
   private final ClientAddressResolver clientAddressResolver;
+  private final ShortLinkBaseUrlResolver baseUrlResolver;
 
   public UrlController(
       ShortenUrlUseCase shortenUrlUseCase,
@@ -50,7 +51,8 @@ public class UrlController {
       HttpServletRequest request,
       MetricsPort metricsPort,
       UserRepositoryPort userRepository,
-      ClientAddressResolver clientAddressResolver) {
+      ClientAddressResolver clientAddressResolver,
+      ShortLinkBaseUrlResolver baseUrlResolver) {
     this.shortenUrlUseCase = shortenUrlUseCase;
     this.getUrlUseCase = getUrlUseCase;
     this.analyticsPort = analyticsPort;
@@ -59,6 +61,7 @@ public class UrlController {
     this.metricsPort = metricsPort;
     this.userRepository = userRepository;
     this.clientAddressResolver = clientAddressResolver;
+    this.baseUrlResolver = baseUrlResolver;
   }
 
   @PostMapping("/api/v1/urls")
@@ -115,11 +118,9 @@ public class UrlController {
               userId,
               request.ttlSeconds(),
               request.domain());
-      String baseUrl =
-          org.springframework.web.servlet.support.ServletUriComponentsBuilder
-              .fromCurrentContextPath()
-              .build()
-              .toUriString();
+      // Canonical public origin: custom-domain binding wins, then the configured public base
+      // URL, then the request-derived fallback (see ShortLinkBaseUrlResolver).
+      String baseUrl = baseUrlResolver.baseFor(shortUrl);
 
       metricsPort.recordUrlShortened();
       return ResponseEntity.ok(new ShortenResponse(shortUrl.id(), baseUrl + "/" + shortUrl.id()));

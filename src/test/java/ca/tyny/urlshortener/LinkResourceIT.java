@@ -249,7 +249,8 @@ class LinkResourceIT extends BaseIntegrationTest {
     assertThat(response.originalUrl()).isEqualTo("https://example.com/test");
     assertThat(response.userId()).isEqualTo(user1Id);
     assertThat(response.clickCount()).isEqualTo(0L);
-    assertThat(response.shortUrl()).endsWith("/" + linkId);
+    // Full scheme + host + port asserted (not just the link suffix): the canonical-URL contract
+    assertThat(response.shortUrl()).isEqualTo("http://localhost:" + port + "/" + linkId);
   }
 
   @Test

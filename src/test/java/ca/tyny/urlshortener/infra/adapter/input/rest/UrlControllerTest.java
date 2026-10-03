@@ -57,11 +57,14 @@ class UrlControllerTest {
 
   @MockitoBean private ClientAddressResolver clientAddressResolver;
 
+  @MockitoBean private ShortLinkBaseUrlResolver baseUrlResolver;
+
   @MockitoBean
   private ca.tyny.urlshortener.infra.config.properties.ShortenerProperties shortenerProperties;
 
   private static final String TEST_URL = "https://www.example.com/very/long/url";
   private static final String TEST_ID = "abc123";
+  private static final String PUBLIC_BASE_URL = "https://short.example.com";
   private static final long MAX_TTL_SECONDS = 31_536_000L;
 
   @org.junit.jupiter.api.BeforeEach
@@ -71,6 +74,7 @@ class UrlControllerTest {
     org.mockito.Mockito.when(rateLimiter.tryAcquire(any(), anyString()))
         .thenReturn(ca.tyny.urlshortener.core.model.RateLimitVerdict.allow(100));
     org.mockito.Mockito.when(shortenerProperties.maxTtlSeconds()).thenReturn(MAX_TTL_SECONDS);
+    org.mockito.Mockito.when(baseUrlResolver.baseFor(any())).thenReturn(PUBLIC_BASE_URL);
   }
 
   @Test
@@ -92,7 +96,7 @@ class UrlControllerTest {
                 .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(TEST_ID))
-        .andExpect(jsonPath("$.shortUrl").value("http://localhost/" + TEST_ID));
+        .andExpect(jsonPath("$.shortUrl").value(PUBLIC_BASE_URL + "/" + TEST_ID));
 
     verify(shortenUrlUseCase).shorten(eq(TEST_URL), isNull(), isNull(), (Long) isNull(), isNull());
   }
@@ -266,6 +270,70 @@ class UrlControllerTest {
 
     verify(shortenUrlUseCase)
         .shorten(eq(TEST_URL), isNull(), isNull(), (Long) isNull(), eq("links.example.com"));
+  }
+
+  @Test
+  @DisplayName("POST /api/v1/urls should reject a custom alias over 64 characters with 400")
+  void shouldRejectAliasOver64Chars() throws Exception {
+    // Given: 65-char alias (one over the cap)
+    String tooLongAlias = "a".repeat(65);
+    String body = "{\"originalUrl\":\"" + TEST_URL + "\",\"customAlias\":\"" + tooLongAlias + "\"}";
+
+    // When/Then: bean validation rejects before the use case is invoked
+    mockMvc
+        .perform(post("/api/v1/urls").contentType(MediaType.APPLICATION_JSON).content(body))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error").value("Validation Failed"))
+        .andExpect(jsonPath("$.validationErrors.customAlias").exists());
+
+    verify(shortenUrlUseCase, never()).shorten(anyString(), any(), any(), (Long) any(), any());
+  }
+
+  @Test
+  @DisplayName("POST /api/v1/urls should accept a custom alias of exactly 64 characters")
+  void shouldAcceptAliasOfExactly64Chars() throws Exception {
+    // Given: 64-char alias (at the cap)
+    String maxAlias = "a".repeat(64);
+    ShortenRequest request = new ShortenRequest(TEST_URL, maxAlias);
+    ShortUrl shortUrl = new ShortUrl(maxAlias, TEST_URL, LocalDateTime.now());
+
+    when(shortenUrlUseCase.shorten(eq(TEST_URL), eq(maxAlias), isNull(), (Long) isNull(), isNull()))
+        .thenReturn(shortUrl);
+
+    // When/Then: passes bean validation and reaches the use case
+    mockMvc
+        .perform(
+            post("/api/v1/urls")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(maxAlias))
+        .andExpect(jsonPath("$.shortUrl").value(PUBLIC_BASE_URL + "/" + maxAlias));
+
+    verify(shortenUrlUseCase)
+        .shorten(eq(TEST_URL), eq(maxAlias), isNull(), (Long) isNull(), isNull());
+  }
+
+  @Test
+  @DisplayName("POST /api/v1/urls should build shortUrl from the link's custom-domain base")
+  void shouldUseCustomDomainBaseForShortUrl() throws Exception {
+    // Given: a link bound to a verified custom domain — the resolver answers with that origin
+    ShortUrl shortUrl =
+        new ShortUrl(TEST_ID, TEST_URL, LocalDateTime.now()).withDomain("links.example.com");
+    when(shortenUrlUseCase.shorten(
+            eq(TEST_URL), isNull(), isNull(), (Long) isNull(), eq("links.example.com")))
+        .thenReturn(shortUrl);
+    when(baseUrlResolver.baseFor(
+            org.mockito.ArgumentMatchers.argThat(
+                s -> s != null && "links.example.com".equals(s.domain()))))
+        .thenReturn("https://links.example.com");
+    String body = "{\"originalUrl\":\"" + TEST_URL + "\",\"domain\":\"links.example.com\"}";
+
+    // When/Then
+    mockMvc
+        .perform(post("/api/v1/urls").contentType(MediaType.APPLICATION_JSON).content(body))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.shortUrl").value("https://links.example.com/" + TEST_ID));
   }
 
   @Test

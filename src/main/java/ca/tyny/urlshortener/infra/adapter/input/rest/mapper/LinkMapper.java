@@ -1,13 +1,14 @@
 package ca.tyny.urlshortener.infra.adapter.input.rest.mapper;
 
 import ca.tyny.urlshortener.core.model.ShortUrl;
+import ca.tyny.urlshortener.infra.adapter.input.rest.ShortLinkBaseUrlResolver;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.ShortUrlResponse;
 import java.util.List;
 import java.util.stream.Collectors;
 
 public class LinkMapper {
 
-  public ShortUrlResponse toResponse(ShortUrl domain, String baseUrl) {
+  public ShortUrlResponse toResponse(ShortUrl domain, ShortLinkBaseUrlResolver baseUrlResolver) {
     if (domain == null) {
       return null;
     }
@@ -26,7 +27,7 @@ public class LinkMapper {
     return new ShortUrlResponse(
         domain.id(),
         domain.originalUrl(),
-        baseUrl + "/" + domain.id(),
+        baseUrlResolver.baseFor(domain) + "/" + domain.id(),
         domain.createdAt(),
         domain.userId(),
         domain.isCustomAlias(),
@@ -39,10 +40,11 @@ public class LinkMapper {
         domain.domain());
   }
 
-  public List<ShortUrlResponse> toResponseList(List<ShortUrl> domains, String baseUrl) {
+  public List<ShortUrlResponse> toResponseList(
+      List<ShortUrl> domains, ShortLinkBaseUrlResolver baseUrlResolver) {
     if (domains == null) {
       return List.of();
     }
-    return domains.stream().map(d -> toResponse(d, baseUrl)).collect(Collectors.toList());
+    return domains.stream().map(d -> toResponse(d, baseUrlResolver)).collect(Collectors.toList());
   }
 }

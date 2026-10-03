@@ -40,6 +40,15 @@ app:
     # Maximum ttlSeconds accepted on shorten (server-side cap); over-cap is rejected with 400.
     max-ttl-seconds: ${SHORTENER_MAX_TTL_SECONDS:31536000}   # 1 year
     # salt: removed (SHORTENER_SALT no longer used once Hashids is dropped)
+    # Canonical public origin (scheme + host, e.g. https://short.example.com) used to build the
+    # shortUrl field in API responses (shorten, list, detail, PATCH, admin). Required in the prod
+    # profile (ProdConfigValidator). Unset = derived from the current request, which is only
+    # correct when clients reach the service directly — X-Forwarded-* headers are NOT trusted
+    # implicitly. Links bound to a custom domain always resolve to https://<domain> instead.
+    # To derive the origin from a trusted edge instead, set (proxy-scoped trust, never blanket):
+    #   server.forward-headers-strategy: native   # Tomcat RemoteIpValve
+    #   server.tomcat.remoteip-internal-proxies: "<edge IP/CIDR regex>"
+    public-base-url: ${APP_PUBLIC_BASE_URL:}
   cache:
     # L1 Caffeine front cache of the cache-aside stack (defaults: 100 items / 5s TTL)
     l1-max-size: ${APP_CACHE_L1_MAX_SIZE:100}

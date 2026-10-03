@@ -56,7 +56,8 @@ class ShortenFlowIT extends BaseIntegrationTest {
             .as(ShortenResponse.class);
 
     assertThat(response.id()).isNotNull();
-    assertThat(response.shortUrl()).contains(response.id());
+    // Full scheme + host + port asserted (not just containment): request-derived fallback
+    assertThat(response.shortUrl()).isEqualTo("http://localhost:" + port + "/" + response.id());
 
     // Then: Redirect to original URL
     given()

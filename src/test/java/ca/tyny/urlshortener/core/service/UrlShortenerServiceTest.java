@@ -132,6 +132,40 @@ class UrlShortenerServiceTest {
   }
 
   @Test
+  @DisplayName("Should reject a custom alias longer than 64 characters (business layer cap)")
+  @TracesRequirement("REQ-SHORT-002")
+  void shouldRejectAliasOver64Chars() {
+    // Given: one character over the global cap
+    String tooLongAlias = "a".repeat(65);
+    String userId = "user123";
+
+    // When/Then: rejected before any persistence or generation
+    assertThatThrownBy(() -> service.shorten(TEST_URL, tooLongAlias, userId))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("at most 64");
+
+    verify(urlRepository, never()).save(any(ShortUrl.class));
+    verify(urlIdGenerator, never()).generateId(anyString(), anyString());
+  }
+
+  @Test
+  @DisplayName("Should accept a custom alias of exactly 64 characters (boundary)")
+  @TracesRequirement("REQ-SHORT-002")
+  void shouldAcceptAliasOfExactly64Chars() {
+    // Given: exactly at the global cap
+    String maxAlias = "a".repeat(64);
+    String userId = "user123";
+    when(urlIdGenerator.generateId(maxAlias, userId)).thenReturn(maxAlias);
+
+    // When
+    ShortUrl result = service.shorten(TEST_URL, maxAlias, userId);
+
+    // Then
+    assertThat(result.id()).isEqualTo(maxAlias);
+    verify(urlRepository).save(any(ShortUrl.class));
+  }
+
+  @Test
   @DisplayName("Should retry on collision and succeed")
   @TracesRequirement("REQ-SHORT-001")
   void shouldRetryOnCollision() {

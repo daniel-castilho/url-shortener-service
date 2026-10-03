@@ -61,6 +61,19 @@ public class ProdConfigValidator {
           "rate-limiter.trusted-proxy-cidrs must be configured for reverse proxy deployment");
     }
 
+    // Canonical public origin for shortUrl responses (never the bind host behind an edge)
+    String publicBaseUrl = environment.getProperty("app.shortener.public-base-url");
+    if (publicBaseUrl == null || publicBaseUrl.isBlank()) {
+      errors.add(
+          "app.shortener.public-base-url (APP_PUBLIC_BASE_URL) is required in production so "
+              + "shortUrl responses use the canonical public origin instead of the bind origin");
+    } else if (!publicBaseUrl.trim().startsWith("https://")) {
+      errors.add(
+          "app.shortener.public-base-url must start with https:// in production (got: '"
+              + publicBaseUrl.trim()
+              + "')");
+    }
+
     // OTel endpoint for tracing
     String otelEndpoint = environment.getProperty("management.otlp.tracing.endpoint");
     if (otelEndpoint == null || otelEndpoint.isBlank()) {

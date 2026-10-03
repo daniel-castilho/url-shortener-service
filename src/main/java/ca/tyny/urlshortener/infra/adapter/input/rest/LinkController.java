@@ -18,7 +18,6 @@ import ca.tyny.urlshortener.infra.adapter.input.rest.dto.LinkListResponse;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.ShortUrlResponse;
 import ca.tyny.urlshortener.infra.adapter.input.rest.dto.UpdateLinkRequest;
 import ca.tyny.urlshortener.infra.adapter.input.rest.mapper.LinkMapper;
-import ca.tyny.urlshortener.infra.config.properties.ShortenerProperties;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -53,7 +52,7 @@ public class LinkController {
   private final ArchiveLinkUseCase archiveLinkUseCase;
   private final LinkMapper linkMapper;
   private final UserRepositoryPort userRepository;
-  private final ShortenerProperties shortenerProperties;
+  private final ShortLinkBaseUrlResolver baseUrlResolver;
 
   public LinkController(
       ListUserLinksUseCase listUserLinksUseCase,
@@ -63,7 +62,7 @@ public class LinkController {
       ArchiveLinkUseCase archiveLinkUseCase,
       LinkMapper linkMapper,
       UserRepositoryPort userRepository,
-      ShortenerProperties shortenerProperties) {
+      ShortLinkBaseUrlResolver baseUrlResolver) {
     this.listUserLinksUseCase = listUserLinksUseCase;
     this.getLinkUseCase = getLinkUseCase;
     this.getClickAnalyticsUseCase = getClickAnalyticsUseCase;
@@ -71,7 +70,7 @@ public class LinkController {
     this.archiveLinkUseCase = archiveLinkUseCase;
     this.linkMapper = linkMapper;
     this.userRepository = userRepository;
-    this.shortenerProperties = shortenerProperties;
+    this.baseUrlResolver = baseUrlResolver;
   }
 
   @GetMapping
@@ -95,7 +94,6 @@ public class LinkController {
           String cursor) {
 
     String userId = getCurrentUserId();
-    String baseUrl = getBaseUrl();
 
     PageRequest request =
         PageRequest.of(
@@ -104,7 +102,7 @@ public class LinkController {
 
     LinkListResponse response =
         new LinkListResponse(
-            linkMapper.toResponseList(page.items(), baseUrl),
+            linkMapper.toResponseList(page.items(), baseUrlResolver),
             page.nextCursor() != null ? page.nextCursor().value() : null,
             page.hasMore());
 
@@ -127,10 +125,9 @@ public class LinkController {
           String id) {
 
     String userId = getCurrentUserId();
-    String baseUrl = getBaseUrl();
 
     ShortUrl link = getLinkUseCase.get(userId, id);
-    return ResponseEntity.ok(linkMapper.toResponse(link, baseUrl));
+    return ResponseEntity.ok(linkMapper.toResponse(link, baseUrlResolver));
   }
 
   @PatchMapping("/{id}")
@@ -155,11 +152,10 @@ public class LinkController {
       @Valid @RequestBody UpdateLinkRequest request) {
 
     String userId = getCurrentUserId();
-    String baseUrl = getBaseUrl();
 
     ca.tyny.urlshortener.core.command.UpdateLinkCommand command = toCommand(request);
     ShortUrl updated = updateLinkUseCase.update(userId, id, command);
-    return ResponseEntity.ok(linkMapper.toResponse(updated, baseUrl));
+    return ResponseEntity.ok(linkMapper.toResponse(updated, baseUrlResolver));
   }
 
   @GetMapping("/{id}/clicks")
@@ -230,11 +226,6 @@ public class LinkController {
         .findByEmail(email)
         .map(User::id)
         .orElseThrow(() -> new IllegalStateException("User not found: " + email));
-  }
-
-  private String getBaseUrl() {
-    return "http://localhost"; // In production, use
-    // ServletUriComponentsBuilder.fromCurrentContextPath()
   }
 
   private ca.tyny.urlshortener.core.command.UpdateLinkCommand toCommand(UpdateLinkRequest req) {
