@@ -55,9 +55,13 @@ jobs:
       # Epic 23: Documentation Change-Impact Gate
       - name: Doc-impact gate (pull_request)
         if: github.event_name == 'pull_request'
+        env:
+          # Passed via env, never interpolated into the shell: PR bodies may contain
+          # quotes/apostrophes that would break a literal `echo '${{ }}'` line.
+          PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           set -euo pipefail
-          echo '${{ github.event.pull_request.body }}' > /tmp/pr-body.txt
+          printf '%s' "$PR_BODY" > /tmp/pr-body.txt
           bash scripts/check-doc-impact.sh \
             --base ${{ github.event.pull_request.base.sha }} \
             --head ${{ github.event.pull_request.head.sha }} \
