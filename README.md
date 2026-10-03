@@ -231,6 +231,12 @@ Implemented on `main`:
   profile), falling back to the request origin when unset. `X-Forwarded-*` is never trusted
   implicitly. Full contract: `docs/backend-frontend-contract.md`. Custom aliases are capped at
   **64 characters** (DTO + business layer + OpenAPI).
+- **Custom domains with automated TLS** — claimed domains are TXT-verified, links bind to them
+  and resolve to `https://<domain>`; the supported edge is **Caddy on-demand TLS** gated by the
+  app's ACTIVE-domain registry (`/internal/edge/domain-ask`, shared `EDGE_ASK_TOKEN`) — one
+  certificate per customer domain, provisioned and renewed automatically via ACME; revoked
+  domains are refused by both the edge (ask → 404) and the app (host matching → 404). Full
+  architecture and lifecycle: `docs/custom-domain-edge.md`.
 - **ID generation (locked model)** — random **Base62** (`SecureRandom`), default length 7, bounded
   retry on `_id` collision. Generated codes and vanity aliases are namespace-isolated (length /
   alphabet / reserved words). `409` is **only** “custom alias already exists”.
@@ -342,6 +348,7 @@ Deliberately not implemented yet (candidate backlog, in priority order):
 | `CHANGELOG.md` | Release history (Keep a Changelog) |
 | `docs/data-model-decisions.md` | Locked identity model (Base62, no URL dedup, namespace isolation) |
 | `docs/backend-frontend-contract.md` | Backend ↔ frontend integration contract (canonical URLs, alias rules, pagination, 429, cookies, proxies, Swagger) |
+| `docs/custom-domain-edge.md` | Custom-domain edge: on-demand TLS provisioning/renewal, ask endpoint, domain lifecycle, revocation |
 | `docs/coding-standards.md` | Day-to-day Java/Spring conventions |
 | `docs/testing-playbook.md` | How to design, run and maintain tests |
 | `docs/twelve-factor.md` | Twelve-factor compliance |

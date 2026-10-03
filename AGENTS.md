@@ -706,6 +706,24 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     `docs/backend-frontend-contract.md` is a required target of the API-CONTRACT doc-impact rule.
     — `resolved`
 
+40. **No production TLS automation for custom domains (architect review finding)** — the resolver
+    returns `https://<custom-domain>` for domain-bound links, but the shipped edge configs
+    (`deploy/proxy/Caddyfile`, `nginx.conf`) were fixed-hostname only: no per-customer-domain
+    certificate provisioning, renewal or routing existed, so those URLs could be unservable.
+    **Fixed:** supported custom-domain edge is **Caddy on-demand TLS** gated by the app's
+    ACTIVE-domain registry — new `EdgeDomainAskController` (`GET /internal/edge/domain-ask`,
+    Caddy `domain` param contract, shared `EDGE_ASK_TOKEN`, constant-time compare, fail-closed
+    when unset; permitAll in the chain with the token as the authentication), `EdgeProperties`
+    (`app.edge.ask-token`), Caddyfile extended (global `on_demand_tls ask` + catch-all `https://`
+    block). **Measured semantics (dev validation, internal CA):** ask gates *issuance*; cached
+    certificates keep terminating TLS after a deny — revocation is enforced by the data plane
+    (app 404s every link on a non-ACTIVE host, verified end-to-end through the edge); unknown
+    hosts and wrong-token new issuances are refused (curl 35). Lifecycle behavior defined in
+    `docs/custom-domain-edge.md` (incl. the customer DNS step and the NGINX-single-host/Caddy-
+    custom-domains decision). Tests: `EdgeDomainAskControllerTest` (8, slice),
+    `EdgeDomainAskIT` (6, real registry: ACTIVE/PENDING/default/unknown/token/revocation).
+    — `resolved`
+
 ## 🔍 Operational Discipline & Debugging Guidelines
 
 - **Investigate before trial-and-error:** when a compile or test fails, read the full stack trace and
