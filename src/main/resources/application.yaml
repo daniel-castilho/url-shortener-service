@@ -45,6 +45,8 @@ app:
     # profile (ProdConfigValidator). Unset = derived from the current request, which is only
     # correct when clients reach the service directly — X-Forwarded-* headers are NOT trusted
     # implicitly. Links bound to a custom domain always resolve to https://<domain> instead.
+    # NOTE: app.domain.default-host must equal the host of this value — redirects serve
+    # default-host links only for that host.
     # To derive the origin from a trusted edge instead, set (proxy-scoped trust, never blanket):
     #   server.forward-headers-strategy: native   # Tomcat RemoteIpValve
     #   server.tomcat.remoteip-internal-proxies: "<edge IP/CIDR regex>"

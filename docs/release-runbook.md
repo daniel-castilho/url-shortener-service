@@ -366,6 +366,8 @@ failures" are non-issues: that collection was never dropped, so existing `_id`s 
 - [ ] `bash scripts/check-living-spec.sh` passes (requirement traceability intact).
 - [ ] `APP_JWT_SECRET` is set to a strong random value (≥32 chars); the default is not used.
 - [ ] `APP_PUBLIC_BASE_URL` is set to the canonical public origin (e.g. `https://short.example.com`) — boot aborts in `prod` without it.
+- [ ] `APP_DOMAIN_DEFAULT_HOST` equals the host of `APP_PUBLIC_BASE_URL` — the redirect serves
+      default-host links only for that host (a mismatch serves `404` on every redirect).
 - [ ] `MONGODB_URI` / `REDIS_HOST` / `REDIS_PORT` point at the real services.
 - [ ] `rate-limiter.trusted-proxy-cidrs` matches the reverse proxy network CIDR.
 - [ ] `management.otlp.tracing.endpoint` points at the OTel Collector.
