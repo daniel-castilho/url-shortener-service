@@ -57,7 +57,9 @@
  * {@code refresh_token} cookie,
  * **the Business Component shall** issue a new access token, re-set the {@code access_token}
  * cookie with it and re-set the {@code refresh_token} cookie with the same value (sliding
- * Max-Age); a request with neither a body token nor the cookie is rejected with HTTP 401.
+ * Max-Age); a request with neither a body token nor the cookie, or whose refresh token is invalid
+ * or expired, is rejected with HTTP 401 and — on refresh failure only — both auth cookies are
+ * cleared (Max-Age 0, exact paths) so the frontend can hard-logout.
  *
  * ### REQ-AUTH-010
  * **When** the calling IP exceeds the configured AUTH rate limit ({@code rate-limiter.auth-limit}

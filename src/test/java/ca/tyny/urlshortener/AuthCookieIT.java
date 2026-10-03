@@ -213,14 +213,97 @@ class AuthCookieIT extends BaseIntegrationTest {
 
   @Test
   @TracesRequirement("REQ-AUTH-009")
-  @DisplayName("refresh with neither body token nor cookie returns 401 (not 400)")
+  @DisplayName("refresh with neither body token nor cookie returns 401 and clears both cookies")
   void refreshWithoutTokenOrCookie() {
-    given()
-        .contentType(ContentType.JSON)
-        .when()
-        .post("/api/v1/auth/refresh")
-        .then()
-        .statusCode(401);
+    // When - a stale access cookie is still present from a previous session
+    Response response =
+        given()
+            .contentType(ContentType.JSON)
+            .cookie(ACCESS_COOKIE, "stale.access.cookie")
+            .when()
+            .post("/api/v1/auth/refresh");
+
+    // Then
+    response.then().statusCode(401);
+    // Terminal refresh failure clears both cookies (exact paths, Max-Age 0)
+    Cookie clearedAccess = response.getDetailedCookie(ACCESS_COOKIE);
+    Cookie clearedRefresh = response.getDetailedCookie(REFRESH_COOKIE);
+    assertThat(clearedAccess.getMaxAge()).isZero();
+    assertThat(clearedAccess.getPath()).isEqualTo("/");
+    assertThat(clearedRefresh.getMaxAge()).isZero();
+    assertThat(clearedRefresh.getPath()).isEqualTo(REFRESH_COOKIE_PATH);
+  }
+
+  @Test
+  @TracesRequirement("REQ-AUTH-009")
+  @DisplayName("refresh with an invalid/expired token returns 401 and clears both cookies")
+  void refreshWithInvalidTokenClearsCookies() {
+    // Given - a garbage/expired-looking refresh token in the body
+    Response response =
+        given()
+            .contentType(ContentType.JSON)
+            .body("{\"refreshToken\":\"garbage-invalid-token\"}")
+            .when()
+            .post("/api/v1/auth/refresh");
+
+    // Then
+    response.then().statusCode(401);
+    Cookie clearedAccess = response.getDetailedCookie(ACCESS_COOKIE);
+    Cookie clearedRefresh = response.getDetailedCookie(REFRESH_COOKIE);
+    assertThat(clearedAccess.getMaxAge()).isZero();
+    assertThat(clearedAccess.getPath()).isEqualTo("/");
+    assertThat(clearedRefresh.getMaxAge()).isZero();
+    assertThat(clearedRefresh.getPath()).isEqualTo(REFRESH_COOKIE_PATH);
+  }
+
+  @Test
+  @TracesRequirement("REQ-AUTH-009")
+  @DisplayName("refresh with an invalid refresh_token cookie clears both cookies")
+  void refreshWithInvalidCookieClearsCookies() {
+    // Given - garbage refresh token carried only in the cookie
+    Response response =
+        given()
+            .cookie(REFRESH_COOKIE, "garbage-refresh-cookie")
+            .contentType(ContentType.JSON)
+            .when()
+            .post("/api/v1/auth/refresh");
+
+    // Then
+    response.then().statusCode(401);
+    Cookie clearedAccess = response.getDetailedCookie(ACCESS_COOKIE);
+    Cookie clearedRefresh = response.getDetailedCookie(REFRESH_COOKIE);
+    assertThat(clearedAccess.getMaxAge()).isZero();
+    assertThat(clearedRefresh.getMaxAge()).isZero();
+    assertThat(clearedRefresh.getPath()).isEqualTo(REFRESH_COOKIE_PATH);
+  }
+
+  @Test
+  @TracesRequirement("REQ-AUTH-002")
+  @DisplayName("login failure (401 bad credentials) does NOT touch cookies")
+  void loginFailureDoesNotClearCookies() {
+    // Given - valid user then wrong password
+    String email = "login-fail@test.com";
+    register(email);
+
+    // When/Then - 401 bad credentials, and no Set-Cookie clearing headers
+    Response response =
+        given()
+            .contentType(ContentType.JSON)
+            .body("{\"email\":\"" + email + "\",\"password\":\"wrong-password\"}")
+            .when()
+            .post("/api/v1/auth/login");
+    response.then().statusCode(401);
+    assertThat(response.getHeaders().getValues("Set-Cookie")).isNullOrEmpty();
+  }
+
+  @Test
+  @TracesRequirement("REQ-AUTH-007")
+  @DisplayName("anonymous /me (401) does NOT touch cookies")
+  void meAnonymousDoesNotClearCookies() {
+    // When/Then - 401 anonymous, no Set-Cookie clearing headers
+    Response response = given().when().get("/api/v1/auth/me");
+    response.then().statusCode(401);
+    assertThat(response.getHeaders().getValues("Set-Cookie")).isNullOrEmpty();
   }
 
   @Test
