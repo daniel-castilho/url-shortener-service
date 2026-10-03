@@ -74,7 +74,8 @@ import org.springframework.core.annotation.Order;
   ca.tyny.urlshortener.infra.config.properties.DomainProperties.class,
   ca.tyny.urlshortener.infra.config.properties.AnalyticsProperties.class,
   ca.tyny.urlshortener.infra.config.properties.UrlCacheProperties.class,
-  ca.tyny.urlshortener.infra.config.properties.AdminProperties.class
+  ca.tyny.urlshortener.infra.config.properties.AdminProperties.class,
+  ca.tyny.urlshortener.infra.config.properties.EdgeProperties.class
 })
 public class ServiceConfig {
 

@@ -74,6 +74,13 @@ public class SecurityConfig {
         .authorizeHttpRequests(
             auth ->
                 auth
+                    // Edge integration (custom-domain on-demand TLS): the shared EDGE_ASK_TOKEN
+                    // IS the authentication (constant-time compared in the controller); no JWT
+                    // applies. Fails closed when the token is unset. Matched before the managed
+                    // rules — /internal/edge/** is three segments deep, so it can never collide
+                    // with the single-segment GET /{id} redirect permitAll.
+                    .requestMatchers("/internal/edge/**")
+                    .permitAll()
                     // Public Endpoints (order matters: a matcher decides the FIRST rule that fits)
                     // /api/v1/auth/me MUST be matched BEFORE the auth/** permitAll below or it
                     // inherits permitAll (matcher ordering trap, ADR 0010).
