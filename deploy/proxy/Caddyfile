@@ -1,12 +1,16 @@
 # Caddy TLS Termination for URL Shortener Service
 #
-# Caddy automatically provisions and renews TLS certificates via Let's Encrypt
-# (or uses provided certs). Simpler than NGINX for on-prem deployments.
+# Caddy automatically provisions and renews TLS certificates:
+#   - the configured public host: issued at startup (ACME) as usual;
+#   - CUSTOM DOMAINS (multi-tenant): issued ON DEMAND, gated by the application's
+#     domain registry via the ask endpoint — see docs/custom-domain-edge.md.
 #
 # Usage:
 #   1. Save as Caddyfile
 #   2. Replace short.example.com with your domain
-#   3. Run: caddy run --config Caddyfile
+#   3. Render the EDGE_ASK_TOKEN into the ask URL below (same value as the app's
+#      EDGE_ASK_TOKEN environment variable; e.g. via sed/envsubst in your deploy tooling)
+#   4. Run: caddy run --config Caddyfile
 #
 # The app must be configured with:
 #   rate-limiter:
@@ -15,18 +19,37 @@
 #       - 10.0.0.0/8
 #       - 172.16.0.0/12
 #       - 192.168.0.0/16
+#   app.domain.default-host: short.example.com   (must match the public host below)
+#   app.edge.ask-token: <the same token rendered into the ask URL>
+#
+# Custom-domain contract (per customer domain, e.g. go.acme.io):
+#   a. claimed + TXT-verified in the app (proves DNS control) -> domain becomes ACTIVE;
+#   b. customer points go.acme.io (CNAME/A) at the edge's public name;
+#   c. first HTTPS handshake with SNI go.acme.io -> Caddy asks the app "is go.acme.io
+#      ours?" -> 200 -> ACME certificate is issued on the spot and cached/renewed;
+#   d. the app still refuses to serve links for hosts that lost verification, even
+#      if a certificate lingers (defense in depth, REQ-SHORT-004).
 
 {
-    # Admin API (optional)
-    # admin localhost:2019
-    
     # Email for Let's Encrypt (change for production)
     email admin@example.com
-    
-    # Use local certs if preferred (comment out email + add tls directive in site)
+
+    # On-demand TLS gate: before issuing/serving a certificate for an unknown SNI,
+    # Caddy asks the app. Caddy appends ?domain=<sni> to this URL; the token is the
+    # shared secret configured as EDGE_ASK_TOKEN on the app. 2xx = provision/serve,
+    # anything else = refuse the handshake (fail-closed).
+    on_demand_tls {
+        ask http://127.0.0.1:8080/internal/edge/domain-ask?token=CHANGE_ME_EDGE_ASK_TOKEN
+    }
+
+    # Uncomment for local/dev validation (internal CA instead of ACME — no public
+    # DNS or rate limits required): every certificate below is then issued locally.
     # local_certs
 }
 
+# ---------------------------------------------------------------------------
+# Configured public host (default short domain) — static issuance as usual.
+# ---------------------------------------------------------------------------
 short.example.com {
     # For local certs instead of Let's Encrypt:
     # tls /etc/caddy/certs/tls.crt /etc/caddy/certs/tls.key
@@ -46,7 +69,7 @@ short.example.com {
         header_up X-Forwarded-Proto {scheme}
         header_up X-Forwarded-Host {host}
         header_up X-Forwarded-Port {server_port}
-        
+
         # Timeouts
         transport http {
             connect_timeout 5s
@@ -54,7 +77,39 @@ short.example.com {
             write_timeout 10s
         }
     }
+}
 
-    # Health endpoints (no special handling needed, just pass through)
-    # They're included in the main reverse_proxy above
+# ---------------------------------------------------------------------------
+# CUSTOM DOMAINS — catch-all with on-demand TLS.
+#
+# Any SNI not matched above lands here. Certificates are provisioned on first
+# handshake ONLY for hosts the app authorizes (the ask gate above); every other
+# handshake is refused. Host is preserved, so the app's host-bound redirect
+# matching (REQ-SHORT-004/007) serves the right links per domain.
+# ---------------------------------------------------------------------------
+https:// {
+    tls {
+        on_demand
+    }
+
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    reverse_proxy 127.0.0.1:8080 {
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-Host {host}
+        header_up X-Forwarded-Port {server_port}
+
+        transport http {
+            connect_timeout 5s
+            read_timeout 30s
+            write_timeout 10s
+        }
+    }
 }
