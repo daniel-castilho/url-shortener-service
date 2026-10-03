@@ -33,6 +33,10 @@ for the same link.
    and requires the `https://` scheme). **[fixed here]** — before this branch, list/detail/PATCH
    and admin responses hardcoded `http://localhost`, and the shorten response derived the origin
    from the bind address (`http://127.0.0.1:8080/...` behind a proxy).
+   **Operational coupling (verified in the dev-edge run):** `app.domain.default-host`
+   (`APP_DOMAIN_DEFAULT_HOST`) must equal the host of the public base URL — the redirect serves a
+   default-host link only for that host (`GET /{id}` returns 404 otherwise, by design — host-bound
+   redirect matching, REQ-SHORT-004/007).
 3. **Request-derived fallback (unset config):** the origin of the incoming request
    (`scheme://host:port` of what the client actually dialed). Only correct when the client
    reaches the service directly (local dev). Testcontainers ITs exercise this fallback and assert
