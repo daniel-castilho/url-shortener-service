@@ -26,7 +26,11 @@ for the same link.
 
 1. **Custom-domain binding wins:** a link created with a verified `domain` resolves to
    `https://<domain>/<id>` — always HTTPS, regardless of configuration (short links are
-   HTTPS-only by product rule).
+   HTTPS-only by product rule). The edge that makes these URLs actually servable is part of the
+   contract: **Caddy on-demand TLS gated by the app's ACTIVE-domain registry**
+   (`/internal/edge/domain-ask`, `EDGE_ASK_TOKEN`) provisions and renews one certificate per
+   customer domain automatically — lifecycle, revocation semantics and the NGINX/Caddy decision
+   are specified in `docs/custom-domain-edge.md`.
 2. **Configured public origin:** `app.shortener.public-base-url` (env `APP_PUBLIC_BASE_URL`),
    e.g. `https://short.example.com` → `shortUrl = https://short.example.com/<id>`.
    This is the **required** setting in production (`ProdConfigValidator` aborts boot without it,

@@ -8,6 +8,21 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 ## [Unreleased]
 
 ### Added
+- **Custom-domain TLS automation (Caddy on-demand TLS, architect review)** — the supported
+  production edge for custom domains provisions and renews one ACME certificate per customer
+  domain automatically, gated per issuance by the app's ACTIVE-domain registry:
+  - New edge ask endpoint `GET /internal/edge/domain-ask` (Caddy `domain` param contract): 200 =
+    the host is ours (configured public host or an ACTIVE custom domain), 404 = not ours,
+    401 = wrong/missing shared token (`EDGE_ASK_TOKEN`, constant-time compare, fail-closed
+    when unset). The token is the authentication (permitAll in the chain).
+  - `deploy/proxy/Caddyfile` extended: global `on_demand_tls { ask … }` + catch-all `https://`
+    block for custom domains; the public host keeps its static block. NGINX remains for
+    single-host deployments only (decision documented).
+  - Domain lifecycle defined and validated: unknown/PENDING hosts are refused by the edge and
+    never produce URLs; the customer DNS step (CNAME/A to the edge) is the only manual part;
+    revoked domains are refused by the edge for new issuance AND by the app for every link
+    (data-plane defense in depth — measured end-to-end). Cached certificates keep terminating
+    TLS after a deny (Caddy semantics) — documented in `docs/custom-domain-edge.md`.
 - **Canonical public `shortUrl` (frontend-integration fix)** — every API response that carries a
   `shortUrl` (shorten, list, detail, PATCH, admin) now resolves through a single
   `ShortLinkBaseUrlResolver`:
