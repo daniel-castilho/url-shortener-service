@@ -9,6 +9,7 @@ import ca.tyny.urlshortener.core.exception.ForbiddenException;
 import ca.tyny.urlshortener.core.exception.InvalidDestinationException;
 import ca.tyny.urlshortener.core.exception.InvalidDomainException;
 import ca.tyny.urlshortener.core.exception.InvalidExpiryException;
+import ca.tyny.urlshortener.core.exception.InvalidRefreshTokenException;
 import ca.tyny.urlshortener.core.exception.QuotaExceededException;
 import ca.tyny.urlshortener.core.exception.UrlExpiredException;
 import ca.tyny.urlshortener.core.exception.UrlNotFoundException;
@@ -146,6 +147,20 @@ public class GlobalExceptionHandler {
             LocalDateTime.now());
 
     return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+  }
+
+  @ExceptionHandler(InvalidRefreshTokenException.class)
+  public ResponseEntity<ErrorResponse> handleInvalidRefreshToken(InvalidRefreshTokenException ex) {
+    log.warn("Invalid refresh token: {}", logSafe(ex.getMessage()));
+
+    ErrorResponse error =
+        new ErrorResponse(
+            HttpStatus.UNAUTHORIZED.value(),
+            "Unauthorized",
+            "Invalid or expired refresh token",
+            LocalDateTime.now());
+
+    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
   }
 
   @ExceptionHandler(InvalidDestinationException.class)

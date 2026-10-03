@@ -1,6 +1,7 @@
 package ca.tyny.urlshortener.core.service;
 
 import ca.tyny.urlshortener.core.exception.ForbiddenException;
+import ca.tyny.urlshortener.core.exception.InvalidRefreshTokenException;
 import ca.tyny.urlshortener.core.model.User;
 import ca.tyny.urlshortener.core.ports.outgoing.AdminEmailPort;
 import ca.tyny.urlshortener.core.ports.outgoing.AuthenticationPort;
@@ -74,7 +75,7 @@ public class UserService {
 
   public AuthResult refreshToken(String refreshToken) {
     if (!tokenPort.validateToken(refreshToken)) {
-      throw new IllegalArgumentException("Invalid refresh token");
+      throw new InvalidRefreshTokenException("Invalid refresh token");
     }
 
     String email = tokenPort.getUsernameFromToken(refreshToken);
