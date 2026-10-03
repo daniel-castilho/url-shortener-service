@@ -125,7 +125,7 @@ read_vec() {
 eval_state="INDET"
 eval_msg=""
 
-set_indet() { eval_state="INDET"; eval_msg="$1"; }
+set_indet() { [[ "$eval_state" == "FAIL" ]] || { eval_state="INDET"; eval_msg="$1"; } }
 set_fail()  { eval_state="FAIL"; eval_msg="$1"; }
 
 # signal 1+3: up == 1, exactly one series, sample younger than freshness.
@@ -161,14 +161,16 @@ check_up() {
 # signal 2: count_over_time(up) >= 2 in the window.
 check_scrape_count() {
   local body code vec len ts val
-  code=$(http_query "$tmp/count.json" "count_over_time(up{job=\"url-shortener-$COLOR\"}[${WINDOW}s])")
+  code=$(http_query "$tmp/count.json" "sum_over_time(up{job=\"url-shortener-$COLOR\"}[${WINDOW}s])")
   [[ "$code" == "200" ]] || { set_indet "scrape-count query HTTP $code"; return 1; }
   vec=$(read_vec "$tmp/count.json")
   [[ "$vec" == "ERR" ]] && { set_indet "scrape-count malformed response"; return 1; }
   IFS=$'\t' read -r len ts val <<<"$vec"
   [[ "$len" == "1" ]] || { set_indet "scrape-count must be exactly 1 series, got ${len:-0}"; return 1; }
   is_num "$val" || { set_indet "scrape-count not numeric"; return 1; }
-  if lt "$val" "2"; then set_indet "insufficient scrapes in window (${val})"; return 1; fi
+  # sum_over_time(up[W]) = count of successful scrapes (up==1) in the window;
+  # need at least 2 to confirm both colors are reachable.
+  if lt "$val" "2"; then set_indet "insufficient successful scrapes in window (${val})"; return 1; fi
   return 0
 }
 
@@ -422,7 +424,7 @@ fi
 
 CASE="up"
 case "$Q" in
-  *count_over_time*) CASE="count" ;;
+  *count_over_time*|*sum_over_time*) CASE="count" ;;
   *timestamp*) CASE="source" ;;
   *status*) CASE="error" ;;
   *le%3D*|*le=*) CASE="latency" ;;
@@ -477,6 +479,14 @@ case "$SC:$CASE" in
   low-volume:volume)  BODY=$(scalar_one 1 "30") ;;
   missing:*)          BODY=$(vec_empty) ;;
   aparams:*)          BODY=$(scalar_none) ;;
+  # scrape-mix: 1 successful scrape + 1 failed scrape in the window -> sum_over_time(up)==1
+  # (< 2). count_over_time would have counted BOTH samples (2) and wrongly passed;
+  # sum_over_time only credits the successful one -> INDET -> exit 2.
+  scrape-mix:count)   BODY=$(scalar_one 1 "1") ;;
+  # fail-then-indet: measured 5xx breach (FAIL) followed by a non-numeric latency
+  # sample (would-be INDET). The sticky-FAIL rule must keep the FAIL verdict -> exit 1.
+  fail-then-indet:error)   BODY=$(scalar_one 1 "0.01") ;;
+  fail-then-indet:latency) BODY=$(scalar_one 1 "NaN") ;;
 esac
 
 if [[ "$SC" == "bad-json" ]]; then
@@ -526,6 +536,11 @@ EOF
   run_case "prometheus 500"   p500        2
   run_case "bad json"         bad-json    2
   run_case "curl failure"     timeout     2
+  # sum_over_time semantics: 1 success + 1 fail in window -> only 1 credited (< 2).
+  run_case "scrape mix"       scrape-mix  2
+  # Sticky FAIL: measured 5xx breach cannot be downgraded to INDET by a later
+  # non-numeric latency sample -> exit 1, not 2.
+  run_case "sticky FAIL"      fail-then-indet 1
 
   # Bounded retry: first eval hits HTTP 500 on `up`, second eval passes -> exit 0.
   : > "$root/calls"

@@ -85,3 +85,38 @@
   Epic 25 overview/stories/technical-tasks/testing/DoD: `tasks/epic-25/`. See also ADR 0005
   (fail-open vs fail-closed), ADR 0007 (blue-green), `docs/slos.md` (SLO/frozen meters),
   `deploy/monitoring/`, `scripts/deploy.sh`, `scripts/rollback.sh`.
+
+## Amendments (2026-10-02 — implementation-accuracy, discovered while landing S1/S2)
+
+The S0 decisions above are preserved as ratified; the following points record where the
+implementation had to deviate for correctness, all verified by self-tests + the ephemeral
+Prometheus e2e (`scripts/canary-prometheus-e2e.sh`):
+
+1. **D3 — flag spelling:** Prometheus 3.x rejects `--web.enable-admin-api=false` at startup.
+   The systemd unit uses `--no-web.enable-admin-api` / `--no-web.enable-lifecycle`. Same
+   enforcement (both APIs off), corrected syntax.
+2. **D4 — secret delivery:**
+   - The password file is **`root:prometheus 0640`** (group-readable by the service account
+     only), not `root:root 0600` — the `prometheus` process runs as its own user and must
+     read the file; `0600 root:root` would break every scrape.
+   - The username is **not** env-fed at runtime: Prometheus does **not** expand `${VAR}` in
+     `basic_auth.username`/`password_file` (only `external_labels` support env expansion).
+     `scripts/install-prometheus.sh` renders concrete values from the git-owned template
+     into `/etc/prometheus/prometheus.yml` (`--render-config`), and the rendered form is
+     validated with `promtool check config`. An unprovisioned username renders as the literal
+     `UNPROVISIONED` → scrapes fail 401 (fail-closed, never anonymous).
+   - The `environment` label renders from a **required** `--environment` flag (no default):
+     staging can never be implicitly labeled `prod`.
+3. **D5 — signals:** the scrape-count signal uses `sum_over_time(up{job=...}[W])` —
+   **successful scrapes only** (≥2 required). The originally sketched `count_over_time`
+   would also credit failed scrapes and could pass a flapping target. Latency-OK default
+   calibrated **0.99** (from the 0.90 placeholder); thresholds remain provisional until the
+   S3 staging rehearsal. Within one evaluation a measured breach (FAIL) is **sticky**: a
+   later non-numeric/indeterminate signal can never downgrade the verdict to INDET.
+4. **D7 — retry budget:** bounded multi-evaluation (up to 3) remains a **standalone gate
+   capability** (`--max-evals`). `deploy.sh` drives the gate with **`--max-evals 1`**: the
+   90 s window IS the bounded wait, and additional evaluations would extend the stage beyond
+   the D6 budget. The single-eval policy is asserted by `deploy.sh --self-test`.
+5. **Alerting:** the deploy-host Prometheus carries **no `alerting:` block** — no
+   Alertmanager is provisioned by this epic; wiring alert delivery is a future,
+   explicitly-approved scope (`docs/slos.md` claim updated accordingly).
