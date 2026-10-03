@@ -116,8 +116,15 @@ docker run -d --name urls \
   -e MONGODB_URI=mongodb://urlshortener-mongo:27017/url_shortener \
   -e REDIS_HOST=redis -e REDIS_PORT=6379 \
   -e APP_JWT_SECRET="$APP_JWT_SECRET" \
+  -e APP_PUBLIC_BASE_URL="https://short.example.com" \
   url-shortener-service:VNEW
 ```
+
+`APP_PUBLIC_BASE_URL` is the canonical public origin of the default short domain: every `shortUrl`
+in API responses is built from it (custom-domain links use `https://<domain>` instead). It is
+**required** in the `prod` profile — `ProdConfigValidator` aborts boot if missing or not `https://`.
+Behind the edge, the request-derived fallback would otherwise leak the bind origin
+(`http://127.0.0.1:8080/...`). See `docs/backend-frontend-contract.md` §1.
 
 Post-deploy verification (applies to both paths):
 
@@ -358,6 +365,7 @@ failures" are non-issues: that collection was never dropped, so existing `_id`s 
 - [ ] `bash scripts/check-boundaries.sh` passes (architecture boundaries intact).
 - [ ] `bash scripts/check-living-spec.sh` passes (requirement traceability intact).
 - [ ] `APP_JWT_SECRET` is set to a strong random value (≥32 chars); the default is not used.
+- [ ] `APP_PUBLIC_BASE_URL` is set to the canonical public origin (e.g. `https://short.example.com`) — boot aborts in `prod` without it.
 - [ ] `MONGODB_URI` / `REDIS_HOST` / `REDIS_PORT` point at the real services.
 - [ ] `rate-limiter.trusted-proxy-cidrs` matches the reverse proxy network CIDR.
 - [ ] `management.otlp.tracing.endpoint` points at the OTel Collector.

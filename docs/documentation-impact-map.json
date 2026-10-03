@@ -25,7 +25,7 @@
       "source": ["src/main/java/**/infra/adapter/input/rest/**"],
       "requires": [
         {
-          "any_of": ["README.md"]
+          "any_of": ["docs/backend-frontend-contract.md", "README.md"]
         }
       ]
     },

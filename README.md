@@ -188,9 +188,9 @@ With the application running, open the API docs:
 | **Auth** | `POST` | `/api/v1/auth/register` | Register a new user (name, e-mail, password ≥ 6 chars) and return an access + refresh token + an **HttpOnly cookie pair** (`access_token`, `refresh_token`). Fails `400` if the e-mail is already in use. |
 | | `POST` | `/api/v1/auth/login` | Authenticate and return an access + refresh token + the **HttpOnly cookie pair** (`access_token` `Path=/`; `refresh_token` `Path=/api/v1/auth/refresh`; both `Secure; SameSite=Lax`; Max-Age = JWT TTLs). `429` on per-IP rate limit (AUTH scope). |
 | | `POST` | `/api/v1/auth/refresh` | Exchange a valid refresh token (JSON body **or** the `refresh_token` cookie) for a new access token; re-sets the cookie pair. `401` if neither is provided; `429` on per-IP rate limit (AUTH scope). |
-| | `GET` | `/api/v1/auth/me` | Return the authenticated caller's `{userId, email, name}` — works with a `Bearer` header **or** the `access_token` cookie. `401` when anonymous. |
+| | `GET` | `/api/v1/auth/me` | Return the authenticated caller's `{userId, email, role, name}` — works with a `Bearer` header **or** the `access_token` cookie. `401` when anonymous. |
 | | `POST` | `/api/v1/auth/logout` | Clear both auth cookies (idempotent, `204` even for anonymous callers). |
-| **URLs** | `POST` | `/api/v1/urls` | Shorten a URL. Anonymous allowed; `customAlias` (vanity) requires authentication; optional `ttlSeconds` (bounded by `app.shortener.max-ttl-seconds`, default 1 year, `null` = never expires). `429` on rate limit. |
+| **URLs** | `POST` | `/api/v1/urls` | Shorten a URL. Anonymous allowed; `customAlias` (vanity, `^[a-zA-Z0-9-_]*$`, **max 64 chars**) requires authentication; optional `ttlSeconds` (bounded by `app.shortener.max-ttl-seconds`, default 1 year, `null` = never expires). `429` on rate limit. The `shortUrl` field is the **canonical public URL** (see `docs/backend-frontend-contract.md`). |
 | | `GET` | `/api/v1/urls` | List the **caller's** links (archived included), newest first, cursor-paginated (`?limit=&cursor=`; `limit` capped at 100, malformed cursor → `400`). Requires authentication. |
 | | `GET` | `/api/v1/urls/{id}` | Get one link's details (owner only; `403` for non-owner, `404` unknown). |
 | | `PATCH` | `/api/v1/urls/{id}` | Partially update a link — only **supplied** fields change; `expiresAt`/`utm` present-and-`null` clears. Owner only. Archived links are immutable (`400`). |
@@ -225,6 +225,12 @@ Implemented on `main`:
 - **URL shortening & redirection** — `POST /api/v1/urls` creates a short code; `GET /{id}` performs a
   `302` redirect. URL input is validated against a value object (requires `http://`/`https://`).
   The same long URL may be shortened repeatedly; each call yields a **distinct** code.
+- **Canonical public URLs** — every `shortUrl` in API responses (shorten, list, detail, PATCH,
+  admin) is built by a single resolver: custom-domain links resolve to `https://<domain>`, others
+  to `app.shortener.public-base-url` (`APP_PUBLIC_BASE_URL`; required with `https://` in the prod
+  profile), falling back to the request origin when unset. `X-Forwarded-*` is never trusted
+  implicitly. Full contract: `docs/backend-frontend-contract.md`. Custom aliases are capped at
+  **64 characters** (DTO + business layer + OpenAPI).
 - **ID generation (locked model)** — random **Base62** (`SecureRandom`), default length 7, bounded
   retry on `_id` collision. Generated codes and vanity aliases are namespace-isolated (length /
   alphabet / reserved words). `409` is **only** “custom alias already exists”.
@@ -335,6 +341,7 @@ Deliberately not implemented yet (candidate backlog, in priority order):
 | `AGENTS.md` | Contributor/agent rules, architecture, debt matrix |
 | `CHANGELOG.md` | Release history (Keep a Changelog) |
 | `docs/data-model-decisions.md` | Locked identity model (Base62, no URL dedup, namespace isolation) |
+| `docs/backend-frontend-contract.md` | Backend ↔ frontend integration contract (canonical URLs, alias rules, pagination, 429, cookies, proxies, Swagger) |
 | `docs/coding-standards.md` | Day-to-day Java/Spring conventions |
 | `docs/testing-playbook.md` | How to design, run and maintain tests |
 | `docs/twelve-factor.md` | Twelve-factor compliance |
