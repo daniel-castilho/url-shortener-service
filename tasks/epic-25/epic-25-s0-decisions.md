@@ -4,6 +4,15 @@
   No implementation, host access, or deployment is authorized by this record alone; S1–S3 require
   their own authorizations and the S3 non-production rehearsal.
 - **Date:** 2026-10-02
+- **Amendments (2026-10-02, implementation-accuracy):** while landing S1/S2 the implementation
+  deviated from the original proposal on four verified points — D3 flag spelling
+  (`--no-web.enable-admin-api`), D4 secret delivery (root:prometheus 0640 password file;
+  installer-RENDERED username — Prometheus does not expand env vars in `basic_auth`;
+  required `--environment` label), D5 signals (`sum_over_time(up[W])` successful-scrape
+  count; latency default 0.99; sticky FAIL) and D7 retry budget (deploy uses
+  `--max-evals 1`; multi-eval is standalone). The proposal text below is preserved as the
+  ratified baseline; the authoritative amended state is
+  `docs/adr/0012-metrics-gated-blue-green-canary.md` §Amendments.
 - **Reference:** `tasks/epic-25/epic-25-overview.md` (D1–D9), `epic-25-stories.md` S0
   acceptance criteria 1–5, `epic-25-technical-tasks.md` S0, `docs/adr/0012-metrics-gated-blue-green-canary.md`.
 - **Target repository:** `daniel-castilho/url-shortener-service` only.
