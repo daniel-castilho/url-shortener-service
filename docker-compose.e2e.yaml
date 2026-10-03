@@ -1,0 +1,83 @@
+# Disposable backend for frontend E2E / staging (Epic 14 Request 2).
+#
+# Brings up the full stack (Mongo + Redis + the URL Shortener API) so a frontend
+# engineer can run end-to-end flows without a local JVM build:
+#
+#   docker compose -f docker-compose.e2e.yaml up --build
+#   # API at http://localhost:8080 — registers an operator/admin via APP_ADMIN_EMAILS
+#
+# Configuration knobs (all optional for a disposable environment):
+#   APP_ADMIN_EMAILS          comma-separated emails granted the ADMIN role (ADR 0011)
+#   APP_PUBLIC_BASE_URL       canonical origin for shortUrl fields (default: request-derived)
+#   RATE_LIMITER_ENABLED      default true; set "false" to disable per-IP throttling for E2E
+#   RATE_LIMITER_LIMIT        SHORTEN budget per window (default 60)
+#   RATE_LIMITER_AUTH_LIMIT   AUTH budget for login/refresh (default 10)
+#   APP_JWT_SECRET            dev secret override (default bundled dev-only secret)
+#   APP_REDIS_*               Redisson timeout budget (defaults are fine locally)
+#
+# The compose network uses the plain bridge name below; containers reach each other by
+# service name. The app healthcheck mirrors the production Dockerfile (liveness).
+
+services:
+  mongo:
+    image: mongo:6.0
+    container_name: urlshortener-e2e-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - e2e-mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - url-shortener-e2e-net
+
+  redis:
+    image: redis:alpine
+    container_name: urlshortener-e2e-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    networks:
+      - url-shortener-e2e-net
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: urlshortener-e2e-app
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      MONGODB_URI: mongodb://mongo:27017/url_shortener
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      APP_ADMIN_EMAILS: ${APP_ADMIN_EMAILS:-}
+      APP_PUBLIC_BASE_URL: ${APP_PUBLIC_BASE_URL:-}
+      RATE_LIMITER_ENABLED: ${RATE_LIMITER_ENABLED:-true}
+      RATE_LIMITER_LIMIT: ${RATE_LIMITER_LIMIT:-60}
+      RATE_LIMITER_AUTH_LIMIT: ${RATE_LIMITER_AUTH_LIMIT:-10}
+      APP_JWT_SECRET: ${APP_JWT_SECRET:-9a4f2c8d3b7a1e6f4c5d8e9a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c}
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health/liveness"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    networks:
+      - url-shortener-e2e-net
+
+networks:
+  url-shortener-e2e-net:
+    driver: bridge
+
+volumes:
+  e2e-mongo-data:

@@ -121,6 +121,11 @@ management:
       exposure:
         include: health, info, metrics, prometheus, circuitbreakers
       base-path: /actuator
+  info:
+    build:
+      enabled: true
+    env:
+      enabled: false
   endpoint:
     health:
       show-details: ${HEALTH_SHOW_DETAILS:when-authorized}

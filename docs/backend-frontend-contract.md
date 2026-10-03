@@ -266,6 +266,22 @@ both cookies, logout idempotency, minimized path, Secure flag, no-store).
   required, CORS must be added (with `Access-Control-Expose-Headers` for `Retry-After` and
   `RateLimit-*`, otherwise browsers hide them from JS).
 
+### 8.1 Build / version endpoint
+
+`GET /actuator/info` is **public** and exposes the release identity (Request 3):
+
+```json
+"build": { "artifact": "url-shortener-service", "name": "url-shortener-service",
+           "version": "0.X.Y", "time": "2026-10-03T21:11:30.425Z" }
+```
+
+- Populated by `spring-boot-maven-plugin:build-info` at build time; `version` reflects the
+  `<revision>` resolved by the Maven wrapper. In the release image the version equals the tagged
+  semver (`release.yml` passes `-Drevision=<semver>`).
+- The frontend can read `build.version` to decide whether feature flags / API expectations match
+  the running backend during staging checks. No other actuator endpoint is public (see
+  `docs/security-notes.md` / `ProductionLockdownIT`).
+
 ---
 
 ## 9. Compatibility notes

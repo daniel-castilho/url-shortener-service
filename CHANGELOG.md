@@ -7,7 +7,23 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ## [Unreleased]
 
+### Fixed
+- **Terminal refresh failure is a 401 that clears the session (Epic 14 Request 1)** — a refresh
+  with a missing, invalid or expired token now answers `401` (previously `400` via an
+  `IllegalArgumentException` mapper) and clears **both** auth cookies with `Max-Age=0` and their
+  exact paths — scoped to the refresh path only, so `login`/`me` 401s never touch cookies.
+  Success stays `200` + dual-write (JSON + cookies, ADR 0010). New `InvalidRefreshTokenException`
+  in `core`; `5` new `AuthCookieIT` cases; REQ-AUTH-009 and `docs/backend-frontend-contract.md`
+  synced.
+
 ### Added
+- **Public `build.version` on `GET /actuator/info` (Epic 14 Request 3)** — `spring-boot-maven-plugin`
+  `build-info` goal bakes `<revision>` + build time into the jar; frontends/staging can read
+  `build.version` to match the running backend (`ProductionLockdownIT` asserts artifact + version).
+- **Disposable E2E backend (Epic 14 Request 2)** — `docker-compose.e2e.yaml` (Mongo + Redis +
+  the app image, healthchecked), `scripts/seed-e2e.sh` (demo user + admin + sample links),
+  `docs/e2e-backend.md` and `docs/staging-readiness.md`. No reset endpoint: tear down with
+  `-v` and re-seed.
 - **Custom-domain TLS automation (Caddy on-demand TLS, architect review)** — the supported
   production edge for custom domains provisions and renews one ACME certificate per customer
   domain automatically, gated per issuance by the app's ACTIVE-domain registry:
