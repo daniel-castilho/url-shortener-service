@@ -36,8 +36,13 @@ client ──► [NGINX/Caddy :443] ──► url-shortener instances (HTTP, no 
   instance scraping per-color `/actuator/prometheus` endpoints (blue `:8080`, green `:8081`)
   with `color` label and Operator BasicAuth. Install via `scripts/install-prometheus.sh`
   (systemd unit `prometheus.service`, loopback 127.0.0.1:9090, retention 30d + 8GiB,
-  no admin API). Scrape credentials in `/etc/url-shortener/prometheus.env` (0600).
-  See `deploy/monitoring/prometheus.yml` for the scrape config.
+  no admin API). The scrape password lives in
+  `/etc/url-shortener/prometheus-scrape.password` (root:prometheus 0640 — group-readable
+  by the service account only); the username is RENDERED into
+  `/etc/prometheus/prometheus.yml` by the installer (Prometheus does not expand env vars
+  in `basic_auth` fields; unprovisioned renders as `UNPROVISIONED` → scrapes 401,
+  fail-closed). See `deploy/monitoring/prometheus.yml` (git-owned template) for the
+  scrape config shape.
 
 ---
 
@@ -58,8 +63,9 @@ docker-compose up -d       # mongo + redis
 #    - stages the SAME validated JAR into the idle color (single download; no re-fetch)
 #    - canary stages: render → nginx -t → reload → smoke → METRICS_WINDOW_SECONDS window
 #      (default 90s, contains former 30s dwell) → Prometheus canary gate
-#    - gate signals: up==1, scrape count≥2, source freshness≤45s, 5xx<0.001,
-#      latency≥0.99, volume≥1; bounded retry; measured breach=fail-closed
+#    - gate signals: up==1, successful scrapes≥2 (sum_over_time), source freshness≤45s,
+#      5xx<0.001, latency≥0.99, volume≥1; single evaluation (window is the bounded
+#      wait); sticky FAIL; measured breach=fail-closed
 #    - success: last-deploy.txt + drain old color + one-liner
 sudo bash scripts/deploy.sh vX.Y.Z
 ```

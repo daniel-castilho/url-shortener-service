@@ -11,24 +11,36 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 - **Metrics-gated blue-green canary (Epic 25 / ADR 0012)** — production canary deployments
   now run a Prometheus-backed gate per stage (10→30→100) instead of fixed dwell:
   - Per-color Prometheus scrape config (`deploy/monitoring/prometheus.yml`) with
-    `color=blue/green` labels, `application=url-shortener`, `environment=prod`, Operator
-    BasicAuth via `password_file`, 15s scrape interval.
+    `color=blue/green` labels, `application=url-shortener`, `environment` rendered from a
+    REQUIRED `--environment` flag (never defaulted to prod), Operator BasicAuth via
+    `password_file`, 15s scrape interval. The template carries `${PROM_*}` render tokens:
+    Prometheus does NOT expand env vars in `basic_auth` fields, so the installer renders
+    concrete values into `/etc/prometheus/prometheus.yml` (promtool-validated).
   - Hardened systemd unit (`deploy/systemd/prometheus.service`) on loopback 127.0.0.1:9090,
     retention 30d + 8GiB, no admin API / lifecycle, `prometheus` user, `ProtectSystem=strict`.
   - Pinned Prometheus 3.3.0 install script (`scripts/install-prometheus.sh`) with sha256
-    verification, free-disk assert (8GiB), env scaffold for scrape credentials, self-test.
-  - Canary gate (`scripts/canary-gate.sh`) evaluates 6 signals over a 30s window: `up==1`,
-    scrape count ≥2, source freshness ≤45s, 5xx ratio <0.001, latency ratio ≥0.99, volume ≥1.
-    Bounded retry (configurable evals), fail-closed on measured breach, NO-EVIDENCE on
-    indeterminate. Fixed timestamp arithmetic bug: Prometheus returns float-second
-    timestamps (e.g. `1790965152.964`); gate now computes age in seconds with awk
-    float-safe math and allows 2s clock skew.
+    verification, free-disk assert (8GiB), scrape password scaffold (root:prometheus 0640),
+    config render + promtool validation of the rendered form, `/api/v1/targets` post-start
+    verification, `--render-config` offline subcommand, self-test.
+  - Canary gate (`scripts/canary-gate.sh`) evaluates 6 signals over the stage window:
+    `up==1`, successful scrapes ≥2 (`sum_over_time(up[W])` — failed scrapes do NOT count,
+    unlike `count_over_time`), source freshness ≤45s, 5xx ratio <0.001, latency ratio ≥0.99,
+    volume ≥1. Sticky FAIL: a measured breach can never be downgraded to NO-EVIDENCE by a
+    later non-numeric signal in the same evaluation. Bounded retry (configurable evals,
+    standalone capability), fail-closed on measured breach, NO-EVIDENCE on indeterminate.
+    Fixed timestamp arithmetic bug: Prometheus returns float-second timestamps
+    (e.g. `1790965152.964`); gate computes age in seconds with awk float-safe math and
+    allows 2s clock skew.
   - Ephemeral Prometheus e2e test (`scripts/canary-prometheus-e2e.sh`) spins up pinned
     `prom/prometheus:v3.3.0` + mock Actuator endpoints, validates healthy pass,
-    broken fail-closed, auth'd scrape, anonymous NO-EVIDENCE. 3 consecutive clean runs.
+    broken fail-closed, auth'd scrape, anonymous NO-EVIDENCE.
+  - New CI job `canary-gate-e2e` (pinned images; gate/installer/e2e self-tests + the real
+    ephemeral run) and a rendered-form `promtool check config` step in the observability job.
   - Deploy contract: `METRICS_WINDOW_SECONDS` (default 90s) is the total per-stage wait
-    containing the former 30s dwell (not additive); after window: smoke probe + gate;
-    any non-zero gate aborts fail-closed naming the step.
+    containing the former 30s dwell (not additive); after window: smoke probe + gate with
+    `--max-evals 1` (single evaluation — the window IS the bounded wait; multi-eval is a
+    standalone gate capability, never used from deploy); any non-zero gate aborts
+    fail-closed naming the step (asserted by `deploy.sh --self-test`).
 
 ### Changed
 - **Prometheus 3.x flag syntax fix** — `--web.enable-admin-api=false` crashes;

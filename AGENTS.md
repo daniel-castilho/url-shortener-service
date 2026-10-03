@@ -674,6 +674,22 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     ruleset loosens this one. The evidence report/verifier assert current tag object type/target but
     never historical immutability. — `resolved`
 
+38. **Epic 25 (Metrics-Gated Blue-Green Canary) — in progress** — ADR 0012 ratified (S0,
+    D1–D9 with dated amendments). Landed so far: per-color Prometheus scrape template
+    (`deploy/monitoring/prometheus.yml`, `${PROM_*}` render tokens, no `alerting:` block),
+    hardened systemd unit (`deploy/systemd/prometheus.service`, `--no-web.*` flags),
+    pinned installer (`scripts/install-prometheus.sh`: sha256-verified 3.3.0, free-disk
+    assert, 0640 root:prometheus password scaffold, `--render-config` subcommand,
+    rendered-form promtool validation, `/api/v1/targets` post-start check, 31-assertion
+    self-test), canary gate (`scripts/canary-gate.sh`: 6 signals, `sum_over_time(up[W])`
+    successful-scrape count, sticky FAIL, float-safe timestamp math, 25-assertion self-test),
+    ephemeral e2e (`scripts/canary-prometheus-e2e.sh`: pinned Prometheus + mock Actuator
+    endpoints, 5 assertions), `deploy.sh` canary wiring (`--max-evals 1` single-eval policy
+    asserted by self-test), CI job `canary-gate-e2e` + rendered-form promtool check.
+    Docs synced: ADR 0012 §Amendments, S0 decisions, runbook §0/§1, slos (no Alertmanager
+    wiring), CHANGELOG. **Remaining:** S3 staging rehearsal (threshold calibration, owner
+    authorization required) and production wiring on the deploy host. — `in-progress`
+
 ## 🔍 Operational Discipline & Debugging Guidelines
 
 - **Investigate before trial-and-error:** when a compile or test fails, read the full stack trace and

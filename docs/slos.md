@@ -100,9 +100,11 @@ Each rule carries `runbook` / `runbook_<phase>` annotations resolving to this do
 firing and healthy-traffic silence, plus the latency p99 and rate-limit-share alerts
 firing/silent, plus `amtool check-config` for
 `deploy/monitoring/alertmanager.yml`), so a broken expression or config never reaches
-production (Epic 3 stories 3.4/3.6). Prometheus routes to Alertmanager per
-`deploy/monitoring/prometheus.yml`; replace the placeholder webhook receiver before
-going live.
+production (Epic 3 stories 3.4/3.6). Alert routing is defined but NOT wired to a
+provisioned Alertmanager: the deploy-host Prometheus (Epic 25, ADR 0012) carries no
+`alerting:` block — no Alertmanager is provisioned by that epic, and delivery wiring is a
+future, explicitly-approved scope. `alertmanager.yml` remains CI-validated for when that
+happens; replace its placeholder webhook receiver before going live.
 
 ## Response runbook
 
