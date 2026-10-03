@@ -1,0 +1,14 @@
+# Production-specific configuration.
+#
+# This file is loaded in addition to application.yaml when the `prod` profile is active
+# (SPRING_PROFILES_ACTIVE=prod) and overrides the base defaults.
+#
+# Key deviation from the base file:
+#   - Swagger/OpenAPI (and its UI) is DISABLED by default in prod. The base file enables it
+#     for dev/staging. ProdConfigValidator additionally fails the boot if it is ever enabled —
+#     even via APP_SECURITY_SWAGGER_ENABLED=true — so the API surface cannot be exposed
+#     accidentally in production.
+app:
+  security:
+    swagger:
+      enabled: ${APP_SECURITY_SWAGGER_ENABLED:false}

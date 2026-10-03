@@ -95,6 +95,14 @@ public class SecurityConfig {
                     // alias can ever collide with it.
                     .requestMatchers("/actuator")
                     .hasRole("ADMIN")
+
+                    // Swagger - conditional (exact /v3/api-docs must be listed too; Ant ignores
+                    // trailing-slash match). MUST precede the single-segment GET /{id} redirect
+                    // permitAll below, otherwise /swagger-ui.html falls into the redirect matcher
+                    // and is never denied when Swagger is off (fail-closed).
+                    .requestMatchers(
+                        "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
+                    .access(swaggerAccessManager(securityProperties.swagger()))
                     .requestMatchers(HttpMethod.GET, "/{id}")
                     .permitAll() // Redirect
                     // HEAD mirrors GET per HTTP semantics (and ops tooling such as curl -Is
@@ -133,10 +141,6 @@ public class SecurityConfig {
                     .hasAnyRole("ADMIN", "OPERATOR")
                     .requestMatchers("/actuator/**")
                     .hasRole("ADMIN")
-
-                    // Swagger - conditional
-                    .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
-                    .access(swaggerAccessManager(securityProperties.swagger()))
 
                     // Default
                     .anyRequest()
