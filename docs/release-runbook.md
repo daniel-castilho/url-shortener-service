@@ -21,6 +21,10 @@ client ──► [NGINX/Caddy :443] ──► url-shortener instances (HTTP, no 
                                    MongoDB (urlshortener-mongo) :27017 / Redis :6379
 ```
 
+- **Current production target:** single-host Docker Compose + Caddy on the deploy host
+  (`deploy/compose/`, §1 → *Docker Compose deployment*), deployed by the `deploy.yml`
+  workflow (§*Continuous Deploy*). The blue/green systemd topology below is the bare-metal
+  path — still supported (`scripts/deploy.sh`), development/testing at this host.
 - App routes: `POST /api/v1/urls` (shorten), `GET /{id}` (redirect), `/api/v1/auth/*`. All under
   internal ports `:8080+` (one per instance). Auth is `Authorization: Bearer <token>` for
   vanity/short-create; anonymous shorten is also allowed.
@@ -158,9 +162,10 @@ Deploys are dispatched, never pushed from CI:
    when the rollback succeeds). Preflight reports `rollback_supported=false` when the
    previous tag has no GHCR image (first CD deploy has no rollback target).
 
-Until the first release tag exists on GHCR, the stack runs the legacy locally built
-image (`APP_IMAGE_TAG=prod` is unreachable via GHCR) — dispatch `deploy.yml` only after
-a `v*` release has published its image.
+Production runs the GHCR release image pinned by the last dispatch (currently
+`APP_IMAGE_TAG=0.18.0`, verified live on 2026-10-06: 11-leg smoke + image identity). The
+manual fallbacks above only work with a semver that exists in GHCR — the retired local tag
+`prod` (pre-CD image) is not pullable.
 
 ---
 
