@@ -340,6 +340,15 @@ Implemented on `main`:
   (`scripts/rollback.sh`) follow ADR 0007/0008; scheduled verified backups
   (`scripts/backup-mongodb.sh` + systemd timer, manifest with per-collection counts,
   `restore-mongodb.sh --verify`). See `docs/release-engineering.md`.
+- **Docker Compose production stack (`deploy/compose/`) — landed.** Single-host deployment used
+  on the deploy host: Caddy TLS edge (`tyny.ca` → `www.tyny.ca`), Mongo/Redis/App/Prometheus
+  bound to loopback or the internal network, operator-BasicAuth Prometheus scrape, OTel
+  collector, and daily verified Mongo backups via user crontab. First run:
+  `cp deploy/compose/.env.example .env && chmod 600 .env && bash deploy/compose/bootstrap.sh`
+  (bootstrap renders the git-ignored `prometheus/operator_password` fail-closed; secrets are
+  never committed). Runbook: `docs/release-runbook.md` §1 → *Docker Compose deployment*;
+  local guide: `deploy/compose/README.md`. Continuous Deploy wiring (GHCR image, self-hosted
+  runner, `deploy.yml`) is tracked in `AGENTS.md` debt 41.
 
 > **Scope note adapted from the original README:** earlier revisions of this README overclaimed
 > (e.g. "invalid IDs never reach the database", persisted analytics). The documentation now reflects

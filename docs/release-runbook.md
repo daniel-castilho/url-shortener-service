@@ -48,10 +48,14 @@ client ──► [NGINX/Caddy :443] ──► url-shortener instances (HTTP, no 
 
 ## 1. Deploy a new version (production)
 
-The **sole supported production deployment path** is the blue-green deploy script
-which downloads the exact tested artifact from the GitHub Release, validates the
-full artifact chain (JAR, SHA256SUMS, RELEASE-PROVENANCE.txt, RELEASE-EVIDENCE.json
-against the committed schema), and performs a canary cutover.
+Two supported production paths:
+
+- **Bare metal (blue-green)** — the deploy script below, which downloads the exact tested
+  artifact from the GitHub Release, validates the full artifact chain (JAR, SHA256SUMS,
+  RELEASE-PROVENANCE.txt, RELEASE-EVIDENCE.json against the committed schema), and performs
+  a canary cutover.
+- **Docker Compose (current deploy host)** — single-host stack in `deploy/compose/`; see
+  *Docker Compose deployment* below.
 
 ```sh
 # 1. Ensure backing services are up
@@ -80,6 +84,48 @@ sudo bash scripts/deploy.sh vX.Y.Z --canary 5,25,50,100
 They are for development/testing only. Production deployments MUST use artifacts
 from the GitHub Release created by the CI pipeline (single-build, identity-verified
 per ADR 0008 / Epic 21).
+
+---
+
+### Docker Compose deployment (current deploy host)
+
+The current deploy host runs Docker Desktop (WSL2) with no application systemd units, so
+production there is the single-host stack in `deploy/compose/` (`docker-compose.prod.yaml`):
+Caddy publishes `:80`/`:443` (TLS, `tyny.ca` → `www.tyny.ca`), while Mongo, Redis, the app
+and Prometheus are bound to `127.0.0.1` or kept on the internal `172.28.0.0/16` network.
+Prometheus scrapes `/actuator/prometheus` with operator BasicAuth; daily verified Mongo
+backups run from the user crontab. Full local guide: `deploy/compose/README.md`.
+
+```sh
+cd deploy/compose
+
+# 1. First setup / after rotating OPERATOR_PASSWORD — fail-closed if .env is missing;
+#    renders the git-ignored prometheus/operator_password (never echoes secrets)
+bash bootstrap.sh
+
+# 2. Start / refresh the stack (image tag = APP_IMAGE_TAG in .env)
+docker compose -f docker-compose.prod.yaml up -d --build
+
+# 3. Status and logs
+docker compose -f docker-compose.prod.yaml ps
+docker compose -f docker-compose.prod.yaml logs -f app
+
+# 4. Rollback: redeploy a previous ref (until deploy.yml lands — AGENTS debt 41)
+git checkout <ref> && cd deploy/compose && bash bootstrap.sh && \
+  docker compose -f docker-compose.prod.yaml up -d --build
+```
+
+Post-deploy verification is the shared block below plus the Prometheus target check:
+
+```sh
+curl -s 'http://127.0.0.1:9090/api/v1/targets?state=active' | grep -o '"health":"[a-z]*"'
+```
+
+Note the **host mirror**: `GET /{id}` only resolves when the `Host` header equals
+`app.domain.default-host` (`www.tyny.ca`) — probing with `Host: 127.0.0.1` returns
+`404 Rejecting id=… on unbound host` by design. Public HTTPS requires the DNS prerequisite
+documented in `deploy/compose/README.md` before `bash scripts/smoke.sh https://www.tyny.ca`
+can pass.
 
 ---
 
