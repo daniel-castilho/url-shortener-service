@@ -17,7 +17,7 @@ are bound to `127.0.0.1` (backups, local debugging) or kept on the internal netw
 
 | File | Purpose |
 | --- | --- |
-| `docker-compose.prod.yaml` | The stack (build context = repository root) |
+| `docker-compose.prod.yaml` | The stack (app image pulled from GHCR — no local build) |
 | `Caddyfile` | TLS termination, `tyny.ca` → `www.tyny.ca`, Host passthrough |
 | `.env.example` | Committed template — copy to `.env` and fill in real values |
 | `.env` | **Secrets — chmod 600, git-ignored.** Never commit or copy into images |
@@ -27,13 +27,29 @@ are bound to `127.0.0.1` (backups, local debugging) or kept on the internal netw
 | `otel/otel-collector-config.yml` | OTLP receiver → tail sampling → `debug` exporter |
 | `backup.env` | `MONGODB_URI` for `scripts/backup-mongodb.sh` (git-ignored) |
 
+## Images: GHCR, never a local build
+
+The `app` service runs the **release image** published by the `release.yml` pipeline:
+`ghcr.io/<owner>/<repo>:<semver>` (e.g. `ghcr.io/daniel-castilho/url-shortener-service:0.16.0`),
+tagged with the release semver only. Compose pulls it with `pull_policy: always` and refuses to
+start if `APP_IMAGE_TAG` is unset — production never rebuilds (ADR 0008 single-build promotion).
+
+The pipeline publishes the package on the first `v*` tag. Until its **visibility is public**
+(the repository is public, so this is the intended setting — package *Settings → Change visibility*),
+the host must authenticate once to pull it:
+
+```bash
+docker login ghcr.io -u <github-user> --password-stdin   # PAT with read:packages
+```
+
 ## First-time setup
 
 ```bash
 cd deploy/compose
 cp .env.example .env && chmod 600 .env   # fill in every CHANGE_ME value
+# set APP_IMAGE_TAG to a release semver that exists in GHCR (see "Images" above)
 bash bootstrap.sh                        # fail-closed: renders operator_password
-docker compose -f docker-compose.prod.yaml up -d --build
+docker compose -f docker-compose.prod.yaml up -d
 ```
 
 `bootstrap.sh` is idempotent — re-run it after rotating `OPERATOR_PASSWORD`, then restart
@@ -48,15 +64,15 @@ docker compose -f docker-compose.prod.yaml kill -s SIGHUP prometheus
 ```bash
 # run from this directory
 bash bootstrap.sh                               # re-render operator_password (safe to re-run)
-docker compose -f docker-compose.prod.yaml up -d --build   # first deploy / rebuild
+docker compose -f docker-compose.prod.yaml up -d # deploy APP_IMAGE_TAG (pulls if changed)
 docker compose -f docker-compose.prod.yaml ps              # health of every service
 docker compose -f docker-compose.prod.yaml logs -f app     # application logs
 docker compose -f docker-compose.prod.yaml restart app     # restart after a config change
 docker compose -f docker-compose.prod.yaml down            # stop (volumes are kept)
 ```
 
-Rolling back to a previous build: `git checkout <ref> && docker compose -f
-docker-compose.prod.yaml up -d --build`.
+Deploying a new release: set `APP_IMAGE_TAG=<new-semver>` in `.env`, then `up -d`.
+Rolling back: set `APP_IMAGE_TAG=<previous-semver>` and `up -d` again.
 
 ## Required environment (`prod` profile)
 

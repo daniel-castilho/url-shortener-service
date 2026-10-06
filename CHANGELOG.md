@@ -22,6 +22,13 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
   synced.
 
 ### Added
+- **Release image published to GHCR (CD Phase 2)** — the `release.yml` `release` job now pushes
+  the exact image it verified (embedded jar == candidate, non-root gate, Trivy-clean, SBOM'd) to
+  `ghcr.io/<owner>/<repo>:<semver>` right after the scan gates, with `packages: write`, semver tag
+  only (`latest` never used) and the GHCR reference/digest recorded in the Release body. The
+  Compose production stack (`deploy/compose/`) now **pulls** that image (`pull_policy: always`,
+  `APP_IMAGE_TAG` required = release semver, fail-closed) and no longer builds locally, closing
+  the single-build promotion loop for containers (ADR 0008).
 - **Docker Compose production stack (`deploy/compose/`)** — committed single-host deployment for
   the deploy host (Docker Desktop/WSL2): Caddy TLS edge with `tyny.ca` → `www.tyny.ca` redirect,
   Mongo/Redis/App/Prometheus bound to loopback or the internal `172.28.0.0/16` network,
