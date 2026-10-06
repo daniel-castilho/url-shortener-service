@@ -1,0 +1,44 @@
+# OTel Collector config for the Docker Compose stack.
+#
+# Derived from deploy/otel/otel-collector-config.yml with the exporter hardcoded to
+# `debug` (no Tempo/Jaeger backend in this deployment): traces are received from the
+# app (OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318), tail-sampled (errors
+# always kept), then logged. Swap the exporters block for an `otlp` exporter pointing
+# at a real backend when one exists.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  tail_sampling:
+    decision_wait: 10s
+    num_traces: 10000
+    expected_new_traces_per_sec: 100
+    policies:
+      - name: keep-errors
+        type: status_code
+        status_code:
+          status_codes: [ERROR]
+      - name: keep-sampled
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 100
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+
+exporters:
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [tail_sampling, batch]
+      exporters: [debug]

@@ -5,7 +5,9 @@
 Adapters)** and **SOLID principles**.
 
 - **Repository:** `daniel-castilho/url-shortener-service`
-- **Deployment:** On-premises **bare metal** (MongoDB in Docker Compose); no cloud APIs.
+- **Deployment:** On-premises self-hosted, no cloud APIs. Production on the deploy host runs from
+  `deploy/compose/` (Docker Compose + Caddy edge); the bare-metal blue-green path
+  (`scripts/deploy.sh` + systemd + nginx) remains supported in `deploy/`.
 - **Runtime:** JVM (default) and GraalVM native image (`-Pnative`).
 
 Sources of truth: `README.md`, `pom.xml`, `src/main/resources/application.yaml`,
@@ -723,6 +725,17 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     custom-domains decision). Tests: `EdgeDomainAskControllerTest` (8, slice),
     `EdgeDomainAskIT` (6, real registry: ACTIVE/PENDING/default/unknown/token/revocation).
     — `resolved`
+
+41. **Continuous Deploy to the Docker Compose production target** — production on the deploy host
+    runs from `deploy/compose/` (single-host stack: Caddy edge, loopback-bound Mongo/Redis/App/
+    Prometheus, operator-BasicAuth scrape, daily verified Mongo backups via user crontab).
+    Landed: the stack is committed (`.env.example` + `bootstrap.sh`, which renders the
+    git-ignored `prometheus/operator_password` fail-closed), Dockerfile runtime fixes (writable
+    `/app/logs` for the non-root user, curl-free `wget` healthcheck), `main` protected with 6
+    required status checks, and the GitHub `production` environment (required reviewer,
+    protected-branches-only). Remaining: publish the release image to GHCR, register the
+    self-hosted runner, add `deploy.yml` (healthcheck + internal smoke + fail-closed rollback),
+    then staging and the Epic 25 metrics canary wiring on this target. — `in-progress`
 
 ## 🔍 Operational Discipline & Debugging Guidelines
 
