@@ -233,7 +233,9 @@ Security headers (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
 
 ## Current State
 
-**Latest tagged release: `v0.15.0`** (Release Artifact Identity & Promotion / Epic 21, 2026-10-01) · see
+**Latest tagged release: `v0.18.0`** (Continuous Deploy to the Compose production target —
+GHCR image promotion, `deploy.yml` + self-hosted runner, metrics-gated canary hardening /
+Epic 25 + auth refresh / custom-domain TLS, 2026-10-06) · see
 [CHANGELOG.md](CHANGELOG.md) for the full version history.
 
 Implemented on `main`:
