@@ -158,6 +158,11 @@ services:
     image: prom/prometheus:latest
     container_name: urlshortener-prometheus
     restart: unless-stopped
+    # The container runs as uid 65534 (nobody) but must read the 0640
+    # operator_password owned by the deploy user — grant its primary group
+    # (PROM_GID = `id -g`, checked fail-closed by bootstrap.sh) as supplementary.
+    group_add:
+      - "${PROM_GID:?PROM_GID required (id -g of the deploy user)}"
     depends_on:
       - app
     command:

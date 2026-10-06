@@ -111,23 +111,56 @@ docker compose -f docker-compose.prod.yaml up -d
 docker compose -f docker-compose.prod.yaml ps
 docker compose -f docker-compose.prod.yaml logs -f app
 
-# 4. Rollback: point APP_IMAGE_TAG at the previous release semver and re-up
-#    (until deploy.yml lands — AGENTS debt 41)
-#    sed -i 's/^APP_IMAGE_TAG=.*/APP_IMAGE_TAG=<previous-semver>/' .env && \
+# 4. Rollback: re-dispatch "Deploy (production)" with the previous semver, or
+#    do it by hand: sed -i 's/^APP_IMAGE_TAG=.*/APP_IMAGE_TAG=<previous-semver>/' .env && \
 #    docker compose -f docker-compose.prod.yaml up -d
 ```
 
-Post-deploy verification is the shared block below plus the Prometheus target check:
+Post-deploy verification is one command (8 business legs with the Host mirror,
+host-mirror negative, Prometheus target, and — when given — image identity):
+
+```sh
+bash scripts/smoke-compose.sh --expect-image ghcr.io/<owner>/<repo>:<semver>
+```
+
+Manual alternative for the Prometheus leg only:
 
 ```sh
 curl -s 'http://127.0.0.1:9090/api/v1/targets?state=active' | grep -o '"health":"[a-z]*"'
 ```
 
 Note the **host mirror**: `GET /{id}` only resolves when the `Host` header equals
-`app.domain.default-host` (`www.tyny.ca`) — probing with `Host: 127.0.0.1` returns
-`404 Rejecting id=… on unbound host` by design. Public HTTPS requires the DNS prerequisite
+`app.domain.default-host` (`www.tyny.ca`). Probing with the loopback `Host` returns the
+**generic** `404` body (`URL Not Found` — deliberately indistinguishable from a missing
+code, anti-enumeration) while the app log records
+`Rejecting id=… on unbound host <ip>`. Public HTTPS requires the DNS prerequisite
 documented in `deploy/compose/README.md` before `bash scripts/smoke.sh https://www.tyny.ca`
 can pass.
+
+#### Continuous Deploy — `deploy.yml` (Actions → production runner)
+
+Deploys are dispatched, never pushed from CI:
+
+1. **Trigger:** Actions → *Deploy (production)* → `workflow_dispatch` with `tag`
+   (`X.Y.Z`, no `v`). Only repo write access can dispatch it; the workflow never runs
+   on `pull_request` (public-repo hardening for the production runner).
+2. **Gate:** the `production` environment holds the run until the required reviewer
+   approves; `concurrency: deploy-production` serializes deploys (queued, never cancelled).
+3. **Runner:** self-hosted with labels `self-hosted, prod-host`, registered on the deploy
+   host (`DEPLOY_DIR` at the top of `deploy.yml` must point at the host's clean `main`
+   checkout — the preflight fails closed on a dirty or switched-branch checkout).
+4. **Steps:** validate semver → preflight (checkout clean/on `main`, `ff-only` pull,
+   `.env` keys, `docker compose config`) → `docker pull` the GHCR image (fail-closed if
+   the tag does not exist) → pin `APP_IMAGE_TAG` in the host `.env` →
+   `compose up -d --no-deps app --wait` → `scripts/smoke-compose.sh --expect-image <ref>`.
+5. **Rollback:** if anything after the pin fails, the run restores the previous
+   `APP_IMAGE_TAG`, re-ups the app and re-smokes it (fail-closed: the run stays red even
+   when the rollback succeeds). Preflight reports `rollback_supported=false` when the
+   previous tag has no GHCR image (first CD deploy has no rollback target).
+
+Until the first release tag exists on GHCR, the stack runs the legacy locally built
+image (`APP_IMAGE_TAG=prod` is unreachable via GHCR) — dispatch `deploy.yml` only after
+a `v*` release has published its image.
 
 ---
 
