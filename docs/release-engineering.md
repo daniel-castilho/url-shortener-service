@@ -76,12 +76,14 @@ Everything is **fail-closed**: a failed gate means no Release, and no Release me
   `run_id`, `run_attempt`, `jar`, `sha256` — plus `SHA256SUMS`. k6-gate, runtime-smoke,
   restore-drill and release download that **same-run** artifact and re-verify all identity fields
   and the SHA-256 before use (fail-closed; no fallback build anywhere).
-- The GitHub Release is the **only** promotion channel: jar + `SHA256SUMS` + `RELEASE-PROVENANCE.txt`
-  + CycloneDX SBOM. The release image is built from the downloaded candidate via single-stage
-  `Dockerfile.release` (never re-runs Maven); the embedded `app.jar` SHA-256 is extracted and
-  hash-compared to the candidate before the image is scanned/SBOM'd/published, and the image
-  digest/id is recorded in the Release body. `deploy.sh` resolves the jar by semver tag, never
-  "latest build" (ADR 0008), and `latest` is not used as release image identity.
+- Promotion channels are the GitHub Release (jar + `SHA256SUMS` + `RELEASE-PROVENANCE.txt`
+  + CycloneDX SBOM) and **GHCR** (the container image): the release image is built from the
+  downloaded candidate via single-stage `Dockerfile.release` (never re-runs Maven); the embedded
+  `app.jar` SHA-256 is extracted and hash-compared to the candidate before the image is scanned,
+  SBOM'd and pushed to `ghcr.io/<owner>/<repo>:<semver>` (after the Trivy gate, semver tag only),
+  and the image digest/id plus the GHCR reference are recorded in the Release body. `deploy.sh`
+  resolves the jar by semver tag and `deploy/compose/` resolves the image by `APP_IMAGE_TAG`,
+  never "latest build" (ADR 0008), and `latest` is not used as release image identity.
 
 ## 4. Deploy topology (blue-green) — summary
 

@@ -732,9 +732,12 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     Landed: the stack is committed (`.env.example` + `bootstrap.sh`, which renders the
     git-ignored `prometheus/operator_password` fail-closed), Dockerfile runtime fixes (writable
     `/app/logs` for the non-root user, curl-free `wget` healthcheck), `main` protected with 6
-    required status checks, and the GitHub `production` environment (required reviewer,
-    protected-branches-only). Remaining: publish the release image to GHCR, register the
-    self-hosted runner, add `deploy.yml` (healthcheck + internal smoke + fail-closed rollback),
+    required status checks, the GitHub `production` environment (required reviewer,
+    protected-branches-only), and the release image published to GHCR
+    (`ghcr.io/<owner>/<repo>:<semver>` from the `release` job; the Compose stack pulls it via
+    `APP_IMAGE_TAG` + `pull_policy: always`, never a local build).
+    Remaining: register the self-hosted runner,
+    add `deploy.yml` (healthcheck + internal smoke + fail-closed rollback),
     then staging and the Epic 25 metrics canary wiring on this target. — `in-progress`
 
 ## 🔍 Operational Discipline & Debugging Guidelines
