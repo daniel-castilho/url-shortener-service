@@ -10,8 +10,8 @@
 # bound to 127.0.0.1 (host-local debugging + backups) or kept on the internal network.
 # Secrets live in ./.env (chmod 600, git-ignored) — never commit it.
 #
-# Run from this directory:
-#   docker compose -f docker-compose.prod.yaml up -d --build
+# Run from this directory (APP_IMAGE_TAG in ./.env pins the release semver):
+#   docker compose -f docker-compose.prod.yaml up -d
 #   docker compose -f docker-compose.prod.yaml ps
 
 name: url-shortener-prod
@@ -67,12 +67,13 @@ services:
     logging: *default-logging
 
   app:
-    build:
-      context: ../..
-      dockerfile: Dockerfile
-      args:
-        VERSION: ${APP_VERSION:-0.0.0-compose}
-    image: url-shortener-service:${APP_IMAGE_TAG:-prod}
+    # Release image published by release.yml to GHCR — the SAME image whose embedded
+    # jar was hash-compared to the verified candidate and Trivy-scanned (ADR 0008).
+    # No local build here on purpose: production must never rebuild (single-build promotion).
+    # APP_IMAGE_TAG = release semver (e.g. 0.16.0); required, fail-closed so a typo cannot
+    # silently pull a wrong tag.
+    image: ghcr.io/daniel-castilho/url-shortener-service:${APP_IMAGE_TAG:?APP_IMAGE_TAG required (release semver)}
+    pull_policy: always
     container_name: urlshortener-app
     restart: unless-stopped
     depends_on:
