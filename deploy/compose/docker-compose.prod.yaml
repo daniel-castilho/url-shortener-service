@@ -1,0 +1,192 @@
+# Production stack for the URL Shortener Service (Docker Compose deployment).
+#
+# Topology (single host):
+#   internet -> caddy:80/443 (TLS, HSTS) -> app:8080 -> mongo:27017 + redis:6379
+#                                            |
+#                                            +-> otel-collector:4318 (traces, debug exporter)
+#   prometheus:9090 scrapes app:8080/actuator/prometheus (operator BasicAuth)
+#
+# Only Caddy publishes ports on the public interface. Mongo/Redis/App/Prometheus are
+# bound to 127.0.0.1 (host-local debugging + backups) or kept on the internal network.
+# Secrets live in ./.env (chmod 600, git-ignored) — never commit it.
+#
+# Run from this directory:
+#   docker compose -f docker-compose.prod.yaml up -d --build
+#   docker compose -f docker-compose.prod.yaml ps
+
+name: url-shortener-prod
+
+services:
+  mongo:
+    image: mongo:6.0
+    container_name: urlshortener-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD required}
+      MONGO_INITDB_DATABASE: ${MONGO_DB}
+      MONGO_APP_USER: ${MONGO_APP_USER}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD}
+      MONGO_APP_DB: ${MONGO_DB}
+    volumes:
+      - mongo-data:/data/db
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+    ports:
+      - "127.0.0.1:27017:27017"
+    healthcheck:
+      test:
+        ["CMD-SHELL", "mongosh -u \"$$MONGO_INITDB_ROOT_USERNAME\" -p \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --quiet --eval 'db.adminCommand(\"ping\").ok' | grep -q 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - urlshortener
+    logging: &default-logging
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  redis:
+    image: redis:alpine
+    container_name: urlshortener-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - urlshortener
+    logging: *default-logging
+
+  app:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${APP_VERSION:-0.0.0-compose}
+    image: url-shortener-service:${APP_IMAGE_TAG:-prod}
+    container_name: urlshortener-app
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      MONGODB_URI: mongodb://${MONGO_APP_USER}:${MONGO_APP_PASSWORD}@mongo:27017/${MONGO_DB}?authSource=${MONGO_DB}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      # Canonical public origin + strict host mirror (must match the Caddy site)
+      APP_PUBLIC_BASE_URL: https://www.tyny.ca
+      APP_DOMAIN_DEFAULT_HOST: www.tyny.ca
+      # Secrets / credentials (from ./.env)
+      APP_JWT_SECRET: ${APP_JWT_SECRET:?APP_JWT_SECRET required}
+      OPERATOR_USERNAME: ${OPERATOR_USERNAME}
+      OPERATOR_PASSWORD: ${OPERATOR_PASSWORD:?OPERATOR_PASSWORD required}
+      APP_ADMIN_EMAILS: ${APP_ADMIN_EMAILS:-}
+      # Prod profile contract (ProdConfigValidator)
+      APP_SECURITY_SWAGGER_ENABLED: "false"
+      HEALTH_SHOW_DETAILS: when-authorized
+      APP_ANALYTICS_RETENTION_DAYS: "90"
+      # Rate limiting — trust only the Caddy container network
+      RATE_LIMITER_TRUSTED_PROXY_CIDRS: "172.28.0.0/16,127.0.0.0/8"
+      RATE_LIMITER_CLIENT_IP_HEADER: X-Forwarded-For
+      # Tracing → in-stack collector (debug exporter; swap for Tempo/Jaeger later)
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      # Custom domains / on-demand TLS are NOT enabled on this deployment
+      EDGE_ASK_TOKEN: ${EDGE_ASK_TOKEN:-}
+      JAVA_OPTS: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=40.0 -XX:+UseG1GC"
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      # logback FILE appender (logs/application.log, rolled: 100MB x 14 days / 2GB cap)
+      - app-logs:/app/logs
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/actuator/health/liveness || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+    networks:
+      - urlshortener
+    logging: *default-logging
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: urlshortener-caddy
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - urlshortener
+    logging: *default-logging
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: urlshortener-otel
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yml"]
+    volumes:
+      - ./otel/otel-collector-config.yml:/etc/otelcol/config.yml:ro
+    ports:
+      - "127.0.0.1:4318:4318"
+      - "127.0.0.1:4317:4317"
+    networks:
+      - urlshortener
+    logging: *default-logging
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: urlshortener-prometheus
+    restart: unless-stopped
+    depends_on:
+      - app
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+      - --storage.tsdb.retention.time=30d
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/recording-rules.yml:/etc/prometheus/recording-rules.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./prometheus/operator_password:/etc/prometheus/operator_password:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks:
+      - urlshortener
+    logging: *default-logging
+
+networks:
+  urlshortener:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  mongo-data:
+  redis-data:
+  caddy-data:
+  caddy-config:
+  prometheus-data:
+  app-logs:

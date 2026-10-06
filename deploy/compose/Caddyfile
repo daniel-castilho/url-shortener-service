@@ -1,0 +1,45 @@
+# Caddy TLS termination for the URL Shortener Service (Docker Compose deployment).
+#
+#   internet -> :80/:443 (Caddy, ACME/Let's Encrypt) -> app:8080 (internal network)
+#
+# - www.tyny.ca  : canonical host, serves the API (APP_PUBLIC_BASE_URL / APP_DOMAIN_DEFAULT_HOST)
+# - tyny.ca      : 301 to www (the app mirrors redirects by Host, so a single canonical
+#                  host keeps domain-less links resolvable)
+# - custom domains / on-demand TLS are NOT enabled here (EDGE_ASK_TOKEN is empty in the
+#   stack => the app's ask endpoint fails closed). Add the catch-all block later if needed
+#   (see deploy/proxy/Caddyfile).
+#
+# ACME email is a placeholder — replace ops@tyny.ca before relying on expiry notices.
+
+{
+	email ops@tyny.ca
+}
+
+# Apex → canonical www (permanent)
+tyny.ca {
+	redir https://www.tyny.ca{uri} permanent
+}
+
+www.tyny.ca {
+	# Only HSTS here: X-Content-Type-Options / X-Frame-Options / Referrer-Policy are
+	# already applied globally by Spring Security, so re-issuing them would duplicate
+	# every response header.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+
+	reverse_proxy app:8080 {
+		# Preserve the public Host: the app serves domain-less links only for
+		# app.domain.default-host and enforces the strict host mirror for custom domains.
+		header_up Host {host}
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+
+		transport http {
+			dial_timeout 5s
+			read_timeout 30s
+			write_timeout 10s
+		}
+	}
+}
