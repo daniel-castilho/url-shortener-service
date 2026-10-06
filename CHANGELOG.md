@@ -7,6 +7,8 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-10-06
+
 ### Fixed
 - **Prometheus could not read its operator password (Compose production)** — the rendered
   `prometheus/operator_password` was mode `0600` owned by the deploy user (uid 1000) while the

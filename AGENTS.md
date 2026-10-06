@@ -743,8 +743,10 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     (`scripts/smoke-compose.sh`: business legs with Host mirror + mirror negative + Prometheus
     target + image identity), `smoke.sh`'s optional Host-header arg, and the Prometheus
     scrape-permission fix (`operator_password` 0640 + compose `group_add: PROM_GID`,
-    fail-closed in `bootstrap.sh`).
-    Remaining: register the self-hosted runner on the deploy host,
+    fail-closed in `bootstrap.sh`). The self-hosted runner `prod-host-wsl2`
+    (labels `self-hosted, linux, x64, prod-host`) is registered, online and runs as a
+    systemd service on the deploy host.
+    Remaining: the first production deploy via `deploy.yml` once a GHCR-backed tag exists,
     then staging and the Epic 25 metrics canary wiring on this target. — `in-progress`
 
 ## 🔍 Operational Discipline & Debugging Guidelines
