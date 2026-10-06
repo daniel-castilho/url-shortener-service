@@ -123,3 +123,12 @@ restore is hope" — the drill is the proof, and its manifests are the deliverab
 Operator procedures (deploy, rollback, pre-release checklist, post-deploy verification,
 incident "deploy failed") live in `docs/release-runbook.md` §1/§2/§7 — this document is the
 contract, the runbook is the hands-on procedure.
+
+For the **Docker Compose production target** on the deploy host the deploy step is not
+`deploy.sh`: it is the manual dispatch of the `deploy.yml` workflow (GHCR semver input →
+`production`-environment approval → self-hosted `prod-host` runner → preflight → pull →
+pin `APP_IMAGE_TAG` → health-gated `compose up` → `scripts/smoke-compose.sh` → fail-closed
+rollback to the previous tag). Its step × failure contract is specified in
+`docs/release-runbook.md` §*Continuous Deploy*; the fail-closed chain above still holds —
+no Release means no GHCR tag, and `docker pull` aborts the deploy before anything is
+replaced.

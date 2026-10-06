@@ -52,8 +52,10 @@ bash bootstrap.sh                        # fail-closed: renders operator_passwor
 docker compose -f docker-compose.prod.yaml up -d
 ```
 
-`bootstrap.sh` is idempotent — re-run it after rotating `OPERATOR_PASSWORD`, then restart
-Prometheus so it picks up the new file:
+`bootstrap.sh` is idempotent — it renders `prometheus/operator_password` mode `0640`
+and fail-closes unless `PROM_GID` in `.env` matches `id -g`: compose grants that group to
+the Prometheus container (`group_add`, uid 65534) so it can read the file. Re-run it after
+rotating `OPERATOR_PASSWORD`, then restart Prometheus so it picks up the new file:
 
 ```bash
 docker compose -f docker-compose.prod.yaml kill -s SIGHUP prometheus
@@ -72,6 +74,9 @@ docker compose -f docker-compose.prod.yaml down            # stop (volumes are k
 ```
 
 Deploying a new release: set `APP_IMAGE_TAG=<new-semver>` in `.env`, then `up -d`.
+Normally you don't do that by hand — Actions → **Deploy (production)** dispatches
+`deploy.yml`, which pins the tag, re-ups the app and runs the full smoke suite
+(contract in `docs/release-runbook.md` §Continuous Deploy).
 Rolling back: set `APP_IMAGE_TAG=<previous-semver>` and `up -d` again.
 
 ## Required environment (`prod` profile)
@@ -92,15 +97,20 @@ Regenerate any secret with `openssl rand -base64 48` and restart the app contain
 # shorten, redirect, HEAD, 404, 410)
 bash scripts/smoke.sh https://www.tyny.ca
 
+# full production check: the 8 legs + host-mirror negative + Prometheus target
+# (+ image identity with --expect-image ghcr.io/<owner>/<repo>:<semver>)
+bash scripts/smoke-compose.sh
+
 # operator-only observability endpoints
 curl -u "$OPERATOR_USERNAME:$OPERATOR_PASSWORD" http://127.0.0.1:8080/actuator/prometheus | head
 curl -s http://127.0.0.1:9090/api/v1/targets?state=active | grep -o '"health":"[a-z]*"'
 ```
 
 Note: the redirect path enforces a **host mirror** — a link only resolves when the
-`Host` header equals `app.domain.default-host` (`www.tyny.ca`). Requests to
-`http://127.0.0.1:8080/<code>` return `404 Rejecting id=… on unbound host`, which is
-correct behaviour, not a bug.
+`Host` header equals `app.domain.default-host` (`www.tyny.ca`). A request with any other
+`Host` gets the **generic** `404` body, deliberately indistinguishable from a missing code
+(anti-enumeration); the exact reason (`Rejecting id=… on unbound host <ip>`) appears only
+in `docker logs urlshortener-app`. Correct behaviour, not a bug.
 
 ## TLS / DNS prerequisite
 
