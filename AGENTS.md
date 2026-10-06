@@ -735,9 +735,16 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     required status checks, the GitHub `production` environment (required reviewer,
     protected-branches-only), and the release image published to GHCR
     (`ghcr.io/<owner>/<repo>:<semver>` from the `release` job; the Compose stack pulls it via
-    `APP_IMAGE_TAG` + `pull_policy: always`, never a local build).
-    Remaining: register the self-hosted runner,
-    add `deploy.yml` (healthcheck + internal smoke + fail-closed rollback),
+    `APP_IMAGE_TAG` + `pull_policy: always`, never a local build). CD wiring landed:
+    `deploy.yml` (manual dispatch of a GHCR semver → `production`-environment approval →
+    self-hosted `prod-host` runner → preflight → pull → pin `APP_IMAGE_TAG` → health-gated
+    `compose up --wait` → `scripts/smoke-compose.sh` 11 legs incl. image identity →
+    fail-closed rollback to the previous tag), the smoke suite itself
+    (`scripts/smoke-compose.sh`: business legs with Host mirror + mirror negative + Prometheus
+    target + image identity), `smoke.sh`'s optional Host-header arg, and the Prometheus
+    scrape-permission fix (`operator_password` 0640 + compose `group_add: PROM_GID`,
+    fail-closed in `bootstrap.sh`).
+    Remaining: register the self-hosted runner on the deploy host,
     then staging and the Epic 25 metrics canary wiring on this target. — `in-progress`
 
 ## 🔍 Operational Discipline & Debugging Guidelines
