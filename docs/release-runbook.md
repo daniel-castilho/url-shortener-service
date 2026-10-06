@@ -103,16 +103,18 @@ cd deploy/compose
 #    renders the git-ignored prometheus/operator_password (never echoes secrets)
 bash bootstrap.sh
 
-# 2. Start / refresh the stack (image tag = APP_IMAGE_TAG in .env)
-docker compose -f docker-compose.prod.yaml up -d --build
+# 2. Start / refresh the stack — APP_IMAGE_TAG in .env pins the GHCR release semver
+#    (ghcr.io/<owner>/<repo>:<semver>, pull_policy: always; unset tag = fail-closed)
+docker compose -f docker-compose.prod.yaml up -d
 
 # 3. Status and logs
 docker compose -f docker-compose.prod.yaml ps
 docker compose -f docker-compose.prod.yaml logs -f app
 
-# 4. Rollback: redeploy a previous ref (until deploy.yml lands — AGENTS debt 41)
-git checkout <ref> && cd deploy/compose && bash bootstrap.sh && \
-  docker compose -f docker-compose.prod.yaml up -d --build
+# 4. Rollback: point APP_IMAGE_TAG at the previous release semver and re-up
+#    (until deploy.yml lands — AGENTS debt 41)
+#    sed -i 's/^APP_IMAGE_TAG=.*/APP_IMAGE_TAG=<previous-semver>/' .env && \
+#    docker compose -f docker-compose.prod.yaml up -d
 ```
 
 Post-deploy verification is the shared block below plus the Prometheus target check:
@@ -484,7 +486,9 @@ and one and only one `./mvnw verify -Drevision=<semver>` run produces the releas
    via the single-stage `Dockerfile.release` (copies the candidate as `app.jar`; no Maven), proves
    the image-embedded JAR SHA-256 equals the candidate's (extract + hash-compare, fail-closed),
    non-root gate + Trivy HIGH/CRITICAL SHA-pinned + CycloneDX SBOM on that image, records the
-   image digest/id, and creates the GitHub Release **as a draft** with assets:
+   image digest/id, **pushes that same image to GHCR**
+   (`ghcr.io/<owner>/<repo>:<semver>`, `packages: write`, semver tag only — only after every scan
+   gate passes), and creates the GitHub Release **as a draft** with assets:
    - `url-shortener-service-<semver>.jar` (the exact tested candidate; the only JAR ever published)
    - `SHA256SUMS` (sha256 of the jar, relative-path format for `sha256sum -c` and `deploy.sh` grep)
    - `RELEASE-PROVENANCE.txt` (full provenance: tag, semver, source commit, run id/attempt, jar, sha256)
@@ -495,7 +499,9 @@ Artifact promotion is **single-build and identity-checked at every hop**: the ja
 and exercise, and each hop cross-checks repository, tag, source commit, run id, semver, filename
 and SHA-256. There is never a fallback build. `deploy.sh <tag>` downloads the jar from the
 Release, verifies the sha256 against `SHA256SUMS`, and stages it — a local rebuild is never a
-deploy source.
+deploy source. The **same rule holds for containers**: the Compose production stack pulls only the
+GHCR image the `release` job published (`deploy/compose/`, `APP_IMAGE_TAG` = release semver,
+`pull_policy: always`), and never builds locally.
 
 ### Draft → finalizer → publish (Epic 22 — machine-generated release evidence)
 
