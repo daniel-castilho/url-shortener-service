@@ -745,9 +745,10 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     scrape-permission fix (`operator_password` 0640 + compose `group_add: PROM_GID`,
     fail-closed in `bootstrap.sh`). The self-hosted runner `prod-host-wsl2`
     (labels `self-hosted, linux, x64, prod-host`) is registered, online and runs as a
-    systemd service on the deploy host.
-    Remaining: the first production deploy via `deploy.yml` once a GHCR-backed tag exists,
-    then staging and the Epic 25 metrics canary wiring on this target. — `in-progress`
+    systemd service on the deploy host; the first CD deploy went end-to-end on `v0.18.0`
+    (2026-10-06: GHCR image promoted from the single build, `APP_IMAGE_TAG=0.18.0` pinned,
+    11-leg smoke + image identity verified live).
+    Remaining: staging and the Epic 25 metrics canary wiring on this target. — `in-progress`
 
 ## 🔍 Operational Discipline & Debugging Guidelines
 

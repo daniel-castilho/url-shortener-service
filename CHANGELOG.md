@@ -56,9 +56,8 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
   crontab. Ships a committed `.env.example` (placeholders) and an idempotent `bootstrap.sh` that
   renders the git-ignored `prometheus/operator_password` fail-closed — real secrets stay out of
   git. Documented in `docs/release-runbook.md` §1 → *Docker Compose deployment*,
-  `deploy/compose/README.md`, `README.md` (Current State) and `AGENTS.md` debt 41, which tracks
-  the remaining Continuous Deploy wiring (release image to GHCR, self-hosted runner,
-  `deploy.yml` with healthcheck/smoke/rollback).
+  `deploy/compose/README.md`, `README.md` (Current State) and `AGENTS.md` debt 41
+  (Continuous Deploy tracking).
 - **Swagger on by default in dev/staging, disabled only in `prod`** — base `application.yaml`
   enables it (`${APP_SECURITY_SWAGGER_ENABLED:true}`), the new `application-prod.yaml` sets the
   prod default to `false`, and `ProdConfigValidator` makes prod boot **fail-closed** if Swagger is
