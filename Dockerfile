@@ -34,8 +34,11 @@ LABEL org.opencontainers.image.description="High-performance link-shortening API
 LABEL org.opencontainers.image.source="https://github.com/daniel-castilho/url-shortener-service"
 LABEL org.opencontainers.image.licenses="MIT"
 
-# Create non-root user for security
-RUN addgroup -S spring && adduser -S spring -G spring
+# Create non-root user for security and a writable log dir (logback's FILE appender
+# writes logs/application.log relative to the workdir; without this the non-root user
+# cannot create it and the JVM aborts during logging initialization).
+RUN addgroup -S spring && adduser -S spring -G spring \
+    && mkdir -p /app/logs && chown -R spring:spring /app
 USER spring:spring
 
 # Copy JAR from build stage
@@ -44,9 +47,10 @@ COPY --from=build /app/target/*.jar app.jar
 # Expose port
 EXPOSE 8080
 
-# Health check - use curl which is available in the base image
+# Health check - busybox wget ships with the alpine base image (curl is NOT present,
+# and the check runs as the non-root user)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
-  CMD curl -fsS http://localhost:8080/actuator/health/liveness || exit 1
+  CMD wget -q -O /dev/null http://localhost:8080/actuator/health/liveness || exit 1
 
 # JVM optimization flags
 ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+UseG1GC"
