@@ -441,6 +441,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      packages: write
     steps:
       - uses: actions/checkout@v7
         with:
@@ -552,6 +553,26 @@ jobs:
           output: 'sbom-url-shortener-${{ steps.extract-tag.outputs.semver }}.json'
           scanners: 'vuln'
 
+      # CD (AGENTS debt 41): publish the SAME image the gates above proved
+      # (embedded jar == verified candidate, non-root, Trivy-clean) to GHCR.
+      # Pushed only after every scan gate passes — a failed scan never reaches GHCR.
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Push release image to GHCR
+        id: ghcr
+        run: |
+          set -euo pipefail
+          SEMVER="${{ steps.extract-tag.outputs.semver }}"
+          # GHCR image references must be lowercase; GITHUB_REPOSITORY is the canonical name.
+          REF="ghcr.io/${GITHUB_REPOSITORY,,}:${SEMVER}"
+          docker tag "url-shortener:${SEMVER}" "$REF"
+          docker push "$REF"
+          DIGEST="$(docker image inspect --format '{{index .RepoDigests 0}}' "$REF")"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+          echo "Pushed $REF ($DIGEST)"
+
       - name: Re-pin release asset hashes to the verified candidate
         id: asset-hashes
         run: |
@@ -610,6 +631,8 @@ jobs:
             | JAR SHA-256 | `${{ steps.asset-hashes.outputs.jar_sha }}` |
             | Image digest | ${{ steps.image-id.outputs.digest }} |
             | Image id | ${{ steps.image-id.outputs.image_id }} |
+            | GHCR image | `${{ steps.ghcr.outputs.ref }}` |
+            | GHCR digest | `${{ steps.ghcr.outputs.digest }}` |
 
             Full provenance: `RELEASE-PROVENANCE.txt`. Verify the JAR with
             `sha256sum -c SHA256SUMS` (asset `RELEASE-SHA256SUMS` on the deployment
