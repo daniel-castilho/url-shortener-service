@@ -8,6 +8,12 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 ## [Unreleased]
 
 ### Fixed
+- **Prometheus could not read its operator password (Compose production)** — the rendered
+  `prometheus/operator_password` was mode `0600` owned by the deploy user (uid 1000) while the
+  Prometheus container runs as uid 65534, so every scrape failed with
+  `unable to read basic auth password` and the `url-shortener` target stayed down.
+  `bootstrap.sh` now renders the file `0640` and fail-closes unless `PROM_GID` in `.env`
+  matches `id -g`; the Compose `prometheus` service gains `group_add: ["${PROM_GID}"]`.
 - **Container runtime fixes in `Dockerfile`** — the runtime stage now creates a writable
   `/app/logs` owned by the non-root `spring` user (logback's FILE appender aborted the JVM at
   boot with `Failed to create parent directories for [/app/logs/application.log]`) and the
@@ -22,6 +28,18 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
   synced.
 
 ### Added
+- **Continuous Deploy to the Compose production target (CD Phase 3)** — new `deploy.yml`
+  workflow: manual dispatch of a GHCR semver, gated by the `production` environment
+  (required reviewer) and serialized by a `deploy-production` concurrency group, runs only on
+  the self-hosted `prod-host` runner (never on `pull_request`, public-repo hardening). It
+  fail-closes on a dirty/non-`main` host checkout, invalid `.env` or missing GHCR tag, pins
+  `APP_IMAGE_TAG`, recreates the app with `compose up --wait`, verifies with the new
+  `scripts/smoke-compose.sh` (8 business legs with Host mirror + host-mirror negative + Prometheus
+  target + image identity via `--expect-image`) and automatically rolls back to the previous
+  tag if anything after the pin fails (run stays red either way). `smoke.sh` gained an optional
+  third argument (Host header) for the loopback/mirror legs; `actionlint` config registers the
+  `prod-host` runner label; docs synced (`release-runbook.md` §Continuous Deploy,
+  `release-engineering.md`, `deploy/compose/README.md`).
 - **Release image published to GHCR (CD Phase 2)** — the `release.yml` `release` job now pushes
   the exact image it verified (embedded jar == candidate, non-root gate, Trivy-clean, SBOM'd) to
   `ghcr.io/<owner>/<repo>:<semver>` right after the scan gates, with `packages: write`, semver tag
