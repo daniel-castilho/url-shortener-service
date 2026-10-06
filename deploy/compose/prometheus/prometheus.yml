@@ -1,0 +1,34 @@
+# Prometheus config for the Docker Compose production stack (single app instance).
+#
+# Scrapes the app's /actuator/prometheus with the infrastructure operator BasicAuth
+# (OPERATOR_USERNAME / OPERATOR_PASSWORD -> app.security.operator.*). The username is
+# rendered literally here; the password comes from a file (mounted read-only, chmod 600).
+# Rotation = replace operator_password + `docker compose kill -s SIGHUP prometheus`.
+#
+# rule_files are mounted next to this file under /etc/prometheus/.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - recording-rules.yml
+  - alerts.yml
+
+scrape_configs:
+  - job_name: url-shortener
+    metrics_path: /actuator/prometheus
+    scrape_interval: 15s
+    honor_labels: false
+    basic_auth:
+      username: metrics-ops
+      password_file: /etc/prometheus/operator_password
+    static_configs:
+      - targets: ["app:8080"]
+        labels:
+          application: url-shortener
+          environment: production
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

@@ -1,0 +1,98 @@
+# Burn-rate alerting for the availability SLO (99.9%, 30d window,
+# error budget = 0.001). Burn rate = error_ratio / error_budget.
+#   Fast burn: consumes >2% of budget in 1h  -> rate ~14.4x budget.
+#   Slow burn: consumes >5% of budget in 6h  -> rate ~6x budget.
+# Multi-window: alert only when the long window AND a shorter burst window
+# both indicate the burn, to tolerate brief traffic spikes.
+groups:
+  - name: url-shortener-alerts
+    rules:
+      - alert: SLOAvailabilityFastBurn
+        expr: |
+          (
+            sum(rate(http_server_requests_seconds_count{status=~"5.."}[1h]))
+            / sum(rate(http_server_requests_seconds_count[1h]))
+          ) > 0.001 * 14.4
+          and on()
+          (
+            sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+            / sum(rate(http_server_requests_seconds_count[5m]))
+          ) > 0.001 * 14.4
+          and sum(rate(http_server_requests_seconds_count[5m])) > 0
+        for: 2m
+        labels:
+          severity: critical
+          slo: availability
+        annotations:
+          summary: "Availability SLO fast burn — error budget being consumed at 14.4x rate (>2% of the 30d budget in 1h)"
+          description: "Error ratio over 1h ({{ $value | humanizePercentage }}) exceeds the fast-burn threshold. Investigate immediately."
+          runbook: "docs/slos.md §Response runbook"
+          runbook_fast_burn: "docs/slos.md — 'Fast burn' row: check p50/p95/p99 + error-rate panels, inspect logging/application.log, health-check MongoDB/Redis, consider rollback."
+
+      - alert: SLOAvailabilitySlowBurn
+        expr: |
+          (
+            sum(rate(http_server_requests_seconds_count{status=~"5.."}[6h]))
+            / sum(rate(http_server_requests_seconds_count[6h]))
+          ) > 0.001 * 6
+          and on()
+          (
+            sum(rate(http_server_requests_seconds_count{status=~"5.."}[30m]))
+            / sum(rate(http_server_requests_seconds_count[30m]))
+          ) > 0.001 * 6
+          and sum(rate(http_server_requests_seconds_count[30m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+          slo: availability
+        annotations:
+          summary: "Availability SLO slow burn — error budget being consumed at 6x rate (>5% of the 30d budget in 6h)"
+          description: "Error ratio over 6h ({{ $value | humanizePercentage }}) exceeds the slow-burn threshold. Plan investigation."
+          runbook: "docs/slos.md §Response runbook"
+          runbook_slow_burn: "docs/slos.md — 'Slow burn' row: scheduled investigation; correlate with deploy timeline (CHANGELOG) and k6 baseline (docs/load-test-baseline.md)."
+
+      - alert: SLOErrorBudgetExhausted
+        expr: |
+          slo:url_shortener:availability_budget_remaining_30d == 0
+        for: 30m
+        labels:
+          severity: critical
+          slo: availability
+        annotations:
+          summary: "Availability SLO error budget exhausted for the 30d window"
+          description: "The 99.9% availability SLO cannot be met this window. Execute the response runbook (docs/slos.md)."
+          runbook: "docs/slos.md §Response runbook"
+          runbook_budget_exhausted: "docs/slos.md — 'Budget exhausted' row: emergency, treat as incident, freeze deploys, add capacity or fix defect."
+
+      - alert: RedirectLatencyP99AboveSLO
+        expr: |
+          redirect_latency_seconds{quantile="0.99", operation="redirect"} > 0.2
+          and on()
+          sum(rate(redirects_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+          slo: latency
+        annotations:
+          summary: "Redirect p99 latency above the 200ms SLO target"
+          description: "p99 redirect latency is {{ $value | humanize }}s (target < 0.2s) while redirect traffic is flowing (traffic guard: no alert on idle windows)."
+          runbook: "docs/slos.md §Response runbook"
+          runbook_latency: "docs/slos.md — 'Latency p99' row: check the latency dashboard (redirect_latency_seconds + url_retrieval_duration_seconds p99), inspect the cache hit ratio (cache_hits_total / cache_misses_total), correlate with the deploy timeline (CHANGELOG) and the k6 baseline (docs/load-test-baseline.md), consider rollback if a recent deploy introduced it."
+
+      - alert: RateLimitExcessiveTrafficRejected
+        expr: |
+          sum(rate(rate_limit_exceeded_total[5m]))
+          / (
+            sum(rate(rate_limit_exceeded_total[5m]))
+            + sum(rate(redirects_total[5m]))
+            + sum(rate(urls_shortened_total[5m]))
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          slo: rate-limit
+        annotations:
+          summary: "Rate limiter rejecting >5% of all traffic"
+          description: "Share of requests rejected by the rate limiter is {{ $value | humanizePercentage }} (threshold 5%) — enumeration/abuse signal (EP7 anti-enumeration posture)."
+          runbook: "docs/slos.md §Response runbook"
+          runbook_rate_limit: "docs/slos.md — 'Rate-limit rejections' row: inspect top clients by IP (rl:redirect:* buckets), verify RATE_LIMITER_* configuration, check bloomfilter_rejections_total for cache-penetration probing, treat as possible enumeration attack."
