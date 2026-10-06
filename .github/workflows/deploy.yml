@@ -1,0 +1,149 @@
+name: Deploy (Compose production)
+
+# Continuous Deploy to the single-host Docker Compose stack (AGENTS debt 41).
+# Runs ONLY on this repository's self-hosted runner (labels self-hosted, prod-host)
+# on the deploy host, and ONLY via manual dispatch — never on pull_request (public
+# repository hardening: an untrusted ref can never reach the production runner).
+#
+# Path: validate tag -> preflight host checkout -> pull GHCR image -> pin
+# APP_IMAGE_TAG in the host .env -> compose up (app only, --wait) -> smoke-compose
+# (11 legs: business + host mirror + Prometheus + image identity) -> on failure
+# fail-closed rollback to the previous APP_IMAGE_TAG.
+#
+# The `production` environment gates the job with a required reviewer.
+# Contract: docs/release-runbook.md §Docker Compose deployment.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release semver to deploy (GHCR image tag, e.g. 0.16.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  DEPLOY_DIR: /home/daniel/projects/urlshortener/url-shortener-service
+  COMPOSE: docker compose -f deploy/compose/docker-compose.prod.yaml
+  IMAGE_REPO: ghcr.io/daniel-castilho/url-shortener-service
+
+jobs:
+  deploy:
+    name: Deploy to production
+    runs-on: [self-hosted, prod-host]
+    environment: production
+    timeout-minutes: 30
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Validate tag input
+        id: input
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$TAG" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "FAIL: tag '$TAG' is not a X.Y.Z semver (deploy.yml input contract)" >&2
+            exit 1
+          fi
+          REF="$IMAGE_REPO:$TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+          echo "Deploying $REF"
+
+      - name: Preflight (host checkout clean on main, .env intact, compose valid)
+        id: preflight
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_DIR"
+          BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+          [ "$BRANCH" = "main" ] || { echo "FAIL: host checkout on '$BRANCH', expected main" >&2; exit 1; }
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "FAIL: host checkout is dirty — commit/stash before deploying:" >&2
+            git status --short >&2
+            exit 1
+          fi
+          git pull --ff-only
+          grep -q '^APP_IMAGE_TAG=' deploy/compose/.env \
+            || { echo "FAIL: APP_IMAGE_TAG missing in deploy/compose/.env" >&2; exit 1; }
+          grep -q '^PROM_GID=' deploy/compose/.env \
+            || { echo "FAIL: PROM_GID missing in deploy/compose/.env (see .env.example)" >&2; exit 1; }
+          $COMPOSE config --quiet
+          PREV_TAG="$(grep '^APP_IMAGE_TAG=' deploy/compose/.env | tail -1 | cut -d= -f2-)"
+          # Rollback re-pulls the previous image — verify it is reachable beforehand
+          # (never fails the deploy itself; a first CD deploy has no rollback target).
+          ROLLBACK="true"
+          if [ -z "$PREV_TAG" ] || ! docker manifest inspect "$IMAGE_REPO:$PREV_TAG" >/dev/null 2>&1; then
+            ROLLBACK="false"
+          fi
+          echo "prev_tag=$PREV_TAG" >> "$GITHUB_OUTPUT"
+          echo "rollback_supported=$ROLLBACK" >> "$GITHUB_OUTPUT"
+          echo "Previous: APP_IMAGE_TAG=$PREV_TAG (rollback_supported=$ROLLBACK)"
+
+      - name: Pull release image (fail-closed if the tag does not exist)
+        run: |
+          set -euo pipefail
+          docker pull "${{ steps.input.outputs.ref }}"
+
+      - name: Pin APP_IMAGE_TAG in host .env
+        id: pin
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_DIR"
+          sed -i "s|^APP_IMAGE_TAG=.*|APP_IMAGE_TAG=$TAG|" deploy/compose/.env
+          grep -qx "APP_IMAGE_TAG=$TAG" deploy/compose/.env \
+            || { echo "FAIL: APP_IMAGE_TAG not updated in deploy/compose/.env" >&2; exit 1; }
+          echo "Pinned APP_IMAGE_TAG=$TAG"
+
+      - name: Recreate app from the release image (health-gated)
+        id: up
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_DIR"
+          $COMPOSE up -d --no-deps app --wait --wait-timeout 180
+
+      - name: Smoke (business legs + host mirror + Prometheus + image identity)
+        id: smoke
+        run: bash scripts/smoke-compose.sh --expect-image "${{ steps.input.outputs.ref }}"
+
+      - name: Rollback to previous APP_IMAGE_TAG (fail-closed)
+        if: failure() && steps.pin.outcome == 'success'
+        env:
+          PREV: ${{ steps.preflight.outputs.prev_tag }}
+        run: |
+          set -euo pipefail
+          cd "$DEPLOY_DIR"
+          echo "ROLLBACK: restoring APP_IMAGE_TAG=$PREV"
+          sed -i "s|^APP_IMAGE_TAG=.*|APP_IMAGE_TAG=$PREV|" deploy/compose/.env
+          grep -qx "APP_IMAGE_TAG=$PREV" deploy/compose/.env \
+            || { echo "ROLLBACK FAILED: could not restore APP_IMAGE_TAG" >&2; exit 1; }
+          if ! $COMPOSE up -d --no-deps app --wait --wait-timeout 180; then
+            echo "ROLLBACK FAILED: compose up of $PREV did not become healthy" >&2
+            exit 1
+          fi
+          if bash scripts/smoke-compose.sh; then
+            echo "ROLLBACK OK: previous release $PREV is serving again"
+          else
+            echo "ROLLBACK DEGRADED: $PREV is up but smoke failed — manual intervention required" >&2
+            exit 1
+          fi
+
+      - name: Deploy summary
+        if: always()
+        run: |
+          {
+            echo "### Deploy ${{ steps.input.outputs.tag }}"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Image | \`${{ steps.input.outputs.ref }}\` |"
+            echo "| Previous tag | \`${{ steps.preflight.outputs.prev_tag }}\` |"
+            echo "| Rollback supported | ${{ steps.preflight.outputs.rollback_supported }} |"
+            echo "| Result | ${{ job.status }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
