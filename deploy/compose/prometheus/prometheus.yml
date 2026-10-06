@@ -2,7 +2,8 @@
 #
 # Scrapes the app's /actuator/prometheus with the infrastructure operator BasicAuth
 # (OPERATOR_USERNAME / OPERATOR_PASSWORD -> app.security.operator.*). The username is
-# rendered literally here; the password comes from a file (mounted read-only, chmod 600).
+# rendered literally here; the password comes from a file (mounted read-only, 0640,
+# group-readable via `group_add: PROM_GID` — the container runs as uid 65534).
 # Rotation = replace operator_password + `docker compose kill -s SIGHUP prometheus`.
 #
 # rule_files are mounted next to this file under /etc/prometheus/.
