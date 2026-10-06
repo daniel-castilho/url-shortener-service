@@ -8,6 +8,11 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 ## [Unreleased]
 
 ### Fixed
+- **Container runtime fixes in `Dockerfile`** — the runtime stage now creates a writable
+  `/app/logs` owned by the non-root `spring` user (logback's FILE appender aborted the JVM at
+  boot with `Failed to create parent directories for [/app/logs/application.log]`) and the
+  healthcheck uses busybox `wget` instead of `curl`, which is not present in the Alpine base
+  image (the previous check never succeeded).
 - **Terminal refresh failure is a 401 that clears the session (Epic 14 Request 1)** — a refresh
   with a missing, invalid or expired token now answers `401` (previously `400` via an
   `IllegalArgumentException` mapper) and clears **both** auth cookies with `Max-Age=0` and their
@@ -17,6 +22,16 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
   synced.
 
 ### Added
+- **Docker Compose production stack (`deploy/compose/`)** — committed single-host deployment for
+  the deploy host (Docker Desktop/WSL2): Caddy TLS edge with `tyny.ca` → `www.tyny.ca` redirect,
+  Mongo/Redis/App/Prometheus bound to loopback or the internal `172.28.0.0/16` network,
+  operator-BasicAuth Prometheus scrape, OTel collector and daily verified Mongo backups via user
+  crontab. Ships a committed `.env.example` (placeholders) and an idempotent `bootstrap.sh` that
+  renders the git-ignored `prometheus/operator_password` fail-closed — real secrets stay out of
+  git. Documented in `docs/release-runbook.md` §1 → *Docker Compose deployment*,
+  `deploy/compose/README.md`, `README.md` (Current State) and `AGENTS.md` debt 41, which tracks
+  the remaining Continuous Deploy wiring (release image to GHCR, self-hosted runner,
+  `deploy.yml` with healthcheck/smoke/rollback).
 - **Swagger on by default in dev/staging, disabled only in `prod`** — base `application.yaml`
   enables it (`${APP_SECURITY_SWAGGER_ENABLED:true}`), the new `application-prod.yaml` sets the
   prod default to `false`, and `ProdConfigValidator` makes prod boot **fail-closed** if Swagger is
