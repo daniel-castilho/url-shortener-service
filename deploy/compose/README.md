@@ -30,16 +30,17 @@ are bound to `127.0.0.1` (backups, local debugging) or kept on the internal netw
 ## Images: GHCR, never a local build
 
 The `app` service runs the **release image** published by the `release.yml` pipeline:
-`ghcr.io/<owner>/<repo>:<semver>` (e.g. `ghcr.io/daniel-castilho/url-shortener-service:0.16.0`),
+`ghcr.io/<owner>/<repo>:<semver>` (e.g. `ghcr.io/daniel-castilho/url-shortener-service:0.18.0`),
 tagged with the release semver only. Compose pulls it with `pull_policy: always` and refuses to
 start if `APP_IMAGE_TAG` is unset — production never rebuilds (ADR 0008 single-build promotion).
 
-The pipeline publishes the package on the first `v*` tag. Until its **visibility is public**
-(the repository is public, so this is the intended setting — package *Settings → Change visibility*),
-the host must authenticate once to pull it:
+The pipeline published the first package on `v0.18.0` and pushes every release the same way.
+The package is **public** — the intended setting for this public repository (package
+*Settings → Change visibility*) — so the host pulls without authentication. Only if the
+visibility is ever changed to private does the host need a one-time login:
 
 ```bash
-docker login ghcr.io -u <github-user> --password-stdin   # PAT with read:packages
+docker login ghcr.io -u <github-user> --password-stdin   # PAT with read:packages (private visibility only)
 ```
 
 ## First-time setup
@@ -66,7 +67,7 @@ docker compose -f docker-compose.prod.yaml kill -s SIGHUP prometheus
 ```bash
 # run from this directory
 bash bootstrap.sh                               # re-render operator_password (safe to re-run)
-docker compose -f docker-compose.prod.yaml up -d # deploy APP_IMAGE_TAG (pulls if changed)
+docker compose -f docker-compose.prod.yaml up -d # apply APP_IMAGE_TAG (pulls on every up: pull_policy: always)
 docker compose -f docker-compose.prod.yaml ps              # health of every service
 docker compose -f docker-compose.prod.yaml logs -f app     # application logs
 docker compose -f docker-compose.prod.yaml restart app     # restart after a config change
@@ -77,7 +78,8 @@ Deploying a new release: set `APP_IMAGE_TAG=<new-semver>` in `.env`, then `up -d
 Normally you don't do that by hand — Actions → **Deploy (production)** dispatches
 `deploy.yml`, which pins the tag, re-ups the app and runs the full smoke suite
 (contract in `docs/release-runbook.md` §Continuous Deploy).
-Rolling back: set `APP_IMAGE_TAG=<previous-semver>` and `up -d` again.
+Rolling back: re-dispatch **Deploy (production)** with the previous semver (or set
+`APP_IMAGE_TAG=<previous-semver>` manually and `up -d`).
 
 ## Required environment (`prod` profile)
 

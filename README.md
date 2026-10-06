@@ -349,10 +349,11 @@ Implemented on `main`:
   `cp deploy/compose/.env.example .env && chmod 600 .env && bash deploy/compose/bootstrap.sh`
   (bootstrap renders the git-ignored `prometheus/operator_password` fail-closed; secrets are
   never committed). Runbook: `docs/release-runbook.md` §1 → *Docker Compose deployment*;
-  local guide: `deploy/compose/README.md`. Continuous Deploy is wired end-to-end: GHCR image
-  from `release.yml`, then the manual `deploy.yml` dispatch (environment approval, smoke via
-  `scripts/smoke-compose.sh`, fail-closed rollback). The open piece — registering the
-  self-hosted runner on the deploy host — is tracked in `AGENTS.md` debt 41.
+  local guide: `deploy/compose/README.md`. Continuous Deploy is wired end-to-end and live:
+  GHCR image from `release.yml`, manual `deploy.yml` dispatch (environment approval, smoke via
+  `scripts/smoke-compose.sh`, fail-closed rollback) on the self-hosted `prod-host` runner —
+  production runs the `v0.18.0` GHCR image. Remaining CD work (staging + metrics-canary wiring
+  on this target) is tracked in `AGENTS.md` debt 41.
 
 > **Scope note adapted from the original README:** earlier revisions of this README overclaimed
 > (e.g. "invalid IDs never reach the database", persisted analytics). The documentation now reflects
