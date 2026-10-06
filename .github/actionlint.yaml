@@ -1,0 +1,5 @@
+# actionlint configuration (run: docker run --rm -v "$PWD":/repo -w /repo rhysd/actionlint).
+# Custom labels of the self-hosted production runner (deploy.yml: prod-host).
+self-hosted-runner:
+  labels:
+    - prod-host
