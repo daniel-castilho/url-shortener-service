@@ -214,14 +214,19 @@ $FRONTEND_DIR/
 ```
 
 Deploy and rollback are one script — no rebuild, no `compose up`, no Caddy reload, no
-touch on backend data or `APP_IMAGE_TAG`:
+touch on backend data or `APP_IMAGE_TAG`. **Ownership of the artifact lifecycle lives in
+`url-shortener-web`** (the frontend CD: `scripts/deploy-frontend.sh`,
+`scripts/smoke-web.sh`, `.github/workflows/deploy-web.yml`); this backend repo only hosts
+the edge config that serves the result:
 
 ```sh
-bash scripts/deploy-frontend.sh --placeholder      # edge prep (minimal page)
-bash scripts/deploy-frontend.sh vX.Y.Z             # gh release download + sha256 verify + flip
-bash scripts/deploy-frontend.sh --rollback vX.Y.Z  # flip back to an extracted release
-bash scripts/deploy-frontend.sh --current          # what is live (readlink + VERSION)
+bash url-shortener-web/scripts/deploy-frontend.sh --placeholder  # edge prep (minimal page)
+bash url-shortener-web/scripts/deploy-frontend.sh vX.Y.Z         # gh release download + sha256 verify + flip
+bash url-shortener-web/scripts/deploy-frontend.sh --rollback vX.Y.Z  # flip back to an extracted release
+bash url-shortener-web/scripts/deploy-frontend.sh --current      # what is live (readlink + VERSION)
 ```
+
+(While the move is in flight both repos may carry the script; the web copy is canonical.)
 
 - **Artifact:** GitHub Release of `url-shortener-web` (tag `vX.Y.Z` → its `release.yml`
   builds `dist/`, publishes `url-shortener-web-<tag>.tar.gz` + `SHA256SUMS` + SBOM).
@@ -242,7 +247,7 @@ bash scripts/deploy-frontend.sh --current          # what is live (readlink + VE
 | Backend tag + deploy (`deploy.yml` dispatch) | owner (GitHub `production` environment review) |
 | Edge config PR (Caddyfile/compose/runbook) | owner (admin merge, 6 required checks) |
 | Frontend tag `vX.Y.Z` in `url-shortener-web` | owner |
-| Frontend artifact swap on the host (`deploy-frontend.sh`) | operator runs it, owner approves in-session |
+| Frontend CD (`deploy-web.yml` dispatch VX.Y.Z → `production` review → `deploy-frontend.sh` + `smoke-web.sh` on the `prod-host-web` runner) | owner (GitHub `production` environment review; deploy is machine-verified, rollback fail-closed) |
 | DNS, port-forward, firewall, ACME email | **owner only** (never from CI) |
 
 **DNS / TLS prerequisite (records only — no cutover without owner approval):**

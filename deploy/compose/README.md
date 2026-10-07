@@ -146,13 +146,16 @@ symlink. The edge route table (`/api` → Java, short codes → Java, everything
 `docs/release-runbook.md` §*Edge routing & static frontend (SPA)*.
 
 ```bash
-bash scripts/deploy-frontend.sh --placeholder      # minimal page (edge prep, pre-artifact)
-bash scripts/deploy-frontend.sh vX.Y.Z             # download + sha256 verify + atomic flip
-bash scripts/deploy-frontend.sh --rollback vX.Y.Z  # flip back (no Caddy reload, backend untouched)
-bash scripts/deploy-frontend.sh --current          # live version
+bash url-shortener-web/scripts/deploy-frontend.sh --placeholder      # minimal page (edge prep, pre-artifact)
+bash url-shortener-web/scripts/deploy-frontend.sh vX.Y.Z             # download + sha256 verify + atomic flip
+bash url-shortener-web/scripts/deploy-frontend.sh --rollback vX.Y.Z  # flip back (no Caddy reload, backend untouched)
+bash url-shortener-web/scripts/deploy-frontend.sh --current          # live version
 ```
 
-No Caddy reload is needed on swap — the file server reads `current` per request.
+The canonical copy of the script and the frontend CD live in `url-shortener-web`
+(`deploy-web.yml` dispatch → `production` review → `prod-host-web` runner → smoke →
+fail-closed rollback). No Caddy reload is needed on swap — the file server reads
+`current` per request.
 
 ## Backups
 

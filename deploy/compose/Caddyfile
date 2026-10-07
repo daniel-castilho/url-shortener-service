@@ -48,12 +48,14 @@ tyny.ca {
 }
 
 www.tyny.ca {
-	# HSTS applies to every response of this site (SPA static and proxied Java).
-	# X-Content-Type-Options / X-Frame-Options / Referrer-Policy on API responses
-	# already come from Spring Security; the SPA handle below sets its own set.
-	header {
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-	}
+	# HSTS — only on TLS-terminated requests (matches the routing law of
+	# url-shortener-web/docs/deploy.md and the Java API: 1y includeSubDomains
+	# preload). Applies to every https response of this site (SPA static and
+	# proxied Java). X-Content-Type-Options / X-Frame-Options /
+	# Referrer-Policy / CSP on API responses already come from Spring Security;
+	# the SPA handle below sets its own set.
+	@tls protocol https
+	header @tls Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
 
 	# --- Rule 1: API prefixes -> Java (same-origin /api, VITE_API_BASE_URL empty)
 	handle /api* {
