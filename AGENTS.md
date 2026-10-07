@@ -769,7 +769,10 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     (runbook §*Edge routing & static frontend*).
     Remaining: web-repo CD assets + `prod-host-web` runner + main protection/
     environments, first real artifact pilot (v0.3.0, pre-DNS), DNS/port-forward
-    cutover (owner-only), post-cutover TLS verification. — `in-progress`
+    cutover + post-cutover TLS verification (OWNER-BLOCKED — no public IP / router
+    port-forward / registrar update configured yet; documented as debt in the runbook;
+    the smoke suite + CD handle the pre-cert edge automatically, so neither is
+    blocked by the owner track). — `in-progress`
 
 ## 🔍 Operational Discipline & Debugging Guidelines
 

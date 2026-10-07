@@ -240,6 +240,14 @@ bash url-shortener-web/scripts/deploy-frontend.sh --current      # what is live 
   `docker run --rm -v "$PWD/deploy/compose/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate`.
   Rollback = revert the PR and recreate.
 
+**Owner-blocked (tracked debt): public DNS / router port-forward / Let's Encrypt cutover.**
+No public IP is bound, `tyny.ca` is parked at the registrar and no router port-forward
+(`:80`/`:443` → host) is configured — the account owner owns these network steps and this
+repo must NOT probe/replace them. Until they land, the real edge has no certificate and
+`scripts/smoke-web.sh` auto-detects that and uses the throwaway `tls internal` edge instead;
+the moment the apex answers with a valid cert, the smoke switches automatically (loopback
+`--resolve`, no hairpin NAT). The CD pipeline never treats the missing cert as a failure.
+
 **Owners / approvals:**
 
 | Step | Who approves |
