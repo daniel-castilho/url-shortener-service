@@ -117,9 +117,16 @@ in `docker logs urlshortener-app`. Correct behaviour, not a bug.
 ## TLS / DNS prerequisite
 
 Caddy provisions certificates through Let's Encrypt HTTP-01, so **`tyny.ca` and
-`www.tyny.ca` must point at this server's public IP** before HTTPS can work. Until DNS
-is corrected, `docker logs urlshortener-caddy` shows ACME failures and the site is only
-reachable with `curl -k`. After changing DNS:
+`www.tyny.ca` must point at this server's public IP** before HTTPS can work:
+
+```text
+tyny.ca      A     99.249.234.162    # replace parking records; TTL 300 during cutover
+www.tyny.ca  CNAME tyny.ca            # keep as-is (resolves through the apex A)
+AAAA         —                        # do NOT add: the host has no global IPv6
+```
+
+Until DNS is corrected, `docker logs urlshortener-caddy` shows ACME failures and TLS
+handshakes on `:443` fail (no certificate yet). After changing DNS:
 
 ```bash
 docker compose -f docker-compose.prod.yaml restart caddy
@@ -127,8 +134,25 @@ docker logs -f urlshortener-caddy   # look for "certificate obtained successfull
 ```
 
 If Let's Encrypt reports `too many failed authorizations`, wait up to 1 hour (rate limit
-per identifier) and restart Caddy again. Replace the placeholder ACME e-mail
-(`ops@tyny.ca`) in `Caddyfile` first.
+per identifier) and restart Caddy again. The ACME account e-mail lives in `Caddyfile`
+(global `email` block).
+
+## Static frontend (SPA)
+
+Caddy serves the frontend from `${FRONTEND_DIR:-/home/daniel/projects/urlshortener/frontend}`
+(read-only mount at `/srv/frontend`): `releases/<version>/` plus an atomic `current`
+symlink. The edge route table (`/api` → Java, short codes → Java, everything else →
+`index.html`) and the DNS/verification details are documented in
+`docs/release-runbook.md` §*Edge routing & static frontend (SPA)*.
+
+```bash
+bash scripts/deploy-frontend.sh --placeholder      # minimal page (edge prep, pre-artifact)
+bash scripts/deploy-frontend.sh vX.Y.Z             # download + sha256 verify + atomic flip
+bash scripts/deploy-frontend.sh --rollback vX.Y.Z  # flip back (no Caddy reload, backend untouched)
+bash scripts/deploy-frontend.sh --current          # live version
+```
+
+No Caddy reload is needed on swap — the file server reads `current` per request.
 
 ## Backups
 

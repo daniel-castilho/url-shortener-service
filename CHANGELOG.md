@@ -7,6 +7,28 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
 
 ## [Unreleased]
 
+### Added
+- **Edge preparation for the static frontend (same-origin `/api`)** — the Compose Caddy edge
+  now implements the routing law of `url-shortener-web/docs/deploy.md`: `/api*` and
+  short-code/alias paths (`^/[A-Za-z0-9_-]{1,64}$`, SPA exclusions) proxy to the Java app
+  preserving `Host`/`X-Forwarded-*` and every backend status (`302/404/410/429`), while `/`,
+  `/login`, `/register`, `/links/*`, `/admin/*` and assets serve the SPA from
+  `${FRONTEND_DIR}/current` (read-only bind mount, `try_files → index.html` fallback with
+  SPA-only security headers). New `scripts/deploy-frontend.sh` deploys/rolls back the
+  frontend artifact independently (GitHub Release download + `sha256sum -c` fail-closed +
+  atomic `current` symlink flip; `--placeholder`, `--rollback`, `--current`, `--self-test`
+  6/6) — no rebuild, no Caddy reload, no backend touch. Runbook gained the edge diagram,
+  route table, owners matrix, DNS records (`tyny.ca` A → `99.249.234.162`, `www` CNAME,
+  no AAAA) and read-only verification legs; ACME e-mail set to the operational address.
+
+### Changed
+- **Actuator exposure narrowed at the edge (owner-approved deviation from the web law)** —
+  only `/actuator/health/liveness`, `/actuator/health/readiness` and `/actuator/info` are
+  proxied publicly; any other `/actuator*` path answers `404` at the edge. Prometheus keeps
+  scraping `app:8080` over the compose network and operator endpoints stay on loopback, so
+  metrics/health-details are never published (`url-shortener-web/docs/deploy.md` needs a
+  follow-up sync).
+
 ## [0.18.0] - 2026-10-06
 
 ### Fixed

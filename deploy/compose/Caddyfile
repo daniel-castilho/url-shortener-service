@@ -1,36 +1,34 @@
-# Caddy TLS termination for the URL Shortener Service (Docker Compose deployment).
+# Caddy edge for the URL Shortener Service (Docker Compose deployment).
 #
-#   internet -> :80/:443 (Caddy, ACME/Let's Encrypt) -> app:8080 (internal network)
+#   internet -> :80/:443 (Caddy, ACME/Let's Encrypt HTTP-01)
+#                  ├── SPA (static dist)  <- /srv/frontend/current (bind mount, FRONTEND_DIR)
+#                  ├── /api*, approved /actuator endpoints, /{shortCode} -> app:8080
+#                  └── everything else    -> SPA index.html (deep-link fallback)
 #
-# - www.tyny.ca  : canonical host, serves the API (APP_PUBLIC_BASE_URL / APP_DOMAIN_DEFAULT_HOST)
-# - tyny.ca      : 301 to www (the app mirrors redirects by Host, so a single canonical
-#                  host keeps domain-less links resolvable)
-# - custom domains / on-demand TLS are NOT enabled here (EDGE_ASK_TOKEN is empty in the
-#   stack => the app's ask endpoint fails closed). Add the catch-all block later if needed
-#   (see deploy/proxy/Caddyfile).
+# Routing law (single source of truth): url-shortener-web → docs/deploy.md.
+# Deviation (owner-approved): rule 2 proxies ONLY the public actuator trio
+# (/actuator/health/liveness, /actuator/health/readiness, /actuator/info);
+# everything else under /actuator answers 404 at the edge. Prometheus scrapes
+# app:8080 directly over the compose network, and operator endpoints stay
+# reachable on loopback — metrics/health-details are never published publicly.
 #
-# ACME email is a placeholder — replace ops@tyny.ca before relying on expiry notices.
-
+# - www.tyny.ca : canonical host (APP_PUBLIC_BASE_URL / APP_DOMAIN_DEFAULT_HOST)
+# - tyny.ca     : permanent redirect to www (single canonical host keeps
+#                 domain-less links resolvable through the host mirror)
+# - custom domains / on-demand TLS are NOT enabled here (EDGE_ASK_TOKEN empty
+#   => the app's ask endpoint fails closed). See deploy/proxy/Caddyfile later.
+#
+# ACME: HTTP-01 on :80 once DNS points tyny.ca/www.tyny.ca at this host; certs
+# live in the caddy-data volume and renew automatically.
 {
-	email ops@tyny.ca
+	email dan.castilho@gmail.com
 }
 
-# Apex → canonical www (permanent)
-tyny.ca {
-	redir https://www.tyny.ca{uri} permanent
-}
-
-www.tyny.ca {
-	# Only HSTS here: X-Content-Type-Options / X-Frame-Options / Referrer-Policy are
-	# already applied globally by Spring Security, so re-issuing them would duplicate
-	# every response header.
-	header {
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-	}
-
+# Upstream to the Java app. Host must be preserved (host mirror), and the edge
+# is the trusted proxy that sets the client-IP headers the app reads
+# (RATE_LIMITER_TRUSTED_PROXY_CIDRS = compose network + loopback).
+(app_upstream) {
 	reverse_proxy app:8080 {
-		# Preserve the public Host: the app serves domain-less links only for
-		# app.domain.default-host and enforces the strict host mirror for custom domains.
 		header_up Host {host}
 		header_up X-Real-IP {remote_host}
 		header_up X-Forwarded-For {remote_host}
@@ -41,5 +39,61 @@ www.tyny.ca {
 			read_timeout 30s
 			write_timeout 10s
 		}
+	}
+}
+
+# Apex → canonical www (permanent)
+tyny.ca {
+	redir https://www.tyny.ca{uri} permanent
+}
+
+www.tyny.ca {
+	# HSTS applies to every response of this site (SPA static and proxied Java).
+	# X-Content-Type-Options / X-Frame-Options / Referrer-Policy on API responses
+	# already come from Spring Security; the SPA handle below sets its own set.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+
+	# --- Rule 1: API prefixes -> Java (same-origin /api, VITE_API_BASE_URL empty)
+	handle /api* {
+		import app_upstream
+	}
+
+	# --- Rule 2 (narrowed): public actuator trio -> Java, rest denied ---------
+	# (handle accepts a single matcher token — multi-path OR needs a named matcher)
+	@actuator_public path /actuator/health/liveness /actuator/health/readiness /actuator/info
+	handle @actuator_public {
+		import app_upstream
+	}
+	handle /actuator* {
+		respond 404
+	}
+
+	# --- Rule 3: short codes / aliases -> Java. Never falls through to the SPA
+	# (must preserve 302/404/410/429 from the backend). Exclusions are the
+	# single-segment SPA routes — keep in sync with src/App.tsx (routing law).
+	@shortcode {
+		not path /login /register /links /api /actuator
+		path_regexp ^/[A-Za-z0-9_-]{1,64}$
+	}
+	handle @shortcode {
+		import app_upstream
+	}
+
+	# --- Rules 4-5: SPA (static dist + index.html fallback for deep links) ----
+	# Security headers apply ONLY here (static responses are not Spring's).
+	handle {
+		header {
+			X-Content-Type-Options "nosniff"
+			X-Frame-Options "DENY"
+			Referrer-Policy "strict-origin-when-cross-origin"
+			X-DNS-Prefetch-Control "off"
+			Permissions-Policy "camera=(), microphone=(), geolocation=()"
+			Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		}
+		root * /srv/frontend/current
+		try_files {path} /index.html
+		file_server
 	}
 }

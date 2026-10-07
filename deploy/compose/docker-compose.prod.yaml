@@ -134,6 +134,9 @@ services:
       - "443:443/udp"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Static SPA artifact (releases/<version> + atomic `current` symlink),
+      # swapped by scripts/deploy-frontend.sh — read-only, no rebuild, no reload.
+      - ${FRONTEND_DIR:-/home/daniel/projects/urlshortener/frontend}:/srv/frontend:ro
       - caddy-data:/data
       - caddy-config:/config
     networks:
