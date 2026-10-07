@@ -142,6 +142,29 @@ ls -la /home/daniel/projects/urlshortener/backups   # latest dump + manifest
 bash scripts/restore-mongodb.sh --verify <dir>      # verify a restore (see script usage)
 ```
 
+The entry only runs while the host is awake; if the machine was off at 03:30 the run is
+missed — make it up manually with `bash scripts/backup-mongodb.sh /home/daniel/projects/urlshortener/backups`
+(from the repository root) so the recovery point stays under ~26h.
+
+## Troubleshooting
+
+**Services exit 127 after a Docker Desktop / WSL restart (stale bind mounts).** A Docker
+Desktop restart or WSL update can invalidate the file bind mounts (`mongo-init.js`,
+`Caddyfile`, Prometheus/OTel configs): those containers die at start with
+`error mounting /run/desktop/mnt/host/wsl/docker-desktop-bind-mounts/… : not a directory`,
+while containers without file mounts (Redis) keep running and the app restarts without DNS
+for `mongo` (`UnknownHostException: mongo` in `docker logs urlshortener-app`). Recovery:
+
+```bash
+cd deploy/compose
+docker compose -f docker-compose.prod.yaml up -d   # re-registers the mounts; named volumes untouched
+```
+
+Then verify from the repository root: `bash scripts/smoke-compose.sh` (add
+`--expect-image ghcr.io/<owner>/<repo>:<semver>` to also assert the running image).
+If the start still fails with the same mount error, restart Docker Desktop and re-run
+`up -d` once more.
+
 ## Monitoring
 
 * Prometheus UI: `http://127.0.0.1:9090` (SLO recording rules + burn-rate alerts mounted
