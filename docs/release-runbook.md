@@ -25,6 +25,18 @@ client ──► [NGINX/Caddy :443] ──► url-shortener instances (HTTP, no 
   (`deploy/compose/`, §1 → *Docker Compose deployment*), deployed by the `deploy.yml`
   workflow (§*Continuous Deploy*). The blue/green systemd topology below is the bare-metal
   path — still supported (`scripts/deploy.sh`), development/testing at this host.
+
+  ```text
+  browser ── HTTPS https://www.tyny.ca ──► caddy :80/:443  (only service with public ports)
+                 │
+                 ├── /, /login, /register, /links*, /admin/*, /assets/*, unknown UI routes
+                 │        └──► /srv/frontend/current   (static SPA dist, FRONTEND_DIR mount)
+                 ├── /api*, /actuator/{health/liveness,health/readiness,info}
+                 │        └──► app:8080                (Java, host preserved)
+                 ├── GET /[A-Za-z0-9_-]{1,64} (excl. SPA paths)
+                 │        └──► app:8080                (302/404/410/429, never the SPA)
+                 └── app:8080 ──► mongo:27017 + redis:6379 (loopback / internal net only)
+  ```
 - App routes: `POST /api/v1/urls` (shorten), `GET /{id}` (redirect), `/api/v1/auth/*`. All under
   internal ports `:8080+` (one per instance). Auth is `Authorization: Bearer <token>` for
   vanity/short-create; anonymous shorten is also allowed.
@@ -166,6 +178,108 @@ Production runs the GHCR release image pinned by the last dispatch (currently
 `APP_IMAGE_TAG=0.18.0`, verified live on 2026-10-06: 11-leg smoke + image identity). The
 manual fallbacks above only work with a semver that exists in GHCR — the retired local tag
 `prod` (pre-CD image) is not pullable.
+
+#### Edge routing & static frontend (SPA)
+
+The Caddy edge (`deploy/compose/Caddyfile`) is the only service with public ports and
+splits the canonical host between the static SPA and the Java API — both on
+`https://www.tyny.ca`, so the frontend calls `/api` on its own origin
+(`VITE_API_BASE_URL` stays empty in `url-shortener-web`; never ship a
+`localhost`/direct-API base URL in the bundle). The routing law is owned by
+`url-shortener-web` → `docs/deploy.md`; the edge implements it in this order:
+
+| # | Request (Host: `www.tyny.ca`) | Goes to | Notes |
+| - | ----------------------------- | ------- | ----- |
+| 0 | `tyny.ca/*` (apex) | `308 → https://www.tyny.ca{uri}` | canonical host |
+| 1 | `/api*` | Java `app:8080` | `Host`/`X-Forwarded-*` preserved; edge is the trusted proxy |
+| 2 | `/actuator/health/liveness`, `/actuator/health/readiness`, `/actuator/info` | Java | public-by-policy allowlist |
+| 3 | any other `/actuator*` | **404 at the edge** | metrics/health-details never published; Prometheus scrapes `app:8080` internally, operator endpoints via loopback/SSH |
+| 4 | `GET/HEAD ^/[A-Za-z0-9_-]{1,64}$` excluding `/login /register /links /api /actuator` | Java | preserves `302/404/410/429`; **never** falls through to `index.html` |
+| 5 | `/`, `/login`, `/register`, `/links`, `/links/*`, `/admin/*`, `/assets/*`, other multi-segment UI routes | SPA `dist/` | `try_files {path} /index.html` (deep links survive refresh) |
+
+Single-segment paths outside the exclusion list are treated as short codes/aliases and
+answered by Java (a non-existent one returns the backend `404`, deliberately **not**
+`index.html`). New single-segment SPA routes must be added to the exclusion list **and**
+to `ReservedWordsValidator` (keep the routing law's two lists in sync).
+Rule 3 deviates from the web repo's law (which proxies `/actuator*` wholesale) — a
+follow-up must sync `url-shortener-web/docs/deploy.md`.
+
+**Static artifact layout** (host, never in Git; `FRONTEND_DIR` in
+`deploy/compose/.env`, bind-mounted read-only into Caddy at `/srv/frontend`):
+
+```text
+$FRONTEND_DIR/
+├── releases/<version>/      # dist/ contents + VERSION file
+└── current -> releases/<version>   # atomic symlink; Caddy serves it live
+```
+
+Deploy and rollback are one script — no rebuild, no `compose up`, no Caddy reload, no
+touch on backend data or `APP_IMAGE_TAG`:
+
+```sh
+bash scripts/deploy-frontend.sh --placeholder      # edge prep (minimal page)
+bash scripts/deploy-frontend.sh vX.Y.Z             # gh release download + sha256 verify + flip
+bash scripts/deploy-frontend.sh --rollback vX.Y.Z  # flip back to an extracted release
+bash scripts/deploy-frontend.sh --current          # what is live (readlink + VERSION)
+```
+
+- **Artifact:** GitHub Release of `url-shortener-web` (tag `vX.Y.Z` → its `release.yml`
+  builds `dist/`, publishes `url-shortener-web-<tag>.tar.gz` + `SHA256SUMS` + SBOM).
+  The script fails closed unless `sha256sum -c SHA256SUMS` passes.
+- **Health/version:** `readlink $FRONTEND_DIR/current` + `cat .../VERSION`; edge check =
+  `curl -k -H 'Host: www.tyny.ca' https://127.0.0.1/` → `200 text/html` (no `-k` once
+  DNS/TLS is cut over).
+- **Edge-config changes** (Caddyfile/compose): normal PR + CI; applying on the host is
+  `docker compose -f docker-compose.prod.yaml up -d caddy` (recreates when mounts change —
+  seconds of edge downtime, harmless while DNS still parks the domain). Validate first with
+  `docker run --rm -v "$PWD/deploy/compose/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate`.
+  Rollback = revert the PR and recreate.
+
+**Owners / approvals:**
+
+| Step | Who approves |
+| ---- | ------------ |
+| Backend tag + deploy (`deploy.yml` dispatch) | owner (GitHub `production` environment review) |
+| Edge config PR (Caddyfile/compose/runbook) | owner (admin merge, 6 required checks) |
+| Frontend tag `vX.Y.Z` in `url-shortener-web` | owner |
+| Frontend artifact swap on the host (`deploy-frontend.sh`) | operator runs it, owner approves in-session |
+| DNS, port-forward, firewall, ACME email | **owner only** (never from CI) |
+
+**DNS / TLS prerequisite (records only — no cutover without owner approval):**
+
+```text
+tyny.ca      A     <OWNER-PROVIDED-PUBLIC-IP>    # replace the GoDaddy parking records; TTL 300 during cutover
+www.tyny.ca  CNAME tyny.ca            # keep as-is (resolves through the apex A)
+AAAA         —                        # do NOT add: the host has no global IPv6
+```
+
+Sequence once the records and the 80/443 port-forward are in place (owner track): Caddy
+serves `/.well-known/acme-challenge` on `:80` (automatic HTTP-01 for both hostnames) →
+Let's Encrypt validates → certificate stored in the `caddy-data` volume → renewal is
+automatic (~60/90-day cycle). After DNS lands, restart Caddy once
+(`docker compose -f docker-compose.prod.yaml restart caddy`) and watch
+`docker logs urlshortener-caddy` for `certificate obtained successfully`; if Let's
+Encrypt reports `too many failed authorizations`, wait out the per-identifier rate limit
+(≤1 h) and restart again.
+
+**Read-only verification legs (approved scope — no data writes):**
+
+```sh
+H=(-H 'Host: www.tyny.ca'); B=http://127.0.0.1:8080
+curl -sk "${H[@]}" https://127.0.0.1/                       # 200 text/html (SPA/placeholder)
+curl -sk "${H[@]}" https://127.0.0.1/login                  # 200 index.html (deep link)
+curl -sk "${H[@]}" https://127.0.0.1/links/whatever         # 200 index.html (fallback)
+curl -sk "${H[@]}" https://127.0.0.1/api/v1/urls            # 401/404 JSON from Java
+curl -sk "${H[@]}" https://127.0.0.1/aaaaaaaa               # 404 JSON from Java (never HTML)
+curl -sk "${H[@]}" https://127.0.0.1/actuator/health/liveness   # 200
+curl -sk "${H[@]}" https://127.0.0.1/actuator/prometheus        # 404 (denied at the edge)
+curl -s  -H 'Host: tyny.ca'     http://127.0.0.1/           # 308 → https://www.tyny.ca
+ss -ltn | grep -E ':(80|443|8080)'                          # 80/443 Caddy, 8080 loopback only
+```
+
+No `GET /{real code}` in this scope: a redirect writes a `click_event` (90-day
+retention) — the `302` leg is already covered by the loopback smoke. Synthetic-data
+checks require explicit owner authorization.
 
 ---
 
@@ -624,6 +738,13 @@ Configuration at `deploy/proxy/Caddyfile`. Replace `short.example.com` with your
 # Run directly or as a service
 caddy run --config deploy/proxy/Caddyfile
 ```
+
+### 8.3 Compose edge (current deploy host)
+
+The live edge is `deploy/compose/Caddyfile` — TLS termination plus the SPA/API route
+table of §1 → *Edge routing & static frontend (SPA)*, which also holds the DNS records,
+the HTTP-01 issuance sequence and the read-only TLS verification legs.
+`deploy/proxy/*` remains the bare-metal alternative.
 
 ---
 

@@ -750,6 +750,22 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     11-leg smoke + image identity verified live).
     Remaining: staging and the Epic 25 metrics canary wiring on this target. — `in-progress`
 
+42. **Edge integration for the static frontend (same-origin SPA on `www.tyny.ca`)** — the
+    Compose Caddy edge now implements the routing law of `url-shortener-web/docs/deploy.md`:
+    `/api*` + short-code matcher (`^/[A-Za-z0-9_-]{1,64}$` with SPA-path exclusions) →
+    Java (host mirror preserved, backend statuses untouched), SPA catch-all serving
+    `${FRONTEND_DIR}/current` (read-only bind mount, `try_files → index.html`, SPA-only
+    security headers), apex `tyny.ca` → permanent redirect to `www`. Owner-approved
+    deviation: the edge exposes only the actuator trio (liveness/readiness/info) and
+    `404`s everything else under `/actuator` (Prometheus scrapes internally; sync
+    `url-shortener-web/docs/deploy.md` as follow-up). Artifact flow:
+    `scripts/deploy-frontend.sh` (GitHub Release + `sha256sum -c` fail-closed + atomic
+    `current` symlink; placeholder/rollback/current + self-test 6/6) — independent of the
+    backend tag (`deploy.yml` untouched). ACME e-mail set; DNS records and HTTP-01
+    sequence documented (runbook §*Edge routing & static frontend*).
+    Remaining: DNS/port-forward cutover (owner-only), first real frontend artifact
+    deploy, post-cutover TLS verification. — `in-progress`
+
 ## 🔍 Operational Discipline & Debugging Guidelines
 
 - **Investigate before trial-and-error:** when a compile or test fails, read the full stack trace and
