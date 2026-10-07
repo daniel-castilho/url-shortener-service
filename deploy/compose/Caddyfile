@@ -42,9 +42,15 @@
 	}
 }
 
-# Apex → canonical www (permanent)
-tyny.ca {
-	redir https://www.tyny.ca{uri} permanent
+# Apex → canonical www (permanent 308). Explicit http/https site splits so
+# Caddy's automatic same-host http->https redirect cannot shadow the law
+# target; `permanent` maps to 301 in current Caddy, docs/smoke assert 308.
+http://tyny.ca {
+	redir https://www.tyny.ca{uri} 308
+}
+
+https://tyny.ca {
+	redir https://www.tyny.ca{uri} 308
 }
 
 www.tyny.ca {
