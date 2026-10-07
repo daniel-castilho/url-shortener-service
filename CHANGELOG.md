@@ -14,10 +14,11 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
   preserving `Host`/`X-Forwarded-*` and every backend status (`302/404/410/429`), while `/`,
   `/login`, `/register`, `/links/*`, `/admin/*` and assets serve the SPA from
   `${FRONTEND_DIR}/current` (read-only bind mount, `try_files → index.html` fallback with
-  SPA-only security headers). New `scripts/deploy-frontend.sh` deploys/rolls back the
+  SPA-only security headers). `scripts/deploy-frontend.sh` deploys/rolls back the
   frontend artifact independently (GitHub Release download + `sha256sum -c` fail-closed +
   atomic `current` symlink flip; `--placeholder`, `--rollback`, `--current`, `--self-test`
-  6/6) — no rebuild, no Caddy reload, no backend touch. Runbook gained the edge diagram,
+  6/6) — no rebuild, no Caddy reload, no backend touch. Its canonical copy lives in
+  `url-shortener-web`; the transitional backend copy was removed with the web CD launch. Runbook gained the edge diagram,
   route table, owners matrix, DNS records (`tyny.ca` A → `<OWNER-PROVIDED-PUBLIC-IP>`, `www` CNAME,
   no AAAA) and read-only verification legs; ACME e-mail set to the operational address.
 
