@@ -432,6 +432,7 @@ failures" are non-issues: that collection was never dropped, so existing `_id`s 
 | Mongo restore (drill)       | `bash scripts/restore-mongodb.sh /var/backups/url-shortener/20260827-120000` |
 | Redis persistence           | Redis is configured with `--appendonly yes`; back up the AOF/dir volume |
 | Host reboot recovery        | Containers use `restart: unless-stopped`; systemd `Restart=on-failure`; verify with `docker ps` after boot |
+| Docker Desktop restart broke bind mounts (services exit `127`) | `cd deploy/compose && docker compose -f docker-compose.prod.yaml up -d` — re-registers the file mounts (`mongo-init.js`, `Caddyfile`, Prometheus/OTel configs); named volumes untouched. See `deploy/compose/README.md` §Troubleshooting |
 
 **Data durability (operator responsibility):**
 
