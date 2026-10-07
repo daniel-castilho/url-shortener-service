@@ -767,12 +767,18 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     smoke → fail-closed rollback) — independent of the backend tag (`deploy.yml`
     untouched). ACME e-mail set; DNS records and HTTP-01 sequence documented
     (runbook §*Edge routing & static frontend*).
-    Remaining: web-repo CD assets + `prod-host-web` runner + main protection/
-    environments, first real artifact pilot (v0.3.0, pre-DNS), DNS/port-forward
-    cutover + post-cutover TLS verification (OWNER-BLOCKED — no public IP / router
-    port-forward / registrar update configured yet; documented as debt in the runbook;
-    the smoke suite + CD handle the pre-cert edge automatically, so neither is
-    blocked by the owner track). — `in-progress`
+    Pilot **v0.3.0 DONE (2026-10-07)**: first `deploy-web.yml` dispatch succeeded
+    end-to-end on the `prod-host-web` runner (`current -> releases/v0.3.0`, smoke
+    13/13 via auto-detected throwaway edge, rollback skipped as designed);
+    `production` environment protected with a required-reviewer rule (set via the
+    legacy `repositories/{id}/environments` API — the current environments write
+    APIs return 404 on this Free account; `deployment_branch_policy` likewise, set
+    via UI Settings→Environments). Remaining: **owner-blocked** DNS/port-forward
+    cutover + post-cutover TLS verification (no public IP / router port-forward /
+    registrar update configured yet; documented in the runbook — the smoke + CD
+    handle the pre-cert edge automatically, so neither the owner track nor this
+    pipeline blocks the other). The transitional `scripts/deploy-frontend.sh`
+    backend copy was removed — canonical owner is `url-shortener-web`. — `resolved`
 
 ## 🔍 Operational Discipline & Debugging Guidelines
 

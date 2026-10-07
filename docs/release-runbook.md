@@ -226,8 +226,6 @@ bash url-shortener-web/scripts/deploy-frontend.sh --rollback vX.Y.Z  # flip back
 bash url-shortener-web/scripts/deploy-frontend.sh --current      # what is live (readlink + VERSION)
 ```
 
-(While the move is in flight both repos may carry the script; the web copy is canonical.)
-
 - **Artifact:** GitHub Release of `url-shortener-web` (tag `vX.Y.Z` → its `release.yml`
   builds `dist/`, publishes `url-shortener-web-<tag>.tar.gz` + `SHA256SUMS` + SBOM).
   The script fails closed unless `sha256sum -c SHA256SUMS` passes.
