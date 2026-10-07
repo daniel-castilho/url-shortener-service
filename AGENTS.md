@@ -757,14 +757,19 @@ new item here. Status: `open` (to do), `in-progress`, `resolved`.
     `${FRONTEND_DIR}/current` (read-only bind mount, `try_files → index.html`, SPA-only
     security headers), apex `tyny.ca` → permanent redirect to `www`. Owner-approved
     deviation: the edge exposes only the actuator trio (liveness/readiness/info) and
-    `404`s everything else under `/actuator` (Prometheus scrapes internally; sync
-    `url-shortener-web/docs/deploy.md` as follow-up). Artifact flow:
-    `scripts/deploy-frontend.sh` (GitHub Release + `sha256sum -c` fail-closed + atomic
-    `current` symlink; placeholder/rollback/current + self-test 6/6) — independent of the
-    backend tag (`deploy.yml` untouched). ACME e-mail set; DNS records and HTTP-01
-    sequence documented (runbook §*Edge routing & static frontend*).
-    Remaining: DNS/port-forward cutover (owner-only), first real frontend artifact
-    deploy, post-cutover TLS verification. — `in-progress`
+    `404`s everything else under `/actuator` (Prometheus scrapes internally; the web
+    `docs/deploy.md` law is amended to match). HSTS is aligned to the law
+    (`max-age=31536000; includeSubDomains; preload`, gated by `@tls protocol https`).
+    Artifact flow: canonical copy in **`url-shortener-web`** → `scripts/deploy-frontend.sh`
+    (GitHub Release + `sha256sum -c` fail-closed + atomic `current` symlink;
+    placeholder/rollback/current + self-test 6/6) driven by the frontend CD —
+    `deploy-web.yml` (manual dispatch → `production` review → `prod-host-web` runner →
+    smoke → fail-closed rollback) — independent of the backend tag (`deploy.yml`
+    untouched). ACME e-mail set; DNS records and HTTP-01 sequence documented
+    (runbook §*Edge routing & static frontend*).
+    Remaining: web-repo CD assets + `prod-host-web` runner + main protection/
+    environments, first real artifact pilot (v0.3.0, pre-DNS), DNS/port-forward
+    cutover (owner-only), post-cutover TLS verification. — `in-progress`
 
 ## 🔍 Operational Discipline & Debugging Guidelines
 

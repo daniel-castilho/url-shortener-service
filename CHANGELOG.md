@@ -26,8 +26,12 @@ intends to follow [Semantic Versioning](https://semver.org/) starting from its f
   only `/actuator/health/liveness`, `/actuator/health/readiness` and `/actuator/info` are
   proxied publicly; any other `/actuator*` path answers `404` at the edge. Prometheus keeps
   scraping `app:8080` over the compose network and operator endpoints stay on loopback, so
-  metrics/health-details are never published (`url-shortener-web/docs/deploy.md` needs a
-  follow-up sync).
+  metrics/health-details are never published (`url-shortener-web/docs/deploy.md` law
+  amended to match).
+- **HSTS aligned to the routing law** — `Strict-Transport-Security:
+  max-age=31536000; includeSubDomains; preload`, now gated by `@tls protocol https`
+  (never sent on plain-HTTP `308` apex redirects), matching
+  `url-shortener-web/docs/deploy.md` and the Java API values.
 
 ## [0.18.0] - 2026-10-06
 
